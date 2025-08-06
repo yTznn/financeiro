@@ -9,21 +9,19 @@ namespace Financeiro.Models.ViewModels
     {
         public int Id { get; set; }
 
-        [Required(ErrorMessage = "O NameSkip é obrigatório.")]
         [MinLength(8, ErrorMessage = "O NameSkip deve ter no mínimo 8 caracteres.")]
         [RegularExpression(@"^[a-zA-Z0-9\.]+$", ErrorMessage = "O NameSkip deve conter apenas letras, números e ponto.")]
-        public string NameSkip { get; set; }
+        public string? NameSkip { get; set; }
 
         [Required(ErrorMessage = "O e-mail é obrigatório.")]
         [EmailAddress(ErrorMessage = "E-mail inválido.")]
         public string Email { get; set; }
 
         [DataType(DataType.Password)]
-        public string Senha { get; set; }
+        public string? Senha { get; set; }
 
-        [DataType(DataType.Password)]
         [Compare("Senha", ErrorMessage = "As senhas não coincidem.")]
-        public string ConfirmarSenha { get; set; }
+        public string? ConfirmarSenha { get; set; }
 
         [Display(Name = "Pessoa Física")]
         public int? PessoaFisicaId { get; set; }
@@ -31,38 +29,26 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Foto de Perfil")]
         public IFormFile? ImagemPerfil { get; set; }
 
-        /// <summary>
-        /// Hash da imagem para exibição do avatar do usuário.
-        /// </summary>
         public string? HashImagem { get; set; }
-
-        /// <summary>
-        /// Campo opcional para mensagens de erro na view (ex: login).
-        /// </summary>
         public string? MensagemErro { get; set; }
-
-        /// <summary>
-        /// Lista de pessoas físicas para preencher o dropdown.
-        /// </summary>
         public List<SelectListItem> PessoasFisicas { get; set; } = new();
 
-        /// <summary>
-        /// Identificador do perfil selecionado
-        /// </summary>
-        [Required(ErrorMessage = "O perfil é obrigatório.")]
         [Display(Name = "Perfil")]
         public int? PerfilId { get; set; }
 
-        /// <summary>
-        /// Lista de perfis disponíveis para o dropdown
-        /// </summary>
         public List<SelectListItem> Perfis { get; set; } = new();
         public List<SelectListItem> PerfisDisponiveis { get; set; } = new();
+
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             var erros = new List<ValidationResult>();
+            bool emEdicao = Id > 0;
 
-            // Validação da senha: só exige se estiver preenchida (útil em edição)
+            if (!emEdicao && string.IsNullOrWhiteSpace(Senha))
+            {
+                erros.Add(new ValidationResult("A senha é obrigatória.", new[] { "Senha" }));
+            }
+
             if (!string.IsNullOrEmpty(Senha))
             {
                 if (!string.IsNullOrEmpty(NameSkip))
@@ -90,7 +76,11 @@ namespace Financeiro.Models.ViewModels
                 }
             }
 
-            // Validação da imagem
+            if (!emEdicao && PerfilId == null)
+            {
+                erros.Add(new ValidationResult("O perfil é obrigatório.", new[] { "PerfilId" }));
+            }
+
             if (ImagemPerfil != null)
             {
                 var extensao = Path.GetExtension(ImagemPerfil.FileName).ToLower();
@@ -112,11 +102,6 @@ namespace Financeiro.Models.ViewModels
                 }
             }
 
-            // Validação manual do Perfil (caso queira reforçar)
-            if (PerfilId == null)
-            {
-                erros.Add(new ValidationResult("O perfil é obrigatório.", new[] { "PerfilId" }));
-            }
             return erros;
         }
     }

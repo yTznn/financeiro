@@ -2,12 +2,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Financeiro.Models;
 using Financeiro.Models.ViewModels;
+using Financeiro.Models.Dto;
 using Financeiro.Repositorios;
 using Financeiro.Servicos.Anexos;
 using Financeiro.Servicos.Seguranca;
 using Financeiro.Infraestrutura;
-using Financeiro.Models.Dto;
-using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Dapper;
 
@@ -169,10 +168,9 @@ namespace Financeiro.Controllers
             var usuarioExistente = await _usuarioRepositorio.ObterPorIdAsync(model.Id);
             if (usuarioExistente == null) return NotFound();
 
-            usuarioExistente.NameSkip = model.NameSkip;
             usuarioExistente.EmailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
             usuarioExistente.PessoaFisicaId = model.PessoaFisicaId;
-            usuarioExistente.PerfilId = model.PerfilId ?? 0;
+            usuarioExistente.PerfilId = model.PerfilId ?? usuarioExistente.PerfilId;
 
             if (!string.IsNullOrWhiteSpace(model.Senha))
                 usuarioExistente.SenhaHash = _criptografiaService.GerarHashSenha(model.Senha);
@@ -238,7 +236,6 @@ namespace Financeiro.Controllers
         }
 
         [HttpGet]
-        [Authorize]
         public async Task<IActionResult> MeusDados()
         {
             var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -252,7 +249,6 @@ namespace Financeiro.Controllers
             var model = new UsuarioViewModel
             {
                 Id = usuario.Id,
-                NameSkip = usuario.NameSkip,
                 Email = _criptografiaService.DescriptografarEmail(usuario.EmailCriptografado),
                 HashImagem = usuario.HashImagem
             };
@@ -270,7 +266,6 @@ namespace Financeiro.Controllers
             var usuario = await _usuarioRepositorio.ObterPorIdAsync(model.Id);
             if (usuario == null) return NotFound();
 
-            usuario.NameSkip = model.NameSkip;
             usuario.EmailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
 
             if (!string.IsNullOrWhiteSpace(model.Senha))

@@ -18,8 +18,8 @@ namespace Financeiro.Repositorios
         {
             const string sql = @"
                 INSERT INTO Usuarios
-                (NameSkip, EmailCriptografado, SenhaHash, NomeArquivoImagem, HashImagem, PessoaFisicaId, Ativo, DataCriacao)
-                VALUES (@NameSkip, @EmailCriptografado, @SenhaHash, @NomeArquivoImagem, @HashImagem, @PessoaFisicaId, @Ativo, @DataCriacao);
+                (NameSkip, EmailCriptografado, SenhaHash, NomeArquivoImagem, HashImagem, PessoaFisicaId, PerfilId, Ativo, DataCriacao)
+                VALUES (@NameSkip, @EmailCriptografado, @SenhaHash, @NomeArquivoImagem, @HashImagem, @PessoaFisicaId, @PerfilId, @Ativo, @DataCriacao);
 
                 SELECT CAST(SCOPE_IDENTITY() as int);
             ";
@@ -87,7 +87,8 @@ namespace Financeiro.Repositorios
                     SenhaHash = @SenhaHash,
                     NomeArquivoImagem = @NomeArquivoImagem,
                     HashImagem = @HashImagem,
-                    PessoaFisicaId = @PessoaFisicaId
+                    PessoaFisicaId = @PessoaFisicaId,
+                    PerfilId = @PerfilId
                 WHERE Id = @Id;
             ";
 

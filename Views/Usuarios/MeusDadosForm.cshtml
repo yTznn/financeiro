@@ -4,6 +4,11 @@
     Layout = "_Layout";
 }
 
+@if (TempData["MensagemSucesso"] != null)
+{
+    <div class="alert alert-success">@TempData["MensagemSucesso"]</div>
+}
+
 <h2 class="mb-4">@ViewBag.Title</h2>
 
 <div asp-validation-summary="All" class="alert alert-danger"></div>
@@ -12,22 +17,22 @@
     @Html.AntiForgeryToken()
     <input asp-for="Id" type="hidden" />
 
-    <div class="col-md-4">
-        <label asp-for="NameSkip" class="form-label"></label>
-        <input asp-for="NameSkip" class="form-control" />
-        <span asp-validation-for="NameSkip" class="text-danger small"></span>
-    </div>
-
-    <div class="col-md-4">
-        <label asp-for="Email" class="form-label"></label>
+    <div class="col-md-6">
+        <label asp-for="Email" class="form-label">E-mail</label>
         <input asp-for="Email" class="form-control" />
         <span asp-validation-for="Email" class="text-danger small"></span>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-6">
         <label asp-for="Senha" class="form-label">Nova Senha (opcional)</label>
         <input asp-for="Senha" type="password" class="form-control" />
         <span asp-validation-for="Senha" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="ConfirmarSenha" class="form-label">Confirmar Senha</label>
+        <input asp-for="ConfirmarSenha" type="password" class="form-control" />
+        <span asp-validation-for="ConfirmarSenha" class="text-danger small"></span>
     </div>
 
     <div class="col-md-6">
@@ -36,8 +41,20 @@
         <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
     </div>
 
+    @if (!string.IsNullOrEmpty(Model.HashImagem))
+    {
+        <div class="col-md-6">
+            <label class="form-label">Imagem Atual</label><br />
+            <img src="/Usuarios/ImagemPerfil?hash=@Model.HashImagem" class="rounded border" width="80" height="80" />
+        </div>
+    }
+
     <div class="col-12">
         <button type="submit" class="btn btn-primary">Salvar</button>
         <a asp-action="Index" class="btn btn-secondary">Voltar</a>
     </div>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

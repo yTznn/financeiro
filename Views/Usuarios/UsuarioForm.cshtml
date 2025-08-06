@@ -3,7 +3,7 @@
 @{
     ViewBag.Title = Model.Id == 0 ? "Novo Usuário" : "Editar Usuário";
     Layout = "_Layout";
-    var isReadOnly = Model.Id != 0 ? "readonly" : "";
+    var isAdmin = User.IsInRole("Administrador");
 }
 
 <h2 class="mb-4">@ViewBag.Title</h2>
@@ -37,16 +37,19 @@
         <span asp-validation-for="PessoaFisicaId" class="text-danger small"></span>
     </div>
 
-    <div class="col-md-4">
-        <label asp-for="PerfilId" class="form-label fw-semibold">Perfil</label>
-        <select asp-for="PerfilId" class="form-select" asp-items="Model.PerfisDisponiveis">
-            <option value="">Selecione...</option>
-        </select>
-        <span asp-validation-for="PerfilId" class="text-danger small"></span>
-    </div>
+    @if (Model.Id == 0 || isAdmin)
+    {
+        <div class="col-md-4">
+            <label asp-for="PerfilId" class="form-label fw-semibold">Perfil</label>
+            <select asp-for="PerfilId" class="form-select" asp-items="Model.PerfisDisponiveis">
+                <option value="">Selecione...</option>
+            </select>
+            <span asp-validation-for="PerfilId" class="text-danger small"></span>
+        </div>
+    }
 
     <div class="col-md-4">
-        <label asp-for="Senha" class="form-label fw-semibold">Senha</label>
+        <label asp-for="Senha" class="form-label fw-semibold">Senha @(Model.Id > 0 ? "(opcional)" : "")</label>
         <input asp-for="Senha" class="form-control" type="password" />
         <span asp-validation-for="Senha" class="text-danger small"></span>
     </div>
