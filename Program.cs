@@ -82,6 +82,7 @@ builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
 builder.Services.AddScoped<IAnexoService, AnexoService>();
 builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
 builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
+builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
 
 var app = builder.Build();
 

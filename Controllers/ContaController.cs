@@ -62,15 +62,20 @@ namespace Financeiro.Controllers
             {
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
                 new Claim(ClaimTypes.Name, usuario.NameSkip),
-                new Claim("EmailCriptografado", usuario.EmailCriptografado)
+                new Claim("EmailCriptografado", usuario.EmailCriptografado ?? "")
             };
+
+            if (!string.IsNullOrEmpty(usuario.HashImagem))
+            {
+                claims.Add(new Claim("HashImagem", usuario.HashImagem));
+            }
 
             var identidade = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identidade);
 
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-            return RedirectToAction("Index", "Home"); // ou a tela desejada pós login
+            return RedirectToAction("Index", "Home");
         }
 
         // GET: /Conta/Logout

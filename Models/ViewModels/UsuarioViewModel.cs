@@ -18,7 +18,6 @@ namespace Financeiro.Models.ViewModels
         [EmailAddress(ErrorMessage = "E-mail inválido.")]
         public string Email { get; set; }
 
-        [Required(ErrorMessage = "A senha é obrigatória.")]
         [DataType(DataType.Password)]
         public string Senha { get; set; }
 
@@ -33,32 +32,61 @@ namespace Financeiro.Models.ViewModels
         public IFormFile? ImagemPerfil { get; set; }
 
         /// <summary>
+        /// Hash da imagem para exibição do avatar do usuário.
+        /// </summary>
+        public string? HashImagem { get; set; }
+
+        /// <summary>
+        /// Campo opcional para mensagens de erro na view (ex: login).
+        /// </summary>
+        public string? MensagemErro { get; set; }
+
+        /// <summary>
         /// Lista de pessoas físicas para preencher o dropdown.
         /// </summary>
         public List<SelectListItem> PessoasFisicas { get; set; } = new();
 
+        /// <summary>
+        /// Identificador do perfil selecionado
+        /// </summary>
+        [Required(ErrorMessage = "O perfil é obrigatório.")]
+        [Display(Name = "Perfil")]
+        public int? PerfilId { get; set; }
+
+        /// <summary>
+        /// Lista de perfis disponíveis para o dropdown
+        /// </summary>
+        public List<SelectListItem> Perfis { get; set; } = new();
+        public List<SelectListItem> PerfisDisponiveis { get; set; } = new();
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             var erros = new List<ValidationResult>();
 
-            // Validação da senha: não pode conter partes do NameSkip
-            if (!string.IsNullOrEmpty(Senha) && !string.IsNullOrEmpty(NameSkip))
+            // Validação da senha: só exige se estiver preenchida (útil em edição)
+            if (!string.IsNullOrEmpty(Senha))
             {
-                var partesNome = NameSkip.ToLower().Split('.', '-', '_');
-
-                foreach (var parte in partesNome)
+                if (!string.IsNullOrEmpty(NameSkip))
                 {
-                    if (parte.Length >= 4 && Senha.ToLower().Contains(parte))
+                    var partesNome = NameSkip.ToLower().Split('.', '-', '_');
+
+                    foreach (var parte in partesNome)
                     {
-                        erros.Add(new ValidationResult("A senha não pode conter partes do nome de usuário.", new[] { "Senha" }));
-                        break;
+                        if (parte.Length >= 4 && Senha.ToLower().Contains(parte))
+                        {
+                            erros.Add(new ValidationResult("A senha não pode conter partes do nome de usuário.", new[] { "Senha" }));
+                            break;
+                        }
+                    }
+
+                    if (Regex.IsMatch(Senha.ToLower(), @"(abc|123|senha|qwerty|0000|1111)"))
+                    {
+                        erros.Add(new ValidationResult("A senha não pode conter sequências simples.", new[] { "Senha" }));
                     }
                 }
 
-                // Verificar sequências simples
-                if (Regex.IsMatch(Senha.ToLower(), @"(abc|123|senha|qwerty|0000|1111)"))
+                if (string.IsNullOrEmpty(ConfirmarSenha))
                 {
-                    erros.Add(new ValidationResult("A senha não pode conter sequências simples.", new[] { "Senha" }));
+                    erros.Add(new ValidationResult("O campo ConfirmarSenha é obrigatório quando a senha é informada.", new[] { "ConfirmarSenha" }));
                 }
             }
 
@@ -84,6 +112,11 @@ namespace Financeiro.Models.ViewModels
                 }
             }
 
+            // Validação manual do Perfil (caso queira reforçar)
+            if (PerfilId == null)
+            {
+                erros.Add(new ValidationResult("O perfil é obrigatório.", new[] { "PerfilId" }));
+            }
             return erros;
         }
     }

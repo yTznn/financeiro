@@ -2,36 +2,47 @@
 
 @{
     ViewBag.Title = "Login no Sistema";
-    Layout = "_Layout"; // ou "_LayoutDeslogado" se você quiser um layout diferente para login
+    Layout = null;
 }
 
-<h2 class="mb-4 text-light">@ViewBag.Title</h2>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewBag.Title</title>
+    <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="login-background">
+        <div class="login-card">
+            <h2 class="login-title">Login</h2>
 
-@if (!string.IsNullOrEmpty(Model.MensagemErro))
-{
-    <div class="alert alert-danger">@Model.MensagemErro</div>
-}
+            @if (!string.IsNullOrEmpty(Model.MensagemErro))
+            {
+                <div class="error-message">@Model.MensagemErro</div>
+            }
 
-<form asp-controller="Conta"
-      asp-action="Login"
-      method="post"
-      class="row g-4 bg-dark p-4 rounded shadow-sm text-light">
+            <form asp-controller="Conta" asp-action="Login" method="post">
+                @Html.AntiForgeryToken()
 
-    @Html.AntiForgeryToken()
+                <div class="input-group">
+                    <label asp-for="Login"></label>
+                    <input asp-for="Login" placeholder="Digite seu e-mail ou NameSkip" />
+                    <span asp-validation-for="Login" class="text-danger small"></span>
+                </div>
 
-    <div class="col-md-12">
-        <label asp-for="Login" class="form-label fw-semibold text-light"></label>
-        <input asp-for="Login" class="form-control bg-dark text-light border-info" placeholder="Digite seu e-mail ou NameSkip" />
-        <span asp-validation-for="Login" class="text-danger small"></span>
+                <div class="input-group">
+                    <label asp-for="Senha"></label>
+                    <input asp-for="Senha" type="password" placeholder="Digite sua senha" />
+                    <span asp-validation-for="Senha" class="text-danger small"></span>
+                </div>
+
+                <div class="actions">
+                    <button type="submit">Entrar</button>
+                </div>
+            </form>
+        </div>
     </div>
-
-    <div class="col-md-12">
-        <label asp-for="Senha" class="form-label fw-semibold text-light"></label>
-        <input asp-for="Senha" class="form-control bg-dark text-light border-info" type="password" />
-        <span asp-validation-for="Senha" class="text-danger small"></span>
-    </div>
-
-    <div class="col-12 text-end">
-        <button type="submit" class="btn btn-outline-info">Entrar</button>
-    </div>
-</form>
+</body>
+</html>

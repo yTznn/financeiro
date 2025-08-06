@@ -24,5 +24,7 @@ namespace Financeiro.Models
         public bool Ativo { get; set; } = true;
         public DateTime DataCriacao { get; set; } = DateTime.Now;
         public DateTime? UltimoAcesso { get; set; }
+        public int PerfilId { get; set; }
+
     }
 }

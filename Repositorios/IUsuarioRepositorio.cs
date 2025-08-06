@@ -1,4 +1,5 @@
 using Financeiro.Models;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Financeiro.Repositorios
@@ -11,5 +12,8 @@ namespace Financeiro.Repositorios
         Task<Usuario?> ObterPorNameSkipAsync(string nameSkip);
         Task<bool> NameSkipExisteAsync(string nameSkip);
         Task AtualizarUltimoAcessoAsync(int usuarioId);
+        Task<IEnumerable<Usuario>> ListarAsync();
+        Task AtualizarAsync(Usuario usuario);
+        Task ExcluirAsync(int id);
     }
 }

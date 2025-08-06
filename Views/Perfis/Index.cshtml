@@ -1,0 +1,43 @@
+@model IEnumerable<Financeiro.Models.Perfil>
+@{
+    ViewBag.Title = "Perfis Cadastrados";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+@if (TempData["MensagemSucesso"] != null)
+{
+    <div class="alert alert-success">@TempData["MensagemSucesso"]</div>
+}
+
+<table class="table table-bordered table-striped align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th>Nome</th>
+            <th>Ativo</th>
+            <th style="width: 150px;">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var perfil in Model)
+        {
+            <tr>
+                <td>@perfil.Nome</td>
+                <td>@(perfil.Ativo ? "Sim" : "Não")</td>
+                <td>
+                    <a asp-action="Editar" asp-route-id="@perfil.Id" class="btn btn-sm btn-warning me-1">Editar</a>
+                    <form asp-action="Excluir" asp-route-id="@perfil.Id" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('Deseja realmente excluir este perfil?');">
+                            Excluir
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<a asp-action="Novo" class="btn btn-primary mt-3">Novo Perfil</a>

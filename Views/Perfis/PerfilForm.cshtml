@@ -1,0 +1,39 @@
+@model Financeiro.Models.Perfil
+
+@{
+    ViewBag.Title = Model.Id == 0 ? "Novo Perfil" : "Editar Perfil";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<div asp-validation-summary="All" class="alert alert-danger"></div>
+
+<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post" class="row g-3">
+    @Html.AntiForgeryToken()
+    <input asp-for="Id" type="hidden" />
+
+    <div class="col-md-6">
+        <label asp-for="Nome" class="form-label fw-semibold"></label>
+        <input asp-for="Nome" class="form-control" placeholder="Nome do Perfil" />
+        <span asp-validation-for="Nome" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-3">
+        <label asp-for="Ativo" class="form-label fw-semibold"></label>
+        <select asp-for="Ativo" class="form-select">
+            <option value="true">Ativo</option>
+            <option value="false">Inativo</option>
+        </select>
+        <span asp-validation-for="Ativo" class="text-danger small"></span>
+    </div>
+
+    <div class="col-12 mt-3">
+        <button type="submit" class="btn btn-success me-2">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Voltar</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

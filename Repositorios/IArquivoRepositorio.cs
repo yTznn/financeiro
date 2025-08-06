@@ -7,6 +7,7 @@ namespace Financeiro.Repositorios
     {
         Task<int> AdicionarAsync(Arquivo arquivo);
         Task<Arquivo?> ObterPorIdAsync(int id);
+        Task<Arquivo?> ObterPorHashAsync(string hash);
 
     }
 }

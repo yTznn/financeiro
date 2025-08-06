@@ -40,5 +40,11 @@ namespace Financeiro.Repositorios
             using var conn = _connectionFactory.CreateConnection();
             return await conn.QueryFirstOrDefaultAsync<Arquivo>(sql, new { Id = id });
         }
+        public async Task<Arquivo?> ObterPorHashAsync(string hash)
+        {
+            const string sql = "SELECT * FROM Arquivos WHERE Hash = @Hash";
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QueryFirstOrDefaultAsync<Arquivo>(sql, new { Hash = hash });
+        }
     }
 }

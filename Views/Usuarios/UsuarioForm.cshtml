@@ -1,61 +1,79 @@
 @model Financeiro.Models.ViewModels.UsuarioViewModel
+
 @{
-    ViewBag.Title = "Cadastro de Usuário";
+    ViewBag.Title = Model.Id == 0 ? "Novo Usuário" : "Editar Usuário";
     Layout = "_Layout";
+    var isReadOnly = Model.Id != 0 ? "readonly" : "";
 }
 
 <h2 class="mb-4">@ViewBag.Title</h2>
 
-@if (TempData["MensagemSucesso"] != null)
-{
-    <div class="alert alert-success">@TempData["MensagemSucesso"]</div>
-}
-
 <div asp-validation-summary="All" class="alert alert-danger"></div>
 
-<form asp-action="Salvar" method="post" enctype="multipart/form-data" class="row g-4">
+<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      method="post"
+      enctype="multipart/form-data"
+      class="row g-4">
     @Html.AntiForgeryToken()
+    <input asp-for="Id" type="hidden" />
 
     <div class="col-md-4">
-        <label asp-for="NameSkip" class="form-label fw-semibold"></label>
-        <input asp-for="NameSkip" class="form-control" placeholder="Ex: elielton.souza" />
+        <label asp-for="NameSkip" class="form-label fw-semibold">NameSkip</label>
+        <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" readonly="@(Model.Id != 0)" />
         <span asp-validation-for="NameSkip" class="text-danger small"></span>
     </div>
 
     <div class="col-md-4">
-        <label asp-for="Email" class="form-label fw-semibold"></label>
-        <input asp-for="Email" class="form-control" placeholder="Ex: email@exemplo.com" />
+        <label asp-for="Email" class="form-label fw-semibold">E-mail</label>
+        <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" />
         <span asp-validation-for="Email" class="text-danger small"></span>
     </div>
 
     <div class="col-md-4">
         <label asp-for="PessoaFisicaId" class="form-label fw-semibold">Pessoa Física</label>
-        <select asp-for="PessoaFisicaId" asp-items="ViewBag.PessoasFisicas" class="form-select">
-            <option value="">-- Selecione --</option>
+        <select asp-for="PessoaFisicaId" class="form-select" asp-items="Model.PessoasFisicas">
+            <option value="">Selecione...</option>
         </select>
         <span asp-validation-for="PessoaFisicaId" class="text-danger small"></span>
     </div>
 
     <div class="col-md-4">
-        <label asp-for="Senha" class="form-label fw-semibold"></label>
+        <label asp-for="PerfilId" class="form-label fw-semibold">Perfil</label>
+        <select asp-for="PerfilId" class="form-select" asp-items="Model.PerfisDisponiveis">
+            <option value="">Selecione...</option>
+        </select>
+        <span asp-validation-for="PerfilId" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Senha" class="form-label fw-semibold">Senha</label>
         <input asp-for="Senha" class="form-control" type="password" />
         <span asp-validation-for="Senha" class="text-danger small"></span>
     </div>
 
     <div class="col-md-4">
-        <label asp-for="ConfirmarSenha" class="form-label fw-semibold"></label>
+        <label asp-for="ConfirmarSenha" class="form-label fw-semibold">Confirmar Senha</label>
         <input asp-for="ConfirmarSenha" class="form-control" type="password" />
         <span asp-validation-for="ConfirmarSenha" class="text-danger small"></span>
     </div>
 
     <div class="col-md-4">
-        <label asp-for="ImagemPerfil" class="form-label fw-semibold"></label>
-        <input asp-for="ImagemPerfil" type="file" class="form-control" />
+        <label asp-for="ImagemPerfil" class="form-label fw-semibold">Foto de Perfil</label>
+        <input asp-for="ImagemPerfil" class="form-control" type="file" />
         <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
     </div>
 
+    @if (!string.IsNullOrEmpty(Model.HashImagem))
+    {
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Imagem Atual</label><br />
+            <img src="/Usuarios/ImagemPerfil?hash=@Model.HashImagem" class="rounded border" width="80" height="80" />
+        </div>
+    }
+
     <div class="col-12">
-        <button type="submit" class="btn btn-success">Salvar Usuário</button>
+        <button type="submit" class="btn btn-primary">@((Model.Id == 0) ? "Salvar" : "Atualizar")</button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">Voltar</a>
     </div>
 </form>
 

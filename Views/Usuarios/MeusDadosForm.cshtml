@@ -1,0 +1,43 @@
+@model Financeiro.Models.ViewModels.UsuarioViewModel
+@{
+    ViewBag.Title = "Meus Dados";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<div asp-validation-summary="All" class="alert alert-danger"></div>
+
+<form asp-action="AtualizarMeusDados" method="post" enctype="multipart/form-data" class="row g-3">
+    @Html.AntiForgeryToken()
+    <input asp-for="Id" type="hidden" />
+
+    <div class="col-md-4">
+        <label asp-for="NameSkip" class="form-label"></label>
+        <input asp-for="NameSkip" class="form-control" />
+        <span asp-validation-for="NameSkip" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" />
+        <span asp-validation-for="Email" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Senha" class="form-label">Nova Senha (opcional)</label>
+        <input asp-for="Senha" type="password" class="form-control" />
+        <span asp-validation-for="Senha" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="ImagemPerfil" class="form-label">Nova Imagem de Perfil</label>
+        <input asp-for="ImagemPerfil" type="file" class="form-control" />
+        <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Voltar</a>
+    </div>
+</form>

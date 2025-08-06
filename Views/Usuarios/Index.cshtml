@@ -1,0 +1,59 @@
+@model IEnumerable<Financeiro.Models.ViewModels.UsuarioListagemViewModel>
+
+@{
+    ViewBag.Title = "Usuários Cadastrados";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+@if (TempData["MensagemSucesso"] != null)
+{
+    <div class="alert alert-success">@TempData["MensagemSucesso"]</div>
+}
+
+<table class="table table-bordered table-striped align-middle">
+    <thead class="table-dark">
+        <tr>
+            <th>NameSkip</th>
+            <th>Pessoa Física</th>
+            <th>Email (Descriptografado)</th>
+            <th>Ativo</th>
+            <th>Imagem</th>
+            <th style="width: 150px;">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var usuario in Model)
+        {
+            <tr>
+                <td>@usuario.NameSkip</td>
+                <td>@usuario.NomePessoaFisica</td>
+                <td>@usuario.Email</td>
+                <td>@(usuario.Ativo ? "Sim" : "Não")</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(usuario.HashImagem))
+                    {
+                        <img src="/Usuarios/ImagemPerfil?hash=@usuario.HashImagem" alt="Imagem de Perfil" width="40" height="40" class="rounded-circle border" />
+                    }
+                    else
+                    {
+                        <span class="text-muted">Sem imagem</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="Editar" asp-route-id="@usuario.Id" class="btn btn-sm btn-warning me-1">Editar</a>
+                    <form asp-action="Excluir" asp-route-id="@usuario.Id" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('Deseja realmente excluir este usuário?');">
+                            Excluir
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<a asp-action="Novo" class="btn btn-primary mt-3">Novo Usuário</a>

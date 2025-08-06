@@ -25,46 +25,87 @@ namespace Financeiro.Repositorios
             ";
 
             using var conn = _connectionFactory.CreateConnection();
-
-            // 👇 Adiciona esta linha
             if (conn.State != ConnectionState.Open)
                 conn.Open();
 
             return await conn.ExecuteScalarAsync<int>(sql, usuario);
         }
-        public Task<Usuario?> ObterPorIdAsync(int id)
+
+        public async Task<Usuario?> ObterPorIdAsync(int id)
         {
             const string sql = "SELECT * FROM Usuarios WHERE Id = @Id";
             using var conn = _connectionFactory.CreateConnection();
-            return conn.QueryFirstOrDefaultAsync<Usuario>(sql, new { Id = id });
+            return await conn.QueryFirstOrDefaultAsync<Usuario>(sql, new { Id = id });
         }
 
-        public Task<Usuario?> ObterPorEmailAsync(string emailCriptografado)
+        public async Task<Usuario?> ObterPorEmailAsync(string emailCriptografado)
         {
             const string sql = "SELECT * FROM Usuarios WHERE EmailCriptografado = @EmailCriptografado";
             using var conn = _connectionFactory.CreateConnection();
-            return conn.QueryFirstOrDefaultAsync<Usuario>(sql, new { EmailCriptografado = emailCriptografado });
+            return await conn.QueryFirstOrDefaultAsync<Usuario>(
+                new CommandDefinition(sql, new { EmailCriptografado = emailCriptografado }, commandTimeout: 10));
         }
 
-        public Task<Usuario?> ObterPorNameSkipAsync(string nameSkip)
+        public async Task<Usuario?> ObterPorNameSkipAsync(string nameSkip)
         {
             const string sql = "SELECT * FROM Usuarios WHERE NameSkip = @NameSkip";
             using var conn = _connectionFactory.CreateConnection();
-            return conn.QueryFirstOrDefaultAsync<Usuario>(sql, new { NameSkip = nameSkip });
+            return await conn.QueryFirstOrDefaultAsync<Usuario>(
+                new CommandDefinition(sql, new { NameSkip = nameSkip }, commandTimeout: 10));
         }
 
         public async Task<bool> NameSkipExisteAsync(string nameSkip)
         {
-            var sql = "SELECT COUNT(1) FROM Usuarios WHERE NameSkip = @NameSkip";
-            using var conn = _connectionFactory.CreateConnection(); // ← CORRETO
-            var count = await conn.QuerySingleAsync<int>(sql, new { NameSkip = nameSkip });
-            return count > 0;
+            const string sql = "SELECT COUNT(1) FROM Usuarios WHERE NameSkip = @NameSkip";
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QuerySingleAsync<int>(sql, new { NameSkip = nameSkip }) > 0;
         }
-        public Task AtualizarUltimoAcessoAsync(int usuarioId)
+
+        public async Task AtualizarUltimoAcessoAsync(int usuarioId)
         {
             const string sql = "UPDATE Usuarios SET UltimoAcesso = GETDATE() WHERE Id = @UsuarioId";
             using var conn = _connectionFactory.CreateConnection();
-            return conn.ExecuteAsync(sql, new { UsuarioId = usuarioId });
+            if (conn.State != ConnectionState.Open)
+                conn.Open();
+
+            await conn.ExecuteAsync(sql, new { UsuarioId = usuarioId });
+        }
+
+        public async Task<IEnumerable<Usuario>> ListarAsync()
+        {
+            const string sql = "SELECT * FROM Usuarios ORDER BY DataCriacao DESC";
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QueryAsync<Usuario>(sql);
+        }
+
+        public async Task AtualizarAsync(Usuario usuario)
+        {
+            const string sql = @"
+                UPDATE Usuarios
+                SET NameSkip = @NameSkip,
+                    EmailCriptografado = @EmailCriptografado,
+                    SenhaHash = @SenhaHash,
+                    NomeArquivoImagem = @NomeArquivoImagem,
+                    HashImagem = @HashImagem,
+                    PessoaFisicaId = @PessoaFisicaId
+                WHERE Id = @Id;
+            ";
+
+            using var conn = _connectionFactory.CreateConnection();
+            if (conn.State != ConnectionState.Open)
+                conn.Open();
+
+            await conn.ExecuteAsync(sql, usuario);
+        }
+
+        public async Task ExcluirAsync(int id)
+        {
+            const string sql = "DELETE FROM Usuarios WHERE Id = @Id";
+            using var conn = _connectionFactory.CreateConnection();
+            if (conn.State != ConnectionState.Open)
+                conn.Open();
+
+            await conn.ExecuteAsync(sql, new { Id = id });
         }
     }
 }
