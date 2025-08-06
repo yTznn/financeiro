@@ -77,6 +77,8 @@ builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoReposito
 // 16) Serviço — Versão de Contrato
 builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
 
+builder.Services.AddScoped<Financeiro.Repositorios.INivelRepositorio, Financeiro.Repositorios.NivelRepositorio>();
+
 // 17) Serviços adicionais
 builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
 builder.Services.AddScoped<IAnexoService, AnexoService>();

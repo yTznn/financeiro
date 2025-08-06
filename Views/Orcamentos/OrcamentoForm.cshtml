@@ -12,10 +12,10 @@
       method="post">
     <div asp-validation-summary="All" class="text-danger mb-3"></div>
 
+    @Html.AntiForgeryToken() @* Adicionado para que o JavaScript possa pegar o token *@
     <input type="hidden" asp-for="Id" />
     <input type="hidden" id="detalhamentoJsonInput" name="detalhamentoJson" />
 
-    <!-- Cabeçalho -->
     <div class="row">
         <div class="col-12 mb-3">
             <label asp-for="Nome" class="form-label"></label>
@@ -70,7 +70,6 @@
 
     <hr />
 
-    <!-- Detalhamento -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4>Detalhamento do Orçamento</h4>
         <button type="button"
@@ -87,7 +86,6 @@
     </div>
 </form>
 
-<!-- Modal (fade removido) -->
 <div class="modal"
      id="modalDetalhamento"
      tabindex="-1"
@@ -139,8 +137,8 @@
 
         // ---------- VARIÁVEIS ----------
         let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
-                            Model.Detalhamento ??
-                            new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+                                Model.Detalhamento ??
+                                new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
 
         const form                  = document.getElementById('orcamento-form');
         const arvoreContainer       = document.getElementById('arvore-container');
@@ -149,6 +147,9 @@
         const btnSalvarParcial      = document.getElementById('btn-salvar-parcial');
         const valorTotalInput       = document.getElementById('ValorPrevistoTotal');
         const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
+        
+        // Pega o token CSRF para as requisições POST via AJAX (para criar novas tags)
+        const antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
         // ---------- FUNÇÕES -----------
         function calcularTotaisNosDados() {
@@ -166,25 +167,30 @@
             if (!valorTotalInput.value) valorTotalInput.value = "0.00";
             return total;
         }
-
+        
         function criarNodeElemento(node, path) {
             const indent = (path.length - 1) * 25;
-            const div    = document.createElement('div');
-            div.className    = 'orcamento-node';
+            const div = document.createElement('div');
+            div.className = 'orcamento-node';
             div.style.marginLeft = `${indent}px`;
             div.dataset.path = path.join('-');
 
             const isParent = node.Filhos && node.Filhos.length > 0;
-            const isL3     = path.length >= 3;
+            const isL3 = path.length >= 3;
+            const nivelHierarquico = path.length;
+
+            const initialOption = node.Nome
+                ? `<option value="${node.Nome}" selected>${node.Nome}</option>`
+                : '';
 
             div.innerHTML = `
                 <div class="d-flex align-items-center mb-1 p-2 border rounded">
                     <div class="flex-grow-1">
-                        <input type="text"
-                               class="form-control form-control-sm mb-1"
-                               data-prop="Nome"
-                               value="${node.Nome}"
-                               placeholder="Nome do item">
+                        <select class="form-control form-control-sm mb-1 select2-niveis"
+                                data-prop="Nome"
+                                data-nivel="${nivelHierarquico}">
+                            ${initialOption}
+                        </select>
                         <input type="number"
                                class="form-control form-control-sm"
                                data-prop="ValorPrevisto"
@@ -195,9 +201,9 @@
                     </div>
                     <div class="ms-2">
                         ${!isL3 ? `<button type="button"
-                                              class="btn btn-sm btn-success"
-                                              data-action="add-child"
-                                              title="Adicionar Filho">+</button>` : ''}
+                                            class="btn btn-sm btn-success"
+                                            data-action="add-child"
+                                            title="Adicionar Filho">+</button>` : ''}
                         <button type="button"
                                 class="btn btn-sm btn-danger"
                                 data-action="remove"
@@ -214,10 +220,71 @@
             return div;
         }
 
+        function inicializarSelect2() {
+            $('.select2-niveis').each(function () {
+                const selectElement = $(this);
+                const nivel = selectElement.data('nivel');
+
+                selectElement.select2({
+                    theme: 'bootstrap-5',
+                    dropdownParent: $('#modalDetalhamento'), // Importante para o Select2 funcionar dentro de um modal
+                    placeholder: 'Digite para buscar um nível...',
+                    minimumInputLength: 1,
+                    allowClear: true,
+                    tags: true,
+                    ajax: {
+                        url: '/Niveis/Search',
+                        dataType: 'json',
+                        delay: 250,
+                        data: function (params) {
+                            return {
+                                term: params.term,
+                                nivel: nivel
+                            };
+                        },
+                        processResults: function (data) {
+                            return {
+                                results: data.results
+                            };
+                        },
+                        cache: true
+                    },
+                    createTag: function (params) {
+                        const term = $.trim(params.term);
+                        if (term === '') return null;
+
+                        $.ajax({
+                            url: '/Niveis/Create',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            headers: {
+                                'RequestVerificationToken': antiForgeryToken
+                            },
+                            data: JSON.stringify({
+                                Nome: term,
+                                IsNivel1: nivel === 1,
+                                IsNivel2: nivel === 2,
+                                IsNivel3: nivel === 3,
+                                Ativo: true
+                            })
+                        }).done(function (data) {
+                            const newOption = new Option(data.text, data.id, true, true);
+                            selectElement.append(newOption).trigger('change');
+                        }).fail(function (jqXHR) {
+                            alert('Erro ao criar o nível: ' + jqXHR.responseText);
+                        });
+
+                        return { id: term, text: term };
+                    }
+                });
+            });
+        }
+
         function renderizarArvore() {
             arvoreContainer.innerHTML = '';
             detalhamento.forEach((n,i) =>
                 arvoreContainer.appendChild(criarNodeElemento(n,[i])));
+            inicializarSelect2();
         }
 
         function getNode(pathArr) {
@@ -233,68 +300,62 @@
             document.querySelectorAll(
                 '.orcamento-node input[data-prop="ValorPrevisto"][readonly]'
             ).forEach(inp => {
-                const path = inp.closest('.orcamento-node')
-                                .dataset.path.split('-').map(Number);
-                const n    = getNode(path);
+                const path = inp.closest('.orcamento-node').dataset.path.split('-').map(Number);
+                const n = getNode(path);
                 if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
             });
         }
 
         // ---------- EVENTOS -----------
         btnAdicionarNivel.addEventListener('click', () => {
-            detalhamento.push({ Nome:'', ValorPrevisto:0, Filhos:[] });
+            detalhamento.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
             renderizarArvore();
         });
 
-        // + / x
         arvoreContainer.addEventListener('click', e => {
-            const btn  = e.target.closest('button[data-action]');
+            const btn = e.target.closest('button[data-action]');
             if (!btn) return;
 
             const elem = btn.closest('.orcamento-node');
             const path = elem.dataset.path.split('-').map(Number);
-            const act  = btn.dataset.action;
+            const act = btn.dataset.action;
 
             if (act === 'add-child') {
                 const p = getNode(path);
                 if (p) {
                     p.Filhos = p.Filhos || [];
-                    p.Filhos.push({ Nome:'', ValorPrevisto:0, Filhos:[] });
+                    p.Filhos.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
                 }
             }
             if (act === 'remove') {
-                const parentPath = path.slice(0,-1);
-                const idx = path[path.length-1];
+                const parentPath = path.slice(0, -1);
+                const idx = path[path.length - 1];
                 if (parentPath.length === 0)
-                    detalhamento.splice(idx,1);
+                    detalhamento.splice(idx, 1);
                 else {
                     const p = getNode(parentPath);
-                    if (p) p.Filhos.splice(idx,1);
+                    if (p) p.Filhos.splice(idx, 1);
                 }
             }
-
             calcularTotaisNosDados();
             renderizarArvore();
         });
 
-        // Digitação
-        arvoreContainer.addEventListener('input', e => {
-            const inp = e.target.closest('input[data-prop]');
-            if (!inp) return;
+        arvoreContainer.addEventListener('change', e => {
+            const el = e.target.closest('[data-prop]');
+            if (!el) return;
 
-            const path = inp.closest('.orcamento-node')
-                            .dataset.path.split('-').map(Number);
+            const path = el.closest('.orcamento-node').dataset.path.split('-').map(Number);
             const node = getNode(path);
             if (!node) return;
 
-            node[inp.dataset.prop] =
-                inp.type === 'number' ? parseFloat(inp.value)||0 : inp.value;
+            node[el.dataset.prop] =
+                el.type.includes('select') ? el.value : (parseFloat(el.value) || 0);
 
             calcularTotaisNosDados();
-            atualizarReadonlyValores(); // não recria DOM
+            atualizarReadonlyValores();
         });
 
-        // limpa "0,00" ao focar
         arvoreContainer.addEventListener('focusin', e => {
             const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
             if (inp && parseFloat(inp.value) === 0) inp.value = '';
@@ -304,33 +365,27 @@
             if (inp && inp.value.trim() === '') inp.value = '0.00';
         });
 
-        // Salvar parcial
         btnSalvarParcial.addEventListener('click', () => {
             calcularTotaisNosDados();
             detalhamentoJsonInput.value = JSON.stringify(detalhamento);
             alert('Preenchimento salvo!');
         });
 
-        // Confirmar
         btnSalvarDetalhamento.addEventListener('click', () => {
             calcularTotaisNosDados();
             detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-
             const mElem = document.getElementById('modalDetalhamento');
-            const inst  = bootstrap.Modal.getInstance(mElem);
+            const inst = bootstrap.Modal.getInstance(mElem);
             if (inst) inst.hide();
-
-            // fallback se backdrop não sair
             document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
             document.body.classList.remove('modal-open');
         });
-
-        // Submit final
+        
         form.addEventListener('submit', () =>
             detalhamentoJsonInput.value = JSON.stringify(detalhamento)
         );
 
-        // Inicialização
+        // ---------- INICIALIZAÇÃO ----------
         calcularTotaisNosDados();
         detalhamentoJsonInput.value = JSON.stringify(detalhamento);
         renderizarArvore();
