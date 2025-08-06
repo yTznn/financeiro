@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Financeiro</title>
 
-    <!-- Bootstrap e CSS externos -->
+    <!-- Estilos -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
@@ -56,7 +56,6 @@
             font-size: 20px;
             margin-left: 10px;
             font-weight: bold;
-            transition: opacity 0.3s ease;
         }
 
         .sidebar.close .logo_name {
@@ -71,14 +70,13 @@
         .sidebar ul li {
             position: relative;
             list-style: none;
-            height: 50px;
-            line-height: 50px;
             padding-left: 20px;
         }
 
         .sidebar ul li a {
             display: flex;
             align-items: center;
+            height: 50px;
             text-decoration: none;
             color: var(--white);
             transition: all 0.2s ease;
@@ -93,6 +91,24 @@
             min-width: 40px;
             text-align: center;
             font-size: 20px;
+        }
+
+        .sidebar ul li ul {
+            background-color: var(--light-dark);
+            border-radius: 6px;
+            margin-top: 5px;
+            margin-bottom: 5px;
+            padding-left: 10px;
+        }
+
+        .sidebar ul li ul li {
+            height: 45px;
+            padding-left: 10px;
+        }
+
+        .sidebar ul li ul li a {
+            font-size: 14px;
+            color: var(--white);
         }
 
         .sidebar .profile {
@@ -126,7 +142,6 @@
             cursor: pointer;
         }
 
-        /* === Ajustes para colapsar apenas o texto === */
         .sidebar.close .links_name {
             display: none;
         }
@@ -136,8 +151,6 @@
         }
 
         .sidebar .nav-list li a {
-            display: flex;
-            align-items: center;
             white-space: nowrap;
         }
 
@@ -152,14 +165,62 @@
             <i class='bx bx-code-alt'></i>
             <span class="logo_name">Financeiro</span>
         </div>
-        <ul class="nav-list">
-            <li><a asp-controller="Home" asp-action="Index"><i class='bx bx-grid-alt'></i><span class="links_name">Dashboard</span></a></li>
-            <li><a asp-controller="PessoasJuridicas" asp-action="Index"><i class='bx bx-building'></i><span class="links_name">PJ</span></a></li>
-            <li><a asp-controller="PessoasFisicas" asp-action="Index"><i class='bx bx-user'></i><span class="links_name">PF</span></a></li>
-            <li><a asp-controller="Contratos" asp-action="Index"><i class='bx bx-file'></i><span class="links_name">Contratos</span></a></li>
-            <li><a asp-controller="Orcamentos" asp-action="Index"><i class='bx bx-wallet'></i><span class="links_name">Orçamentos</span></a></li>
-            <li><a asp-controller="Home" asp-action="Logout"><i class='bx bx-log-out'></i><span class="links_name">Sair</span></a></li>
+        <!-- Trecho ajustado do menu lateral -->
+        <ul class="nav-list" id="accordionSidebar">
+            <!-- Dashboard -->
+            <li>
+                <a asp-controller="Home" asp-action="Index">
+                    <i class='bx bx-grid-alt'></i>
+                    <span class="links_name">Dashboard</span>
+                </a>
+            </li>
+
+            <!-- Cadastros -->
+            <li>
+                <a href="#submenu-cadastros" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="submenu-cadastros">
+                    <i class='bx bx-folder-plus'></i>
+                    <span class="links_name">Cadastros</span>
+                </a>
+                <ul class="collapse list-unstyled" id="submenu-cadastros" data-bs-parent="#accordionSidebar">
+                    <li><a href="http://localhost:5044/Escolhas/Index"><i class='bx bx-plus-circle'></i> <span class="links_name">Novo Fornecedor</span></a></li>
+                    <li><a asp-controller="TipoAcordos" asp-action="Novo"><i class='bx bx-plus-circle'></i> <span class="links_name">Novo Tipo de Acordo</span></a></li>
+                    <li><a asp-controller="Naturezas" asp-action="Novo"><i class='bx bx-plus-circle'></i> <span class="links_name">Nova Natureza</span></a></li>
+                </ul>
+            </li>
+
+            <!-- Consultas -->
+            <li>
+                <a href="#submenu-consultas" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="submenu-consultas">
+                    <i class='bx bx-search'></i>
+                    <span class="links_name">Consultas</span>
+                </a>
+                <ul class="collapse list-unstyled" id="submenu-consultas" data-bs-parent="#accordionSidebar">
+                    <li><a asp-controller="PessoasFisicas" asp-action="Index"><i class='bx bx-user'></i> <span class="links_name">Pessoas Físicas</span></a></li>
+                    <li><a asp-controller="PessoasJuridicas" asp-action="Index"><i class='bx bx-building'></i> <span class="links_name">Pessoas Jurídicas</span></a></li>
+                </ul>
+            </li>
+
+            <!-- Contratos -->
+            <li>
+                <a href="#submenu-contratos" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="submenu-contratos">
+                    <i class='bx bx-file'></i>
+                    <span class="links_name">Contratos</span>
+                </a>
+                <ul class="collapse list-unstyled" id="submenu-contratos" data-bs-parent="#accordionSidebar">
+                    <li><a asp-controller="Contratos" asp-action="Novo"><i class='bx bx-plus-circle'></i> <span class="links_name">Novo Contrato</span></a></li>
+                    <li><a asp-controller="Contratos" asp-action="Index"><i class='bx bx-list-ul'></i> <span class="links_name">Listar Contratos</span></a></li>
+                </ul>
+            </li>
+
+            <!-- Sair -->
+            <li>
+                <a asp-controller="Home" asp-action="Logout">
+                    <i class='bx bx-log-out'></i>
+                    <span class="links_name">Sair</span>
+                </a>
+            </li>
         </ul>
+
         <div class="profile">
             <span class="text-white small">Elielton Souza<br /><span class="text-muted small">Administrador</span></span>
         </div>
@@ -178,6 +239,7 @@
     <!-- Scripts -->
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
 
     <script>
@@ -187,13 +249,15 @@
 
         let manuallyToggled = false;
 
-        // Botão de menu manual
+        // Toggle manual da sidebar
         toggleBtn.addEventListener("click", () => {
             sidebar.classList.toggle("close");
-            manuallyToggled = true; // usuário clicou manualmente
+
+            // Se já estava aberta e o usuário fechou, consideramos como toggle manual.
+            manuallyToggled = sidebar.classList.contains("close");
         });
 
-        // Hover abre temporariamente se estiver colapsada
+        // Hover: só ativa se NÃO estiver manualmente fechado
         sidebar.addEventListener("mouseenter", () => {
             if (sidebar.classList.contains("close") && !manuallyToggled) {
                 sidebar.classList.remove("close");
@@ -208,20 +272,22 @@
             }
         });
 
-        // Clique inteligente nos links
+        // Se o usuário clicar num link, vamos apenas navegar — NÃO vamos setar manuallyToggled como true!
+        // Isso corrige o bug do hover que para de funcionar
         navLinks.forEach(link => {
-            link.addEventListener("click", (e) => {
-                const currentUrl = window.location.pathname.toLowerCase();
-                const targetUrl = link.getAttribute("href").toLowerCase();
-
-                if (currentUrl === targetUrl) {
-                    e.preventDefault(); // impede recarregamento
-                    sidebar.classList.toggle("close");
-                    manuallyToggled = true;
-                }
+            link.addEventListener("click", () => {
+                // Nenhuma alteração em manuallyToggled aqui
+                // Ele só será modificado no botão do menu
             });
         });
+
+        // Redefine manualmente se o usuário sair da página
+        window.addEventListener("pageshow", () => {
+            manuallyToggled = false;
+        });
+
     </script>
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
