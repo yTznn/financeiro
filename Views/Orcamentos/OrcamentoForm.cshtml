@@ -1,0 +1,265 @@
+@model Financeiro.Models.ViewModels.OrcamentoViewModel
+
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Novo Orçamento" : "Editar Orçamento";
+}
+
+<h3>@ViewData["Title"]</h3>
+<hr />
+
+<form id="orcamento-form" asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" id="detalhamentoJsonInput" name="detalhamentoJson" />
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="Nome" class="form-label"></label>
+            <input asp-for="Nome" class="form-control" />
+            <span asp-validation-for="Nome" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="TipoAcordoId" class="form-label"></label>
+            <select asp-for="TipoAcordoId" class="form-select" 
+                    asp-items="@(new SelectList(ViewBag.TiposDeAcordo, "Id", "Numero"))">
+                <option value="">Selecione um termo</option>
+            </select>
+            <span asp-validation-for="TipoAcordoId" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="ValorPrevistoTotal" class="form-label"></label>
+            <input asp-for="ValorPrevistoTotal" class="form-control" readonly />
+            <span asp-validation-for="ValorPrevistoTotal" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="VigenciaInicio" class="form-label"></label>
+            <input asp-for="VigenciaInicio" class="form-control" type="date" />
+            <span asp-validation-for="VigenciaInicio" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="VigenciaFim" class="form-label"></label>
+            <input asp-for="VigenciaFim" class="form-control" type="date" />
+            <span asp-validation-for="VigenciaFim" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="Observacao" class="form-label"></label>
+            <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
+            <span asp-validation-for="Observacao" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" asp-for="Ativo">
+        <label class="form-check-label" asp-for="Ativo"></label>
+    </div>
+
+    <hr/>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Detalhamento do Orçamento</h4>
+        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalDetalhamento">
+            Gerenciar Detalhamento
+        </button>
+    </div>
+    
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+
+<!-- Modal -->
+<div class="modal fade" id="modalDetalhamento" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLabel">Detalhamento do Orçamento</h5>
+                <button type="button" class="btn btn-primary ms-auto" id="btn-adicionar-nivel">+ Adicionar Nível</button>
+            </div>
+            <div class="modal-body">
+                <div id="arvore-container"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="salvar-detalhamento">Confirmar Detalhes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Detalhamento ?? new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+
+        const form = document.getElementById('orcamento-form');
+        const arvoreContainer = document.getElementById('arvore-container');
+        const btnAdicionarNivel = document.getElementById('btn-adicionar-nivel');
+        const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
+        const valorTotalInput = document.getElementById('ValorPrevistoTotal');
+        const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
+
+        function calcularTotaisNosDados() {
+            let grandTotal = 0;
+            function calcularSubtotal(node) {
+                if (!node.Filhos || node.Filhos.length === 0) {
+                    const valor = parseFloat(node.ValorPrevisto) || 0;
+                    grandTotal += valor;
+                    return valor;
+                } else {
+                    let subtotal = 0;
+                    node.Filhos.forEach(child => {
+                        subtotal += calcularSubtotal(child);
+                    });
+                    node.ValorPrevisto = subtotal;
+                    return subtotal;
+                }
+            }
+            detalhamento.forEach(calcularSubtotal);
+            return grandTotal;
+        }
+
+        function renderizarArvore() {
+            arvoreContainer.innerHTML = '';
+            detalhamento.forEach((node, index) => {
+                arvoreContainer.appendChild(criarNodeElemento(node, [index]));
+            });
+        }
+
+        function criarNodeElemento(node, path) {
+            const indentacao = (path.length - 1) * 25;
+            const elemento = document.createElement('div');
+            elemento.className = 'orcamento-node';
+            elemento.style.marginLeft = `${indentacao}px`;
+            elemento.dataset.path = path.join('-');
+
+            const isParent = node.Filhos && node.Filhos.length > 0;
+            const isLevel3 = path.length >= 3;
+
+            elemento.innerHTML = `
+                <div class="d-flex align-items-center mb-1 p-2 border rounded">
+                    <div class="flex-grow-1">
+                        <input type="text" class="form-control form-control-sm mb-1" data-prop="Nome" value="${node.Nome}" placeholder="Nome do item">
+                        <input type="number" class="form-control form-control-sm" data-prop="ValorPrevisto" value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}" step="0.01" placeholder="Valor" ${isParent ? 'readonly style="background-color: #e9ecef;"' : ''}>
+                    </div>
+                    <div class="ms-2">
+                        ${!isLevel3 ? `<button type="button" class="btn btn-sm btn-success" data-action="add-child" title="Adicionar Filho">+</button>` : ''}
+                        <button type="button" class="btn btn-sm btn-danger" data-action="remove" title="Remover">x</button>
+                    </div>
+                </div>
+            `;
+            
+            if (isParent) {
+                const filhosContainer = document.createElement('div');
+                filhosContainer.className = 'orcamento-node-children';
+                node.Filhos.forEach((childNode, index) => {
+                    filhosContainer.appendChild(criarNodeElemento(childNode, [...path, index]));
+                });
+                elemento.appendChild(filhosContainer);
+            }
+            return elemento;
+        }
+
+        function getNodeFromPath(pathArray) {
+            let node = { Filhos: detalhamento };
+            for (const index of pathArray) {
+                if (!node.Filhos || !node.Filhos[index]) return null;
+                node = node.Filhos[index];
+            }
+            return node;
+        }
+
+        // --- EVENTOS ---
+
+        btnAdicionarNivel.addEventListener('click', () => {
+            detalhamento.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+            renderizarArvore();
+        });
+
+        arvoreContainer.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+
+            const nodeElement = button.closest('.orcamento-node');
+            const path = nodeElement.dataset.path.split('-').map(Number);
+            const action = button.dataset.action;
+
+            if (action === 'add-child') {
+                const parentNode = getNodeFromPath(path);
+                if (parentNode) {
+                    if (!parentNode.Filhos) parentNode.Filhos = [];
+                    parentNode.Filhos.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+                }
+            }
+
+            if (action === 'remove') {
+                const parentPath = path.slice(0, -1);
+                const indexToRemove = path[path.length - 1];
+                if (parentPath.length === 0) {
+                    detalhamento.splice(indexToRemove, 1);
+                } else {
+                    const parentNode = getNodeFromPath(parentPath);
+                    if (parentNode) parentNode.Filhos.splice(indexToRemove, 1);
+                }
+            }
+            
+            const total = calcularTotaisNosDados();
+            valorTotalInput.value = total.toFixed(2);
+            renderizarArvore();
+        });
+
+        arvoreContainer.addEventListener('input', function(e) {
+            const input = e.target.closest('input[data-prop]');
+            if (!input) return;
+            
+            const nodeElement = input.closest('.orcamento-node');
+            const path = nodeElement.dataset.path.split('-').map(Number);
+            const prop = input.dataset.prop;
+            const node = getNodeFromPath(path);
+
+            if (node) {
+                node[prop] = input.type === 'number' ? parseFloat(input.value) || 0 : input.value;
+                const total = calcularTotaisNosDados();
+                valorTotalInput.value = total.toFixed(2);
+            }
+        });
+
+        btnSalvarDetalhamento.addEventListener('click', function() {
+            const total = calcularTotaisNosDados();
+            valorTotalInput.value = total.toFixed(2);
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+            var modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalhamento'));
+            modal.hide();
+        });
+
+        // ✅ CORREÇÃO: Adicionado um listener para o evento de submit do formulário
+        form.addEventListener('submit', function() {
+            // Garante que o JSON está atualizado antes de enviar
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+        });
+
+        // --- INICIALIZAÇÃO ---
+        function inicializar() {
+            const total = calcularTotaisNosDados();
+            valorTotalInput.value = total.toFixed(2);
+            renderizarArvore();
+            // ✅ CORREÇÃO: Popula o campo oculto assim que a página carrega
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+        }
+
+        inicializar();
+    });
+    </script>
+}

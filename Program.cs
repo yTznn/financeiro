@@ -3,8 +3,13 @@ using Financeiro.Repositorios;
 using Financeiro.Validacoes;
 using Financeiro.Servicos;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var cultureInfo = new CultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
 // 1) MVC
 builder.Services.AddControllersWithViews();
@@ -42,8 +47,12 @@ builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
 // 9) Serviço domínio — Versão / Aditivo
 builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
 
-// 10) Repositório — Natureza  ✅ NOVO
+// 10) Repositório — Natureza
 builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
+
+// 11) Repositório — Orçamento  ✅ NOVO
+builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
+
 
 var app = builder.Build();
 
