@@ -7,13 +7,33 @@
 
 <h2 class="mb-4">@ViewBag.Title</h2>
 
-<!-- Exibir erros de validação -->
+@if (Model.Id != 0)
+{
+    <!-- Botões utilitários -->
+    <div class="mb-3 d-flex gap-2">
+        <a asp-controller="Aditivos"
+           asp-action="Novo"
+           asp-route-acordoId="@Model.Id"
+           class="btn btn-outline-primary">
+            + Registrar Aditivo
+        </a>
+
+        <!-- Botão abre modal -->
+        <button type="button"
+                class="btn btn-outline-primary"
+                data-bs-toggle="modal"
+                data-bs-target="#modalHistorico">
+            Histórico de Aditivos
+        </button>
+    </div>
+}
+
 <div asp-validation-summary="All" class="text-danger"></div>
 
 <form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
       method="post"
       class="row g-3">
-    
+
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
 
@@ -72,6 +92,67 @@
     </div>
 </form>
 
+@if (Model.Id != 0)
+{
+    <!-- Modal -->
+    <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Histórico de Aditivos</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body" id="histBody">
+                    <div class="text-center">
+                        <div class="spinner-border"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    @if (Model.Id != 0)
+    {
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const acordoId = @Model.Id;
+            const modal    = document.getElementById('modalHistorico');
+            const bodyDiv  = document.getElementById('histBody');
+
+            const loadHistPage = pag => {
+                bodyDiv.innerHTML =
+                    '<div class="text-center"><div class="spinner-border"></div></div>';
+
+                fetch(`/TipoAcordos/HistoricoPagina/${acordoId}?pag=${pag}`)
+                    .then(r => r.text())
+                    .then(html => {
+                        bodyDiv.innerHTML = html;
+
+                        bodyDiv.querySelectorAll('.hist-page-link')
+                               .forEach(a => a.addEventListener('click', e => {
+                                   e.preventDefault();
+                                   loadHistPage(a.dataset.pagina);
+                               }));
+                    });
+            };
+
+            modal.addEventListener('shown.bs.modal', () => loadHistPage(1));
+        });
+    </script>
+    }
+
+    <style>
+        .modal-header { border-bottom: none; }
+        .table thead.table-light th { background-color:#0d6efd20; }
+        .pagination .page-item.active .page-link {
+            background:#0d6efd; border-color:#0d6efd;
+        }
+    </style>
 }

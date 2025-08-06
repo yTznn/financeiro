@@ -1,0 +1,47 @@
+@model IEnumerable<Financeiro.Models.AcordoVersao>
+
+@{
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
+    int paginaAtual  = ViewBag.PaginaAtual  ?? 1;
+}
+
+<table class="table table-sm table-bordered table-hover table-striped">
+    <thead class="table-light">
+        <tr>
+            <th style="width:80px">Versão</th>
+            <th>Vigência</th>
+            <th style="width:120px">Valor</th>
+            <th style="width:140px">Tipo Aditivo</th>
+            <th style="width:120px">Assinatura</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var v in Model)
+        {
+            <tr>
+                <td>@v.Versao</td>
+                <td>
+                    @v.VigenciaInicio.ToString("dd/MM/yyyy") -
+                    @(v.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")
+                </td>
+                <td>@v.Valor.ToString("C")</td>
+                <td>@(v.TipoAditivo?.ToString() ?? "Original")</td>
+                <td>@(v.DataAssinatura?.ToString("dd/MM/yyyy") ?? "-")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (totalPaginas > 1)
+{
+    <nav>
+        <ul class="pagination pagination-sm">
+            @for (int p = 1; p <= totalPaginas; p++)
+            {
+                <li class="page-item @(p == paginaAtual ? "active" : "")">
+                    <a class="page-link hist-page-link" href="#" data-pagina="@p">@p</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}

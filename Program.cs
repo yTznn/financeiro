@@ -1,6 +1,7 @@
 using Financeiro.Infraestrutura;
 using Financeiro.Repositorios;
 using Financeiro.Validacoes;
+using Financeiro.Servicos;          // 👈 novo using
 using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,8 +33,14 @@ builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
 // 6) Repositório — Conta Bancária
 builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
 
-// 7) Repositório — Tipo de Acordo ✅ NOVO
+// 7) Repositório — Tipo de Acordo
 builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
+
+// 8) Repositório — Aditivo / Versões
+builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
+
+// 9) Serviço de domínio — Versão / Aditivo  ✅ NOVO
+builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
 
 var app = builder.Build();
 

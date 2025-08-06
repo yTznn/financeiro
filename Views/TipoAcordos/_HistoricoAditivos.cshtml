@@ -1,0 +1,28 @@
+@model IEnumerable<Financeiro.Models.AcordoVersao>
+
+<table class="table table-sm table-bordered">
+    <thead class="table-light">
+        <tr>
+            <th>Versão</th>
+            <th>Vigência</th>
+            <th>Valor</th>
+            <th>Tipo Aditivo</th>
+            <th>Assinatura</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var v in Model)
+        {
+            <tr>
+                <td>@v.Versao</td>
+                <td>
+                    @v.VigenciaInicio:dd/MM/yyyy -
+                    @(v.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")
+                </td>
+                <td>@v.Valor.ToString("C")</td>
+                <td>@(v.TipoAditivo?.ToString() ?? "Original")</td>
+                <td>@(v.DataAssinatura?.ToString("dd/MM/yyyy") ?? "-")</td>
+            </tr>
+        }
+    </tbody>
+</table>
