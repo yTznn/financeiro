@@ -4,6 +4,8 @@
     ViewBag.Title = Model.Id == 0 ? "Novo Usuário" : "Editar Usuário";
     Layout = "_Layout";
     var isAdmin = User.IsInRole("Administrador");
+    var nameSkipReadonly = !isAdmin ? "readonly" : "";
+    var emailReadonly = !isAdmin ? "readonly" : "";
 }
 
 <h2 class="mb-4">@ViewBag.Title</h2>
@@ -19,13 +21,27 @@
 
     <div class="col-md-4">
         <label asp-for="NameSkip" class="form-label fw-semibold">NameSkip</label>
-        <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" readonly="@(Model.Id != 0)" />
+        @if (isAdmin)
+        {
+            <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" />
+        }
+        else
+        {
+            <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" readonly="readonly" />
+        }
         <span asp-validation-for="NameSkip" class="text-danger small"></span>
     </div>
 
     <div class="col-md-4">
         <label asp-for="Email" class="form-label fw-semibold">E-mail</label>
-        <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" />
+        @if (isAdmin)
+        {
+            <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" />
+        }
+        else
+        {
+            <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" readonly="readonly" />
+        }
         <span asp-validation-for="Email" class="text-danger small"></span>
     </div>
 

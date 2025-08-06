@@ -51,5 +51,12 @@ namespace Financeiro.Servicos.Seguranca
         {
             return BCrypt.Net.BCrypt.Verify(senhaInformada, senhaHashSalva);
         }
+        public string HashEmailParaLogin(string email)
+        {
+            using var sha = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(email.Trim().ToLower());
+            var hash = sha.ComputeHash(bytes);
+            return Convert.ToBase64String(hash);
+        }
     }
 }

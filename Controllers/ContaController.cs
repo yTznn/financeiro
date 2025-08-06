@@ -5,6 +5,7 @@ using Financeiro.Servicos.Seguranca;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Financeiro.Models;
 
 namespace Financeiro.Controllers
 {
@@ -20,13 +21,11 @@ namespace Financeiro.Controllers
             _criptografiaService = criptografiaService;
         }
 
-        // GET: /Conta/Login
         public IActionResult Login()
         {
             return View(new LoginViewModel());
         }
 
-        // POST: /Conta/Login
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model)
@@ -34,15 +33,19 @@ namespace Financeiro.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            // Verifica se é e-mail
-            bool isEmail = model.Login.Contains("@");
-            var emailCriptografado = isEmail ? _criptografiaService.CriptografarEmail(model.Login) : null;
+            Usuario? usuario;
 
-            var usuario = isEmail
-                ? await _usuarioRepositorio.ObterPorEmailAsync(emailCriptografado!)
-                : await _usuarioRepositorio.ObterPorNameSkipAsync(model.Login);
+            if (model.Login.Contains("@"))
+            {
+                var emailHash = _criptografiaService.HashEmailParaLogin(model.Login);
+                usuario = await _usuarioRepositorio.ObterPorEmailHashAsync(emailHash);
+            }
+            else
+            {
+                usuario = await _usuarioRepositorio.ObterPorNameSkipAsync(model.Login);
+            }
 
-            if (usuario == null || !_criptografiaService.VerificarSenha(model.Senha, usuario.SenhaHash))
+            if (usuario is null || !_criptografiaService.VerificarSenha(model.Senha, usuario.SenhaHash))
             {
                 model.MensagemErro = "Usuário ou senha inválidos.";
                 return View(model);
@@ -54,15 +57,23 @@ namespace Financeiro.Controllers
                 return View(model);
             }
 
-            // Atualiza data do último acesso
             await _usuarioRepositorio.AtualizarUltimoAcessoAsync(usuario.Id);
 
-            // Cria claims de identidade
+            // Define role com base no PerfilId
+            var perfil = usuario.PerfilId switch
+            {
+                1 => "Administrador",
+                2 => "Financeiro",
+                3 => "Gerencial",
+                _ => "Comum"
+            };
+
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
                 new Claim(ClaimTypes.Name, usuario.NameSkip),
-                new Claim("EmailCriptografado", usuario.EmailCriptografado ?? "")
+                new Claim("EmailCriptografado", usuario.EmailCriptografado ?? ""),
+                new Claim(ClaimTypes.Role, perfil) // <- Agora com a Claim de Role
             };
 
             if (!string.IsNullOrEmpty(usuario.HashImagem))
@@ -78,7 +89,6 @@ namespace Financeiro.Controllers
             return RedirectToAction("Index", "Home");
         }
 
-        // GET: /Conta/Logout
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync();

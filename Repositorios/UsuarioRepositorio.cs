@@ -18,8 +18,8 @@ namespace Financeiro.Repositorios
         {
             const string sql = @"
                 INSERT INTO Usuarios
-                (NameSkip, EmailCriptografado, SenhaHash, NomeArquivoImagem, HashImagem, PessoaFisicaId, PerfilId, Ativo, DataCriacao)
-                VALUES (@NameSkip, @EmailCriptografado, @SenhaHash, @NomeArquivoImagem, @HashImagem, @PessoaFisicaId, @PerfilId, @Ativo, @DataCriacao);
+                (NameSkip, EmailCriptografado, EmailHash, SenhaHash, NomeArquivoImagem, HashImagem, PessoaFisicaId, PerfilId, Ativo, DataCriacao)
+                VALUES (@NameSkip, @EmailCriptografado, @EmailHash, @SenhaHash, @NomeArquivoImagem, @HashImagem, @PessoaFisicaId, @PerfilId, @Ativo, @DataCriacao);
 
                 SELECT CAST(SCOPE_IDENTITY() as int);
             ";
@@ -44,6 +44,13 @@ namespace Financeiro.Repositorios
             using var conn = _connectionFactory.CreateConnection();
             return await conn.QueryFirstOrDefaultAsync<Usuario>(
                 new CommandDefinition(sql, new { EmailCriptografado = emailCriptografado }, commandTimeout: 10));
+        }
+
+        public async Task<Usuario?> ObterPorEmailHashAsync(string emailHash)
+        {
+            const string sql = "SELECT * FROM Usuarios WHERE EmailHash = @EmailHash";
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QueryFirstOrDefaultAsync<Usuario>(sql, new { EmailHash = emailHash });
         }
 
         public async Task<Usuario?> ObterPorNameSkipAsync(string nameSkip)
@@ -82,11 +89,13 @@ namespace Financeiro.Repositorios
         {
             const string sql = @"
                 UPDATE Usuarios
-                SET NameSkip = @NameSkip,
+                SET
+                    NameSkip = @NameSkip,
                     EmailCriptografado = @EmailCriptografado,
-                    SenhaHash = @SenhaHash,
-                    NomeArquivoImagem = @NomeArquivoImagem,
-                    HashImagem = @HashImagem,
+                    EmailHash = @EmailHash,
+                    SenhaHash = ISNULL(@SenhaHash, SenhaHash),
+                    NomeArquivoImagem = ISNULL(@NomeArquivoImagem, NomeArquivoImagem),
+                    HashImagem = ISNULL(@HashImagem, HashImagem),
                     PessoaFisicaId = @PessoaFisicaId,
                     PerfilId = @PerfilId
                 WHERE Id = @Id;

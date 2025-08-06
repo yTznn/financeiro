@@ -92,7 +92,9 @@ namespace Financeiro.Controllers
                 return View("UsuarioForm", model);
             }
 
-            var emailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
+            var email = model.Email.Trim().ToLower();
+            var emailCriptografado = _criptografiaService.CriptografarEmail(email);
+            var emailHash = _criptografiaService.HashEmailParaLogin(email);
             var senhaHash = _criptografiaService.GerarHashSenha(model.Senha);
 
             string? nomeImagem = null;
@@ -120,6 +122,7 @@ namespace Financeiro.Controllers
             {
                 NameSkip = model.NameSkip,
                 EmailCriptografado = emailCriptografado,
+                EmailHash = emailHash,
                 SenhaHash = senhaHash,
                 PessoaFisicaId = model.PessoaFisicaId,
                 NomeArquivoImagem = nomeImagem,
@@ -168,13 +171,25 @@ namespace Financeiro.Controllers
             var usuarioExistente = await _usuarioRepositorio.ObterPorIdAsync(model.Id);
             if (usuarioExistente == null) return NotFound();
 
-            usuarioExistente.EmailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
+            // Verifica se o e-mail foi alterado
+            if (_criptografiaService.DescriptografarEmail(usuarioExistente.EmailCriptografado) != model.Email)
+            {
+                usuarioExistente.EmailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
+                usuarioExistente.EmailHash = _criptografiaService.HashEmailParaLogin(model.Email);
+            }
+
+            // Permite alteração de NameSkip (nickname)
+            if (usuarioExistente.NameSkip != model.NameSkip)
+                usuarioExistente.NameSkip = model.NameSkip;
+
             usuarioExistente.PessoaFisicaId = model.PessoaFisicaId;
             usuarioExistente.PerfilId = model.PerfilId ?? usuarioExistente.PerfilId;
 
+            // Verifica se senha foi informada
             if (!string.IsNullOrWhiteSpace(model.Senha))
                 usuarioExistente.SenhaHash = _criptografiaService.GerarHashSenha(model.Senha);
 
+            // Verifica se foi alterada a imagem de perfil
             if (model.ImagemPerfil != null)
             {
                 try
@@ -197,6 +212,7 @@ namespace Financeiro.Controllers
             TempData["MensagemSucesso"] = "Usuário atualizado com sucesso!";
             return RedirectToAction("Index");
         }
+
 
         public async Task<IActionResult> Excluir(int id)
         {

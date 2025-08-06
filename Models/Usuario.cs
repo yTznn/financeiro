@@ -9,7 +9,7 @@ namespace Financeiro.Models
         // Login pode ser feito via nameskip ou e-mail
         public string NameSkip { get; set; } // Ex: elielton.silva
         public string EmailCriptografado { get; set; }
-
+        public string EmailHash { get; set; } = string.Empty;
         // Segurança
         public string SenhaHash { get; set; }
 

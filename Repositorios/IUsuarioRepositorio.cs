@@ -9,6 +9,7 @@ namespace Financeiro.Repositorios
         Task<int> AdicionarAsync(Usuario usuario);
         Task<Usuario?> ObterPorIdAsync(int id);
         Task<Usuario?> ObterPorEmailAsync(string emailCriptografado);
+        Task<Usuario?> ObterPorEmailHashAsync(string emailHash);
         Task<Usuario?> ObterPorNameSkipAsync(string nameSkip);
         Task<bool> NameSkipExisteAsync(string nameSkip);
         Task AtualizarUltimoAcessoAsync(int usuarioId);
