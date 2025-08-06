@@ -9,10 +9,14 @@ namespace Financeiro.Controllers
     public class ContratosController : Controller
     {
         private readonly IContratoRepositorio _contratoRepo;
+        private readonly IContratoVersaoRepositorio _versaoRepo;
 
-        public ContratosController(IContratoRepositorio contratoRepo)
+        public ContratosController(
+            IContratoRepositorio contratoRepo, 
+            IContratoVersaoRepositorio versaoRepo) 
         {
             _contratoRepo = contratoRepo;
+            _versaoRepo = versaoRepo;
         }
 
         // --- Ações Principais (Telas) ---
@@ -42,7 +46,6 @@ namespace Financeiro.Controllers
             {
                 return NotFound();
             }
-            // ✅ CORREÇÃO: Passa o ViewModel para o método preparar o ViewBag
             await PrepararViewBagParaFormulario(vm);
             return View("ContratoForm", vm);
         }
@@ -119,15 +122,24 @@ namespace Financeiro.Controllers
             return Json(resultado);
         }
 
-        // --- Métodos Auxiliares ---
+        [HttpGet]
+        public async Task<IActionResult> Historico(int id, int pag = 1)
+        {
+            var (itens, totalPaginas) = await _versaoRepo.ListarPaginadoAsync(id, pag);
+            ViewBag.TotalPaginas = totalPaginas;
+            ViewBag.PaginaAtual = pag;
+            ViewBag.ContratoId = id;
 
-        // ✅ CORREÇÃO: Método agora recebe o ViewModel para buscar o fornecedor atual
+            return PartialView("_HistoricoContrato", itens);
+        }
+
+
+        // --- Métodos Auxiliares ---
         private async Task PrepararViewBagParaFormulario(ContratoViewModel vm)
         {
             ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
 
-            // Se for uma edição e tiver um fornecedor, busca os dados dele
-            if (vm.Id > 0 && !string.IsNullOrEmpty(vm.FornecedorIdCompleto))
+            if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto))
             {
                 ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
             }

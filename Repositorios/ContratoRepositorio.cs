@@ -19,8 +19,6 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
-        // --- Operações de Gravação (CRUD) ---
-
         public async Task InserirAsync(ContratoViewModel vm)
         {
             using var conn = _factory.CreateConnection();
@@ -29,9 +27,7 @@ namespace Financeiro.Repositorios
 
             try
             {
-                // Converte o FornecedorIdCompleto ("PF-123") em IDs separados
                 var (pessoaFisicaId, pessoaJuridicaId) = ParseFornecedorId(vm.FornecedorIdCompleto);
-
                 var contrato = new Contrato
                 {
                     PessoaFisicaId = pessoaFisicaId,
@@ -53,10 +49,7 @@ namespace Financeiro.Repositorios
                     SELECT CAST(SCOPE_IDENTITY() as int);";
                 
                 var contratoId = await conn.QuerySingleAsync<int>(sqlInsertContrato, contrato, transaction);
-
-                // Insere os vínculos na tabela ContratoNatureza
                 await InserirContratoNaturezasAsync(conn, transaction, contratoId, vm.NaturezasIds);
-
                 transaction.Commit();
             }
             catch (Exception)
@@ -75,7 +68,6 @@ namespace Financeiro.Repositorios
             try
             {
                 var (pessoaFisicaId, pessoaJuridicaId) = ParseFornecedorId(vm.FornecedorIdCompleto);
-
                 var contrato = new Contrato
                 {
                     Id = vm.Id,
@@ -94,27 +86,15 @@ namespace Financeiro.Repositorios
 
                 const string sqlUpdateContrato = @"
                     UPDATE Contrato SET
-                        PessoaJuridicaId = @PessoaJuridicaId,
-                        PessoaFisicaId = @PessoaFisicaId,
-                        NumeroContrato = @NumeroContrato,
-                        AnoContrato = @AnoContrato,
-                        ObjetoContrato = @ObjetoContrato,
-                        DataAssinatura = @DataAssinatura,
-                        DataInicio = @DataInicio,
-                        DataFim = @DataFim,
-                        ValorContrato = @ValorContrato,
-                        Observacao = @Observacao,
-                        Ativo = @Ativo
+                        PessoaJuridicaId = @PessoaJuridicaId, PessoaFisicaId = @PessoaFisicaId, NumeroContrato = @NumeroContrato,
+                        AnoContrato = @AnoContrato, ObjetoContrato = @ObjetoContrato, DataAssinatura = @DataAssinatura,
+                        DataInicio = @DataInicio, DataFim = @DataFim, ValorContrato = @ValorContrato, Observacao = @Observacao, Ativo = @Ativo
                     WHERE Id = @Id;";
                 
                 await conn.ExecuteAsync(sqlUpdateContrato, contrato, transaction);
-
-                // Remove os vínculos antigos e insere os novos
                 const string sqlDeleteNaturezas = "DELETE FROM ContratoNatureza WHERE ContratoId = @ContratoId;";
                 await conn.ExecuteAsync(sqlDeleteNaturezas, new { ContratoId = vm.Id }, transaction);
-                
                 await InserirContratoNaturezasAsync(conn, transaction, vm.Id, vm.NaturezasIds);
-
                 transaction.Commit();
             }
             catch (Exception)
@@ -131,8 +111,6 @@ namespace Financeiro.Repositorios
             await conn.ExecuteAsync(sql, new { id });
         }
 
-        // --- Operações de Consulta ---
-
         public async Task<ContratoViewModel?> ObterParaEdicaoAsync(int id)
         {
             const string sqlContrato = "SELECT * FROM Contrato WHERE Id = @id;";
@@ -144,7 +122,7 @@ namespace Financeiro.Repositorios
             const string sqlNaturezas = "SELECT NaturezaId FROM ContratoNatureza WHERE ContratoId = @id;";
             var naturezasIds = await conn.QueryAsync<int>(sqlNaturezas, new { id });
 
-            var vm = new ContratoViewModel
+            return new ContratoViewModel
             {
                 Id = contrato.Id,
                 FornecedorIdCompleto = contrato.PessoaFisicaId.HasValue ? $"PF-{contrato.PessoaFisicaId}" : $"PJ-{contrato.PessoaJuridicaId}",
@@ -159,15 +137,22 @@ namespace Financeiro.Repositorios
                 Ativo = contrato.Ativo,
                 NaturezasIds = naturezasIds.ToList()
             };
-
-            return vm;
         }
 
-        public async Task<(IEnumerable<Contrato> Itens, int TotalPaginas)> ListarPaginadoAsync(int pagina, int tamanhoPagina = 10)
+        public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int pagina, int tamanhoPagina = 10)
         {
             const string sql = @"
-                SELECT * FROM Contrato
-                ORDER BY AnoContrato DESC, NumeroContrato DESC
+                SELECT 
+                    c.*, 
+                    COALESCE(pj.RazaoSocial, pf.Nome + ' ' + pf.Sobrenome) AS FornecedorNome
+                FROM 
+                    Contrato c
+                LEFT JOIN 
+                    PessoaJuridica pj ON c.PessoaJuridicaId = pj.Id
+                LEFT JOIN 
+                    PessoaFisica pf ON c.PessoaFisicaId = pf.Id
+                ORDER BY 
+                    c.AnoContrato DESC, c.NumeroContrato DESC
                 OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
 
                 SELECT COUNT(Id) FROM Contrato;";
@@ -175,15 +160,16 @@ namespace Financeiro.Repositorios
             using var conn = _factory.CreateConnection();
             using var multi = await conn.QueryMultipleAsync(sql, new { Offset = (pagina - 1) * tamanhoPagina, TamanhoPagina = tamanhoPagina });
 
-            var itens = await multi.ReadAsync<Contrato>();
+            var itens = multi.Read<Contrato, string, ContratoListaViewModel>(
+                (contrato, fornecedorNome) => new ContratoListaViewModel { Contrato = contrato, FornecedorNome = fornecedorNome },
+                splitOn: "FornecedorNome"
+            ).ToList();
+            
             var totalItens = await multi.ReadSingleAsync<int>();
-
             var totalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
 
             return (itens, totalPaginas);
         }
-
-        // --- Métodos de Negócio e Validação ---
 
         public async Task<int> SugerirProximoNumeroAsync(int ano)
         {
@@ -197,11 +183,8 @@ namespace Financeiro.Repositorios
         {
             const string sql = "SELECT COUNT(1) FROM Contrato WHERE NumeroContrato = @numero AND AnoContrato = @ano AND Id != @idAtual;";
             using var conn = _factory.CreateConnection();
-            var existe = await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, idAtual });
-            return existe;
+            return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, idAtual });
         }
-
-        // --- Métodos de Busca para Formulário ---
 
         public async Task<(IEnumerable<VwFornecedor> Itens, bool TemMais)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina = 10)
         {
@@ -230,7 +213,6 @@ namespace Financeiro.Repositorios
             return await conn.QueryAsync<Natureza>(sql);
         }
 
-        // ✅ NOVO MÉTODO COMPLETO
         public async Task<VwFornecedor?> ObterFornecedorPorIdCompletoAsync(string idCompleto)
         {
             var (pfId, pjId) = ParseFornecedorId(idCompleto);
@@ -246,8 +228,6 @@ namespace Financeiro.Repositorios
                 Tipo = pfId.HasValue ? "PF" : "PJ"
             });
         }
-
-        // --- Métodos Auxiliares ---
 
         private async Task InserirContratoNaturezasAsync(IDbConnection conn, IDbTransaction transaction, int contratoId, List<int> naturezasIds)
         {

@@ -1,4 +1,4 @@
-@model IEnumerable<Financeiro.Models.Contrato>
+@model IEnumerable<Financeiro.Models.ViewModels.ContratoListaViewModel>
 @using System.Globalization
 @{
     ViewData["Title"] = "Contratos";
@@ -24,6 +24,7 @@
     <thead class="table-dark">
         <tr>
             <th>Número</th>
+            <th>Fornecedor</th>
             <th>Objeto</th>
             <th>Valor</th>
             <th>Vigência</th>
@@ -37,12 +38,13 @@
             @foreach (var item in Model)
             {
                 <tr>
-                    <td>@item.NumeroContrato.ToString("D2")-@item.AnoContrato</td>
-                    <td>@item.ObjetoContrato</td>
-                    <td>@item.ValorContrato.ToString("C", culturaBrasileira)</td>
-                    <td>@item.DataInicio.ToShortDateString() a @item.DataFim.ToShortDateString()</td>
+                    <td>@item.Contrato.NumeroContrato.ToString("D2")-@item.Contrato.AnoContrato</td>
+                    <td>@item.FornecedorNome</td>
+                    <td>@item.Contrato.ObjetoContrato</td>
+                    <td>@item.Contrato.ValorContrato.ToString("C", culturaBrasileira)</td>
+                    <td>@item.Contrato.DataInicio.ToShortDateString() a @item.Contrato.DataFim.ToShortDateString()</td>
                     <td>
-                        @if (item.Ativo)
+                        @if (item.Contrato.Ativo)
                         {
                             <span class="badge bg-success">Ativo</span>
                         }
@@ -52,8 +54,8 @@
                         }
                     </td>
                     <td class="text-end">
-                        <a asp-action="Editar" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">Editar</a>
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExclusao" data-contrato-id="@item.Id">
+                        <a asp-action="Editar" asp-route-id="@item.Contrato.Id" class="btn btn-sm btn-outline-primary">Editar</a>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExclusao" data-contrato-id="@item.Contrato.Id">
                             Excluir
                         </button>
                     </td>
@@ -63,7 +65,7 @@
         else
         {
             <tr>
-                <td colspan="6" class="text-center">Nenhum contrato cadastrado.</td>
+                <td colspan="7" class="text-center">Nenhum contrato cadastrado.</td>
             </tr>
         }
     </tbody>

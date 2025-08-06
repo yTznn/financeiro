@@ -41,10 +41,10 @@ builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositori
 // 7) Repositório — Tipo de Acordo
 builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
 
-// 8) Repositório — Aditivo / Versões
+// 8) Repositório — Aditivo / Versões de Acordo
 builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
 
-// 9) Serviço domínio — Versão / Aditivo
+// 9) Serviço domínio — Versão / Aditivo de Acordo
 builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
 
 // 10) Repositório — Natureza
@@ -53,8 +53,14 @@ builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
 // 11) Repositório — Orçamento
 builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
 
-// 12) Repositório — Contrato ✅ NOVO
+// 12) Repositório — Contrato
 builder.Services.AddTransient<IContratoRepositorio, ContratoRepositorio>();
+
+// 13) Repositório — Versão de Contrato ✅ NOVO
+builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
+
+// 14) Serviço — Versão de Contrato ✅ NOVO
+builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
 
 
 var app = builder.Build();
