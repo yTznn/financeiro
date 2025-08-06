@@ -1,0 +1,11 @@
+## ASP.NET / .NET
+bin/
+obj/
+.vscode/
+*.user
+*.suo
+*.log
+*.zip
+*.db
+*.sqlite
+.env

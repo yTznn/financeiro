@@ -1,0 +1,77 @@
+@model Financeiro.Models.ViewModels.PessoaJuridicaViewModel
+@{
+    ViewBag.Title = "Cadastro de Pessoa Jurídica";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<!-- Erros de validação -->
+<div asp-validation-summary="All" class="text-danger"></div>
+
+<form asp-controller="PessoasJuridicas"
+      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      method="post"
+      class="row g-3">
+
+    @Html.AntiForgeryToken()
+
+    <!-- Id oculto (necessário na edição) -->
+    <input asp-for="Id" type="hidden" />
+
+    <div class="col-md-6">
+        <label asp-for="RazaoSocial" class="form-label"></label>
+        <input asp-for="RazaoSocial"
+               placeholder="Nome do fornecedor"
+               class="form-control" />
+        <span asp-validation-for="RazaoSocial" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="NomeFantasia" class="form-label"></label>
+        <input asp-for="NomeFantasia"
+               placeholder="Nome comercial / Fachada"
+               class="form-control" />
+        <span asp-validation-for="NomeFantasia" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="NumeroInscricao" class="form-label"></label>
+        <input asp-for="NumeroInscricao"
+               placeholder="CNPJ (somente números)"
+               class="form-control" />
+        <span asp-validation-for="NumeroInscricao" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email"
+               placeholder="exemplo@dominio.com"
+               class="form-control" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Telefone" class="form-label"></label>
+        <input asp-for="Telefone"
+               placeholder="(xx) 99999-9999"
+               class="form-control" />
+        <span asp-validation-for="Telefone" class="text-danger"></span>
+    </div>
+
+    <div class="col-12 form-check">
+        <input asp-for="SituacaoAtiva" class="form-check-input" />
+        <label asp-for="SituacaoAtiva" class="form-check-label">Ativo</label>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">
+            @(Model.Id == 0 ? "Salvar" : "Atualizar")
+        </button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">Cancelar</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

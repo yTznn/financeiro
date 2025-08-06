@@ -1,0 +1,21 @@
+@{
+    ViewBag.Title = "Novo Cadastro";
+}
+
+<h2>O que você deseja cadastrar?</h2>
+
+<div class="d-flex gap-3">
+    <!-- Pessoa Jurídica -->
+    <a asp-controller="PessoasJuridicas"
+       asp-action="Novo"
+       class="btn btn-primary">
+        Pessoa Jurídica
+    </a>
+
+    <!-- Pessoa Física (controller ainda será criado) -->
+    <a asp-controller="PessoasFisicas"
+       asp-action="Novo"
+       class="btn btn-secondary">
+        Pessoa Física
+    </a>
+</div>

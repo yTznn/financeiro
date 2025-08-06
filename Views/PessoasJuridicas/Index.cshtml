@@ -1,0 +1,55 @@
+@model IEnumerable<Financeiro.Models.PessoaJuridica>
+
+@{
+    ViewBag.Title = "Pessoas Jurídicas";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<a asp-action="Novo" class="btn btn-primary mb-3">
+    + Nova Pessoa Jurídica
+</a>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Razão Social</th>
+            <th>Nome Fantasia</th>
+            <th>CNPJ</th>
+            <th>E-mail</th>
+            <th>Telefone</th>
+            <th>Situação</th>
+            <th style="width:200px">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var pj in Model)
+        {
+            <tr>
+                <td>@pj.RazaoSocial</td>
+                <td>@pj.NomeFantasia</td>
+                <td>@pj.NumeroInscricao</td>
+                <td>@pj.Email</td>
+                <td>@pj.Telefone</td>
+                <td>@(pj.SituacaoAtiva ? "Ativo" : "Inativo")</td>
+                <td>
+                    <!-- Editar -->
+                    <a class="btn btn-sm btn-outline-primary me-1"
+                       asp-action="Editar"
+                       asp-route-id="@pj.Id">
+                        Editar
+                    </a>
+
+                    <!-- Preencher Endereço -->
+                    <a class="btn btn-sm btn-outline-secondary"
+                       asp-controller="Enderecos"
+                       asp-action="Novo"
+                       asp-route-pessoaId="@pj.Id">
+                        Preencher Endereço
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

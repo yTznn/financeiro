@@ -1,0 +1,46 @@
+@model IEnumerable<Financeiro.Models.PessoaFisica>
+
+@{
+    ViewBag.Title = "Pessoas Físicas";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<a asp-action="Novo" class="btn btn-primary mb-3">
+    + Nova Pessoa Física
+</a>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Sobrenome</th>
+            <th>CPF</th>
+            <th>E-mail</th>
+            <th>Telefone</th>
+            <th>Situação</th>
+            <th style="width:140px">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var pf in Model)
+        {
+            <tr>
+                <td>@pf.Nome</td>
+                <td>@pf.Sobrenome</td>
+                <td>@pf.Cpf</td>
+                <td>@pf.Email</td>
+                <td>@pf.Telefone</td>
+                <td>@(pf.SituacaoAtiva ? "Ativo" : "Inativo")</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary"
+                       asp-action="Editar"
+                       asp-route-id="@pf.Id">
+                        Editar
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
