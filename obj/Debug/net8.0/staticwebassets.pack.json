@@ -5,6 +5,14 @@
       "PackagePath": "staticwebassets\\financeiro.bundle.scp.css"
     },
     {
+      "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\css\\coreui.min.css",
+      "PackagePath": "staticwebassets\\css\\coreui.min.css"
+    },
+    {
+      "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\css\\custom-style.css",
+      "PackagePath": "staticwebassets\\css\\custom-style.css"
+    },
+    {
       "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\css\\login.css",
       "PackagePath": "staticwebassets\\css\\login.css"
     },
@@ -15,6 +23,10 @@
     {
       "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\favicon.ico",
       "PackagePath": "staticwebassets\\favicon.ico"
+    },
+    {
+      "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\js\\coreui.bundle.min.js",
+      "PackagePath": "staticwebassets\\js\\coreui.bundle.min.js"
     },
     {
       "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\js\\site.js",
@@ -251,6 +263,14 @@
     {
       "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\lib\\jquery\\dist\\jquery.min.map",
       "PackagePath": "staticwebassets\\lib\\jquery\\dist\\jquery.min.map"
+    },
+    {
+      "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\vendors\\css\\simplebar.css",
+      "PackagePath": "staticwebassets\\vendors\\css\\simplebar.css"
+    },
+    {
+      "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\vendors\\js\\simplebar.min.js",
+      "PackagePath": "staticwebassets\\vendors\\js\\simplebar.min.js"
     },
     {
       "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.build.financeiro.props",

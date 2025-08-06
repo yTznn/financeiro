@@ -82,3 +82,4 @@ C:\Users\Elielton Souza\Desktop\financeiro\bin\Debug\net8.0\Microsoft.Extensions
 C:\Users\Elielton Souza\Desktop\financeiro\bin\Debug\net8.0\Microsoft.Extensions.ObjectPool.dll
 C:\Users\Elielton Souza\Desktop\financeiro\bin\Debug\net8.0\Microsoft.Extensions.WebEncoders.dll
 C:\Users\Elielton Souza\Desktop\financeiro\bin\Debug\net8.0\System.Security.Cryptography.Xml.dll
+C:\Users\Elielton Souza\Desktop\financeiro\obj\Debug\net8.0\financeiro.sourcelink.json
