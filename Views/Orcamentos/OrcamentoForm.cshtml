@@ -129,7 +129,6 @@
         </div>
     </div>
 </div>
-
 @section Scripts {
     @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
 
@@ -219,35 +218,32 @@
             return div;
         }
 
+        function inicializarSelect2ParaElemento(selectElement) {
+            const nivel = selectElement.data('nivel');
+            selectElement.select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#modalDetalhamento'),
+                placeholder: 'Digite para buscar um nível...',
+                minimumInputLength: 1,
+                allowClear: true,
+                ajax: {
+                    url: '/Niveis/Search',
+                    dataType: 'json',
+                    delay: 250,
+                    cache: false,
+                    data: function (params) {
+                        return { term: params.term, nivel: nivel };
+                    },
+                    processResults: function (data) {
+                        return { results: data.results };
+                    }
+                }
+            });
+        }
+
         function inicializarSelect2() {
             $('.select2-niveis').each(function () {
-                const selectElement = $(this);
-                const nivel = selectElement.data('nivel');
-
-                selectElement.select2({
-                    theme: 'bootstrap-5',
-                    dropdownParent: $('#modalDetalhamento'),
-                    placeholder: 'Digite para buscar um nível...',
-                    minimumInputLength: 1,
-                    allowClear: true,
-                    ajax: {
-                        url: '/Niveis/Search',
-                        dataType: 'json',
-                        delay: 250,
-                        cache: false, 
-                        data: function (params) {
-                            return {
-                                term: params.term,
-                                nivel: nivel
-                            };
-                        },
-                        processResults: function (data) {
-                            return {
-                                results: data.results
-                            };
-                        }
-                    }
-                });
+                inicializarSelect2ParaElemento($(this));
             });
         }
 
@@ -268,9 +264,8 @@
         }
 
         function atualizarReadonlyValores() {
-            document.querySelectorAll(
-                '.orcamento-node input[data-prop="ValorPrevisto"][readonly]'
-            ).forEach(inp => {
+            document.querySelectorAll('.orcamento-node input[data-prop="ValorPrevisto"][readonly]')
+            .forEach(inp => {
                 const path = inp.closest('.orcamento-node').dataset.path.split('-').map(Number);
                 const n = getNode(path);
                 if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
@@ -289,16 +284,41 @@
 
             const elem = btn.closest('.orcamento-node');
             const path = elem.dataset.path.split('-').map(Number);
-            const act = btn.dataset.action;
+            const act  = btn.dataset.action;
 
             if (act === 'add-child') {
-                const p = getNode(path);
-                if (p) {
-                    p.Filhos = p.Filhos || [];
-                    p.Filhos.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+                const pNode = getNode(path);
+                if (!pNode) return;
+                pNode.Filhos = pNode.Filhos || [];
+                pNode.Filhos.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+
+                let childrenContainer = elem.querySelector('.orcamento-node-children');
+                if (!childrenContainer) {
+                    childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'orcamento-node-children';
+                    elem.appendChild(childrenContainer);
                 }
-            }
-            if (act === 'remove') {
+                
+                const novoFilhoIndex = pNode.Filhos.length - 1;
+                const novoFilhoPath = [...path, novoFilhoIndex];
+                const novoFilhoData = pNode.Filhos[novoFilhoIndex];
+                const novoFilhoElemento = criarNodeElemento(novoFilhoData, novoFilhoPath);
+                
+                childrenContainer.appendChild(novoFilhoElemento);
+                
+                $(novoFilhoElemento).find('.select2-niveis').each(function() {
+                    inicializarSelect2ParaElemento($(this));
+                });
+                
+                // CORREÇÃO: Bloqueia o campo do pai dinamicamente
+                const parentInput = elem.querySelector('input[data-prop="ValorPrevisto"]');
+                parentInput.readOnly = true;
+                parentInput.style.backgroundColor = '#e9ecef';
+
+                calcularTotaisNosDados();
+                atualizarReadonlyValores();
+
+            } else if (act === 'remove') {
                 const parentPath = path.slice(0, -1);
                 const idx = path[path.length - 1];
                 if (parentPath.length === 0)
@@ -307,69 +327,62 @@
                     const p = getNode(parentPath);
                     if (p) p.Filhos.splice(idx, 1);
                 }
+                renderizarArvore();
+                calcularTotaisNosDados();
+                atualizarReadonlyValores();
             }
-            calcularTotaisNosDados();
-            renderizarArvore();
         });
 
+        // Evento para atualizar o NOME quando um item é selecionado
         arvoreContainer.addEventListener('change', e => {
-            const el = e.target.closest('[data-prop]');
-            if (!el) return;
+            const select = e.target.closest('select[data-prop="Nome"]');
+            if (!select) return;
 
-            const path = el.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const path = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
             const node = getNode(path);
-            if (!node) return;
+            if (node) {
+                node.Nome = select.value;
+            }
+        });
 
-            node[el.dataset.prop] =
-                el.type.includes('select') ? el.value : (parseFloat(el.value) || 0);
+        // Evento para calcular o VALOR em tempo real
+        arvoreContainer.addEventListener('input', e => {
+            const inputValor = e.target.closest('input[data-prop="ValorPrevisto"]');
+            if (!inputValor) return;
+
+            const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const node = getNode(path);
+            if (node) {
+                node.ValorPrevisto = parseFloat(inputValor.value) || 0;
+            }
 
             calcularTotaisNosDados();
             atualizarReadonlyValores();
         });
-
-        arvoreContainer.addEventListener('focusin', e => {
-            const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
-            if (inp && parseFloat(inp.value) === 0) inp.value = '';
-        });
         
-        arvoreContainer.addEventListener('focusout', e => {
-            const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
-            if (inp && inp.value.trim() === '') inp.value = '0.00';
-        });
-
-        btnSalvarDetalhamento.addEventListener('click', () => {
-            calcularTotaisNosDados();
-            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-            const mElem = document.getElementById('modalDetalhamento');
-            const inst = bootstrap.Modal.getInstance(mElem);
-            if (inst) inst.hide();
-            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-            document.body.classList.remove('modal-open');
-        });
-        
-        form.addEventListener('submit', () =>
-            detalhamentoJsonInput.value = JSON.stringify(detalhamento)
-        );
-
-        // --- CÓDIGO NOVO ADICIONADO PARA O MODAL DE CADASTRO ---
-
-        // Variável para guardar o último nível focado pelo usuário
+        // DEMAIS EVENTOS
         let ultimoNivelFocado = 1;
-
-        // Este evento "ouve" qual dropdown de nível o usuário usou por último
         arvoreContainer.addEventListener('focusin', e => {
             const select = e.target.closest('.select2-niveis');
             if (select) {
                 ultimoNivelFocado = parseInt(select.dataset.nivel) || 1;
             }
         });
+        
+        btnSalvarDetalhamento.addEventListener('click', () => {
+            calcularTotaisNosDados();
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+            const mElem = document.getElementById('modalDetalhamento');
+            const inst = bootstrap.Modal.getInstance(mElem);
+            if (inst) inst.hide();
+        });
+        
+        form.addEventListener('submit', () =>
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento)
+        );
 
-        // Evento de clique no botão "Cadastrar Novo Nível"
-        // Lembre-se que o ID do botão no HTML deve ser "btn-abrir-modal-nivel"
         $(document).on('click', '#btn-abrir-modal-nivel', function() {
-            // Faz a requisição AJAX para buscar a PartialView do modal
             $.get('/Niveis/NovoNivelPartial?nivel=' + ultimoNivelFocado, function(data) {
-                // Carrega o HTML retornado no nosso container placeholder
                 $('#modal-nivel-placeholder').html(data);
             });
         });
@@ -378,6 +391,7 @@
         calcularTotaisNosDados();
         detalhamentoJsonInput.value = JSON.stringify(detalhamento);
         renderizarArvore();
+        atualizarReadonlyValores(); // Garante que os pais carregados já sejam atualizados
     });
     </script>
 }
