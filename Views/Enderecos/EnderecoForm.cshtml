@@ -1,0 +1,94 @@
+@model Financeiro.Models.ViewModels.EnderecoViewModel
+@{
+    ViewBag.Title = "Cadastro de Endereço";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<!-- Mostra erros de validação -->
+<div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <form asp-controller="Enderecos"
+              asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+              method="post"
+              class="row g-3">
+
+            @Html.AntiForgeryToken()
+
+            <!-- chaves ocultas -->
+            <input asp-for="Id" type="hidden" />
+            <input asp-for="PessoaJuridicaId" type="hidden" />
+
+            <div class="col-md-6">
+                <label asp-for="Logradouro" class="form-label fw-semibold"></label>
+                <input asp-for="Logradouro"
+                       placeholder="Rua / Avenida / Travessa"
+                       class="form-control" />
+                <span asp-validation-for="Logradouro" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-2">
+                <label asp-for="Numero" class="form-label fw-semibold"></label>
+                <input asp-for="Numero"
+                       placeholder="123 ou SN"
+                       class="form-control" />
+                <span asp-validation-for="Numero" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label asp-for="Complemento" class="form-label fw-semibold"></label>
+                <input asp-for="Complemento"
+                       placeholder="Quadra, lote, etc."
+                       class="form-control" />
+                <span asp-validation-for="Complemento" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-3">
+                <label asp-for="Cep" class="form-label fw-semibold"></label>
+                <input asp-for="Cep"
+                       placeholder="75920000"
+                       class="form-control" />
+                <span asp-validation-for="Cep" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-3">
+                <label asp-for="Bairro" class="form-label fw-semibold"></label>
+                <input asp-for="Bairro" class="form-control" />
+                <span asp-validation-for="Bairro" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label asp-for="Municipio" class="form-label fw-semibold"></label>
+                <input asp-for="Municipio" class="form-control" />
+                <span asp-validation-for="Municipio" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-2">
+                <label asp-for="Uf" class="form-label fw-semibold"></label>
+                <input asp-for="Uf"
+                       placeholder="GO"
+                       class="form-control text-uppercase"
+                       maxlength="2" />
+                <span asp-validation-for="Uf" class="text-danger small"></span>
+            </div>
+
+            <div class="col-12 mt-3">
+                <button type="submit" class="btn btn-success px-4">
+                    @(Model.Id == 0 ? "Salvar" : "Atualizar")
+                </button>
+                <a asp-controller="PessoasJuridicas"
+                   asp-action="Index"
+                   class="btn btn-outline-secondary ms-2 px-4">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

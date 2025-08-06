@@ -1,0 +1,50 @@
+@model Financeiro.Models.Dto.NivelDto
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Novo Nível" : "Editar Nível";
+    var formId = $"nivel-form-{Model.GetHashCode()}";
+}
+
+@if (!Context.Request.Headers["X-Requested-With"].Equals("XMLHttpRequest"))
+{
+    <h3>@ViewData["Title"]</h3>
+    <hr />
+}
+
+<form id="@formId" asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label asp-for="Nome" class="form-label"></label>
+        <input asp-for="Nome" class="form-control" />
+        <span asp-validation-for="Nome" class="text-danger"></span>
+    </div>
+
+    @* CORREÇÃO: As checkboxes para selecionar o "nível do nível" estão visíveis novamente! *@
+    <div class="mb-3">
+        <label class="form-label d-block">Aplicável aos seguintes níveis:</label>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" asp-for="IsNivel1" />
+            <label class="form-check-label" asp-for="IsNivel1">Nível 1</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" asp-for="IsNivel2" />
+            <label class="form-check-label" asp-for="IsNivel2">Nível 2</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" asp-for="IsNivel3" />
+            <label class="form-check-label" asp-for="IsNivel3">Nível 3</label>
+        </div>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" asp-for="Ativo" />
+        <label class="form-check-label" asp-for="Ativo">Ativo</label>
+    </div>
+
+    @if (!Context.Request.Headers["X-Requested-With"].Equals("XMLHttpRequest"))
+    {
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    }
+</form>

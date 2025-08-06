@@ -1,0 +1,424 @@
+@model Financeiro.Models.ViewModels.OrcamentoViewModel
+
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Novo Orçamento" : "Editar Orçamento";
+}
+
+<h3>@ViewData["Title"]</h3>
+<hr />
+
+<form id="orcamento-form"
+      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      method="post">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    @Html.AntiForgeryToken() @* Adicionado para que o JavaScript possa pegar o token *@
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" id="detalhamentoJsonInput" name="detalhamentoJson" />
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="Nome" class="form-label"></label>
+            <input asp-for="Nome" class="form-control" />
+            <span asp-validation-for="Nome" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="TipoAcordoId" class="form-label"></label>
+            <select asp-for="TipoAcordoId"
+                    class="form-select"
+                    asp-items="@(new SelectList(ViewBag.TiposDeAcordo, "Id", "Numero"))">
+                <option value="">Selecione um termo</option>
+            </select>
+            <span asp-validation-for="TipoAcordoId" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label asp-for="ValorPrevistoTotal" class="form-label"></label>
+            <input asp-for="ValorPrevistoTotal" class="form-control" readonly />
+            <span asp-validation-for="ValorPrevistoTotal" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="VigenciaInicio" class="form-label"></label>
+            <input asp-for="VigenciaInicio" class="form-control" type="date" />
+            <span asp-validation-for="VigenciaInicio" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="VigenciaFim" class="form-label"></label>
+            <input asp-for="VigenciaFim" class="form-control" type="date" />
+            <span asp-validation-for="VigenciaFim" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="Observacao" class="form-label"></label>
+            <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
+            <span asp-validation-for="Observacao" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" asp-for="Ativo" />
+        <label class="form-check-label" asp-for="Ativo"></label>
+    </div>
+
+    <hr />
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Detalhamento do Orçamento</h4>
+        <button type="button"
+                class="btn btn-info"
+                data-bs-toggle="modal"
+                data-bs-target="#modalDetalhamento">
+            Gerenciar Detalhamento
+        </button>
+    </div>
+
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+
+<div class="modal"
+     id="modalDetalhamento"
+     tabindex="-1"
+     aria-labelledby="modalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLabel">Detalhamento do Orçamento</h5>
+                <button type="button"
+                        class="btn btn-primary ms-auto"
+                        id="btn-adicionar-nivel">
+                    + Adicionar Nível
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div id="arvore-container"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="btn btn-warning"
+                        id="btn-abrir-modal-nivel">
+                    Cadastrar Novo Nível
+                </button>
+                <div id="modal-nivel-placeholder"></div>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="salvar-detalhamento">
+                    Confirmar Detalhes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // ---------- VARIÁVEIS ----------
+        let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                                Model.Detalhamento ??
+                                new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+
+        const form                  = document.getElementById('orcamento-form');
+        const arvoreContainer       = document.getElementById('arvore-container');
+        const btnAdicionarNivel     = document.getElementById('btn-adicionar-nivel');
+        const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
+        const valorTotalInput       = document.getElementById('ValorPrevistoTotal');
+        const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
+        
+        const antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+        // ---------- FUNÇÕES -----------
+        function calcularTotaisNosDados() {
+            function subtotal(node) {
+                if (!node.Filhos || node.Filhos.length === 0)
+                    return parseFloat(node.ValorPrevisto) || 0;
+
+                let soma = 0;
+                node.Filhos.forEach(c => soma += subtotal(c));
+                node.ValorPrevisto = soma;
+                return soma;
+            }
+            const total = detalhamento.reduce((a,n) => a + subtotal(n), 0);
+            valorTotalInput.value = total.toFixed(2);
+            if (!valorTotalInput.value) valorTotalInput.value = "0.00";
+            return total;
+        }
+        
+        function criarNodeElemento(node, path) {
+            const indent = (path.length - 1) * 25;
+            const div = document.createElement('div');
+            div.className = 'orcamento-node';
+            div.style.marginLeft = `${indent}px`;
+            div.dataset.path = path.join('-');
+
+            const isParent = node.Filhos && node.Filhos.length > 0;
+            const isL3 = path.length >= 3;
+            const nivelHierarquico = path.length;
+
+            const initialOption = node.Nome
+                ? `<option value="${node.Nome}" selected>${node.Nome}</option>`
+                : '';
+
+            div.innerHTML = `
+                <div class="d-flex align-items-center mb-1 p-2 border rounded">
+                    <div class="flex-grow-1">
+                        <select class="form-control form-control-sm mb-1 select2-niveis"
+                                data-prop="Nome"
+                                data-nivel="${nivelHierarquico}">
+                            ${initialOption}
+                        </select>
+                        <input type="number"
+                               class="form-control form-control-sm"
+                               data-prop="ValorPrevisto"
+                               value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}"
+                               step="0.01"
+                               placeholder="Valor"
+                               ${isParent ? 'readonly style="background-color:#e9ecef;"' : ''}>
+                    </div>
+                    <div class="ms-2">
+                        ${!isL3 ? `<button type="button"
+                                            class="btn btn-sm btn-success"
+                                            data-action="add-child"
+                                            title="Adicionar Filho">+</button>` : ''}
+                        <button type="button"
+                                class="btn btn-sm btn-danger"
+                                data-action="remove"
+                                title="Remover">x</button>
+                    </div>
+                </div>`;
+            if (isParent) {
+                const filhosDiv = document.createElement('div');
+                filhosDiv.className = 'orcamento-node-children';
+                node.Filhos.forEach((c,i) =>
+                    filhosDiv.appendChild(criarNodeElemento(c,[...path,i])));
+                div.appendChild(filhosDiv);
+            }
+            return div;
+        }
+
+        function inicializarSelect2ParaElemento(selectElement) {
+            const nivel = selectElement.data('nivel');
+            selectElement.select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#modalDetalhamento'),
+                placeholder: 'Digite para buscar um nível...',
+                minimumInputLength: 1,
+                allowClear: true,
+                ajax: {
+                    url: '/Niveis/Search',
+                    dataType: 'json',
+                    delay: 250,
+                    cache: false,
+                    data: function (params) {
+                        return { term: params.term, nivel: nivel };
+                    },
+                    processResults: function (data) {
+                        return { results: data.results };
+                    }
+                }
+            });
+        }
+
+        function inicializarSelect2() {
+            $('.select2-niveis').each(function () {
+                inicializarSelect2ParaElemento($(this));
+            });
+        }
+
+        function renderizarArvore() {
+            arvoreContainer.innerHTML = '';
+            detalhamento.forEach((n,i) =>
+                arvoreContainer.appendChild(criarNodeElemento(n,[i])));
+            inicializarSelect2();
+        }
+
+        function getNode(pathArr) {
+            let n = { Filhos: detalhamento };
+            for (const i of pathArr) {
+                if (!n.Filhos || !n.Filhos[i]) return null;
+                n = n.Filhos[i];
+            }
+            return n;
+        }
+
+        function atualizarReadonlyValores() {
+            document.querySelectorAll('.orcamento-node input[data-prop="ValorPrevisto"][readonly]')
+            .forEach(inp => {
+                const path = inp.closest('.orcamento-node').dataset.path.split('-').map(Number);
+                const n = getNode(path);
+                if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
+            });
+        }
+
+        // ---------- EVENTOS -----------
+        btnAdicionarNivel.addEventListener('click', () => {
+            detalhamento.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+            renderizarArvore();
+        });
+
+        arvoreContainer.addEventListener('click', e => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+
+            const elem = btn.closest('.orcamento-node');
+            const path = elem.dataset.path.split('-').map(Number);
+            const act  = btn.dataset.action;
+
+            if (act === 'add-child') {
+                const pNode = getNode(path);
+                if (!pNode) return;
+                pNode.Filhos = pNode.Filhos || [];
+                pNode.Filhos.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+
+                let childrenContainer = elem.querySelector('.orcamento-node-children');
+                if (!childrenContainer) {
+                    childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'orcamento-node-children';
+                    elem.appendChild(childrenContainer);
+                }
+                
+                const novoFilhoIndex = pNode.Filhos.length - 1;
+                const novoFilhoPath = [...path, novoFilhoIndex];
+                const novoFilhoData = pNode.Filhos[novoFilhoIndex];
+                const novoFilhoElemento = criarNodeElemento(novoFilhoData, novoFilhoPath);
+                
+                childrenContainer.appendChild(novoFilhoElemento);
+                
+                $(novoFilhoElemento).find('.select2-niveis').each(function() {
+                    inicializarSelect2ParaElemento($(this));
+                });
+                
+                const parentInput = elem.querySelector('input[data-prop="ValorPrevisto"]');
+                parentInput.readOnly = true;
+                parentInput.style.backgroundColor = '#e9ecef';
+
+                calcularTotaisNosDados();
+                atualizarReadonlyValores();
+
+            } else if (act === 'remove') {
+                const parentPath = path.slice(0, -1);
+                const idx = path[path.length - 1];
+                if (parentPath.length === 0)
+                    detalhamento.splice(idx, 1);
+                else {
+                    const p = getNode(parentPath);
+                    if (p) p.Filhos.splice(idx, 1);
+                }
+                renderizarArvore();
+                calcularTotaisNosDados();
+                atualizarReadonlyValores();
+            }
+        });
+        
+        // --- ATUALIZADO COM VALIDAÇÃO DE DUPLICIDADE ---
+        arvoreContainer.addEventListener('change', e => {
+            const select = e.target.closest('select[data-prop="Nome"]');
+            if (!select) return;
+
+            const selectedValue = select.value;
+            const currentPath = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const currentNode = getNode(currentPath);
+
+            if (!selectedValue) {
+                if (currentNode) currentNode.Nome = '';
+                return;
+            }
+
+            const currentIndex = currentPath[currentPath.length - 1];
+            const parentPath = currentPath.slice(0, -1);
+
+            let siblings;
+            if (parentPath.length === 0) {
+                siblings = detalhamento;
+            } else {
+                const parentNode = getNode(parentPath);
+                siblings = parentNode ? parentNode.Filhos : [];
+            }
+
+            const isDuplicate = siblings.some((sibling, index) => {
+                return index !== currentIndex && sibling.Nome === selectedValue;
+            });
+
+            if (isDuplicate) {
+                alert('Este nível já foi adicionado neste agrupamento. Por favor, escolha outro.');
+                $(select).val(null).trigger('change.select2');
+                if (currentNode) currentNode.Nome = '';
+                return;
+            }
+
+            if (currentNode) {
+                currentNode.Nome = selectedValue;
+            }
+        });
+
+        arvoreContainer.addEventListener('input', e => {
+            const inputValor = e.target.closest('input[data-prop="ValorPrevisto"]');
+            if (!inputValor) return;
+
+            const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const node = getNode(path);
+            if (node) {
+                node.ValorPrevisto = parseFloat(inputValor.value) || 0;
+            }
+
+            calcularTotaisNosDados();
+            atualizarReadonlyValores();
+        });
+        
+        let ultimoNivelFocado = 1;
+        arvoreContainer.addEventListener('focusin', e => {
+            const select = e.target.closest('.select2-niveis');
+            if (select) {
+                ultimoNivelFocado = parseInt(select.dataset.nivel) || 1;
+            }
+        });
+        
+        btnSalvarDetalhamento.addEventListener('click', () => {
+            calcularTotaisNosDados();
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+            const mElem = document.getElementById('modalDetalhamento');
+            const inst = bootstrap.Modal.getInstance(mElem);
+            if (inst) inst.hide();
+        });
+        
+        form.addEventListener('submit', () =>
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento)
+        );
+
+        $(document).on('click', '#btn-abrir-modal-nivel', function() {
+            $.get('/Niveis/NovoNivelPartial?nivel=' + ultimoNivelFocado, function(data) {
+                $('#modal-nivel-placeholder').html(data);
+            });
+        });
+
+        // ---------- INICIALIZAÇÃO ----------
+        calcularTotaisNosDados();
+        detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+        renderizarArvore();
+        atualizarReadonlyValores();
+    });
+    </script>
+}

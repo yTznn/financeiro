@@ -1,0 +1,158 @@
+@model Financeiro.Models.ViewModels.TipoAcordoViewModel
+
+@{
+    ViewBag.Title = Model.Id == 0 ? "Novo Tipo de Acordo" : "Editar Tipo de Acordo";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+@if (Model.Id != 0)
+{
+    <!-- Botões utilitários -->
+    <div class="mb-3 d-flex flex-wrap gap-2">
+        <a asp-controller="Aditivos"
+           asp-action="Novo"
+           asp-route-acordoId="@Model.Id"
+           class="btn btn-outline-primary">
+            + Registrar Aditivo
+        </a>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                data-bs-toggle="modal"
+                data-bs-target="#modalHistorico">
+            Histórico de Aditivos
+        </button>
+    </div>
+}
+
+<div asp-validation-summary="All" class="text-danger"></div>
+
+<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      method="post"
+      class="row g-3">
+
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+
+    <div class="col-md-4">
+        <label asp-for="Numero" class="form-label"></label>
+        <input asp-for="Numero" class="form-control" />
+        <span asp-validation-for="Numero" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Valor" class="form-label"></label>
+        <input asp-for="Valor" type="number" step="0.01" class="form-control" />
+        <span asp-validation-for="Valor" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-12">
+        <label asp-for="Objeto" class="form-label"></label>
+        <textarea asp-for="Objeto" class="form-control" rows="2"></textarea>
+        <span asp-validation-for="Objeto" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-3">
+        <label asp-for="DataInicio" class="form-label"></label>
+        <input asp-for="DataInicio" type="date" class="form-control" />
+        <span asp-validation-for="DataInicio" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-3">
+        <label asp-for="DataFim" class="form-label"></label>
+        <input asp-for="DataFim" type="date" class="form-control" />
+        <span asp-validation-for="DataFim" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-3">
+        <label asp-for="DataAssinatura" class="form-label"></label>
+        <input asp-for="DataAssinatura" type="date" class="form-control" />
+        <span asp-validation-for="DataAssinatura" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-3 d-flex align-items-center">
+        <div class="form-check mt-4">
+            <input asp-for="Ativo" class="form-check-input" />
+            <label asp-for="Ativo" class="form-check-label">Ativo</label>
+        </div>
+    </div>
+
+    <div class="col-md-12">
+        <label asp-for="Observacao" class="form-label"></label>
+        <textarea asp-for="Observacao" class="form-control" rows="2"></textarea>
+        <span asp-validation-for="Observacao" class="text-danger"></span>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">
+            @(Model.Id == 0 ? "Salvar" : "Atualizar")
+        </button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">Cancelar</a>
+    </div>
+</form>
+
+@if (Model.Id != 0)
+{
+    <!-- Modal com histórico -->
+    <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Histórico de Aditivos</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body" id="histBody">
+                    <div class="text-center">
+                        <div class="spinner-border"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    @if (Model.Id != 0)
+    {
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const acordoId = @Model.Id;
+            const modal = document.getElementById('modalHistorico');
+            const bodyDiv = document.getElementById('histBody');
+
+            const loadHistPage = pag => {
+                bodyDiv.innerHTML =
+                    '<div class="text-center"><div class="spinner-border"></div></div>';
+
+                fetch(`/TipoAcordos/HistoricoPagina/${acordoId}?pag=${pag}`)
+                    .then(r => r.text())
+                    .then(html => {
+                        bodyDiv.innerHTML = html;
+
+                        bodyDiv.querySelectorAll('.hist-page-link')
+                            .forEach(a => a.addEventListener('click', e => {
+                                e.preventDefault();
+                                loadHistPage(a.dataset.pagina);
+                            }));
+                    });
+            };
+
+            modal.addEventListener('shown.bs.modal', () => loadHistPage(1));
+        });
+    </script>
+    }
+
+    <style>
+        .modal-header { border-bottom: none; }
+        .table thead.table-light th { background-color: #0d6efd20; }
+        .pagination .page-item.active .page-link {
+            background: #0d6efd;
+            border-color: #0d6efd;
+        }
+    </style>
+}

@@ -1,0 +1,92 @@
+@model IEnumerable<Financeiro.Models.VwFornecedor>
+@{
+    ViewData["Title"] = "Fornecedores";
+    string buscaAtual = ViewBag.BuscaAtual;
+    int paginaAtual = ViewBag.PaginaAtual;
+    bool temPaginaAnterior = ViewBag.TemPaginaAnterior;
+    bool temPaginaSeguinte = ViewBag.TemPaginaSeguinte;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>@ViewData["Title"]</h3>
+    @* No futuro, este botão pode levar a um formulário de cadastro unificado *@
+    <a asp-controller="Escolhas" asp-action="Index" class="btn btn-primary">Novo Fornecedor</a>
+</div>
+
+<!-- Formulário de Busca -->
+<form asp-action="Index" method="get" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="busca" class="form-control" placeholder="Buscar por nome..." value="@buscaAtual" />
+        <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+    </div>
+</form>
+
+<table class="table table-striped table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>Nome</th>
+            <th>Documento</th>
+            <th>Tipo</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.Nome</td>
+                <td>@item.Documento</td>
+                <td>
+                    @if (item.Tipo == "PJ")
+                    {
+                        <span class="badge bg-primary">Pessoa Jurídica</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-info text-dark">Pessoa Física</span>
+                    }
+                </td>
+                <td class="text-end">
+                    @{
+                        // Lógica para direcionar para o controller de edição correto
+                        var controller = item.Tipo == "PJ" ? "PessoasJuridicas" : "PessoasFisicas";
+                    }
+                    <a asp-controller="@controller" asp-action="Editar" asp-route-id="@item.FornecedorId" class="btn btn-sm btn-outline-primary">
+                        Editar
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Paginação -->
+<nav>
+    <ul class="pagination">
+        @if (temPaginaAnterior)
+        {
+            <li class="page-item">
+                <a class="page-link" asp-action="Index" asp-route-pagina="@(paginaAtual - 1)" asp-route-busca="@buscaAtual">Anterior</a>
+            </li>
+        }
+        else
+        {
+            <li class="page-item disabled">
+                <a class="page-link" href="#">Anterior</a>
+            </li>
+        }
+
+        @if (temPaginaSeguinte)
+        {
+            <li class="page-item">
+                <a class="page-link" asp-action="Index" asp-route-pagina="@(paginaAtual + 1)" asp-route-busca="@buscaAtual">Próxima</a>
+            </li>
+        }
+        else
+        {
+            <li class="page-item disabled">
+                <a class="page-link" href="#">Próxima</a>
+            </li>
+        }
+    </ul>
+</nav>

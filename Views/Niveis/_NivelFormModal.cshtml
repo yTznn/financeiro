@@ -1,0 +1,77 @@
+@model Financeiro.Models.Dto.NivelDto
+
+@{
+    // Gera IDs únicos para o modal e o formulário para evitar conflitos
+    var modalId = $"modal-nivel-cadastro-{Model.GetHashCode()}";
+    var formId = $"nivel-form-{Model.GetHashCode()}";
+}
+
+<div class="modal fade" id="@modalId" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cadastrar Novo Nível</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @* Esta linha é a mágica: ela renderiza o formulário que ajustamos no passo anterior *@
+                <partial name="NivelForm" model="Model" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" form="@formId">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+        const modalElement = $('#@modalId');
+        const formElement = $('#@formId');
+
+        // Garante que a validação do JQuery funcione no conteúdo carregado via AJAX
+        $.validator.unobtrusive.parse(formElement);
+
+        // Lida com a submissão do formulário via AJAX
+        formElement.on('submit', function (e) {
+            e.preventDefault(); // Impede o refresh da página
+
+            if (!formElement.valid()) {
+                return;
+            }
+
+            $.ajax({
+                url: formElement.attr('action'),
+                type: formElement.attr('method'),
+                data: formElement.serialize(),
+                success: function (response) {
+                    // Fecha o modal de cadastro
+                    modalElement.modal('hide');
+                    
+                    // Exibe uma notificação de sucesso
+                    alert('Nível salvo com sucesso!');
+
+                    // Recarrega a árvore de detalhamento para refletir a mudança
+                    renderizarArvore(); 
+                },
+                error: function (jqXHR) {
+                    // Se o servidor retornar um erro com o formulário (ex: nome já existe),
+                    // ele atualiza apenas o conteúdo do modal com as novas mensagens de erro.
+                    var newBody = $(jqXHR.responseText).find('.modal-body').html();
+                    modalElement.find('.modal-body').html(newBody);
+                    // Re-aplica a validação do JQuery ao novo conteúdo
+                    $.validator.unobtrusive.parse(formElement);
+                }
+            });
+        });
+
+        // Limpa o conteúdo do placeholder quando o modal é fechado, para não acumular
+        modalElement.on('hidden.bs.modal', function () {
+            $(this).remove();
+        });
+
+        // Finalmente, mostra o modal que acabamos de carregar
+        modalElement.modal('show');
+    });
+</script>

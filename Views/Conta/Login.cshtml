@@ -1,0 +1,48 @@
+@model Financeiro.Models.ViewModels.LoginViewModel
+
+@{
+    ViewBag.Title = "Login no Sistema";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewBag.Title</title>
+    <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+</head>
+<body>
+    <div class="login-background">
+        <div class="login-card">
+            <h2 class="login-title">Login</h2>
+
+            @if (!string.IsNullOrEmpty(Model.MensagemErro))
+            {
+                <div class="error-message">@Model.MensagemErro</div>
+            }
+
+            <form asp-controller="Conta" asp-action="Login" method="post">
+                @Html.AntiForgeryToken()
+
+                <div class="input-group">
+                    <label asp-for="Login"></label>
+                    <input asp-for="Login" placeholder="Digite seu e-mail ou NameSkip" />
+                    <span asp-validation-for="Login" class="text-danger small"></span>
+                </div>
+
+                <div class="input-group">
+                    <label asp-for="Senha"></label>
+                    <input asp-for="Senha" type="password" placeholder="Digite sua senha" />
+                    <span asp-validation-for="Senha" class="text-danger small"></span>
+                </div>
+
+                <div class="actions">
+                    <button type="submit">Entrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

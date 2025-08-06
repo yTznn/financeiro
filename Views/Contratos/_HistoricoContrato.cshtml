@@ -1,0 +1,73 @@
+@model IEnumerable<Financeiro.Models.ContratoVersao>
+@using System.Globalization
+@{
+    var culturaBrasileira = new CultureInfo("pt-BR");
+    int totalPaginas = ViewBag.TotalPaginas;
+    int paginaAtual = ViewBag.PaginaAtual;
+    int contratoId = ViewBag.ContratoId;
+}
+
+<table class="table table-sm table-hover table-bordered align-middle">
+    <thead class="table-light">
+        <tr>
+            <th style="width: 70px;">Versão</th>
+            <th style="width: 160px;">Tipo de Aditivo</th>
+            <th style="width: 150px;">Início do Aditivo</th>
+            <th style="width: 120px;">Valor</th>
+            <th>Vigência</th>
+            <th style="width: 170px;">Data do Registro</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var versao in Model)
+        {
+            <tr>
+                <td>@versao.Versao</td>
+                <td>@(versao.TipoAditivo?.ToString() ?? "Original")</td>
+                <td>@(versao.DataInicioAditivo?.ToString("dd/MM/yyyy") ?? "---")</td>
+                <td>@versao.ValorContrato.ToString("C", culturaBrasileira)</td>
+                <td>@versao.DataInicio.ToString("dd/MM/yyyy") a @versao.DataFim.ToString("dd/MM/yyyy")</td>
+                <td>@versao.DataRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (totalPaginas > 1)
+{
+    <nav>
+        <ul class="pagination pagination-sm justify-content-center mt-2">
+            @for (var i = 1; i <= totalPaginas; i++)
+            {
+                <li class="page-item @(i == paginaAtual ? "active" : "")">
+                    <a class="page-link historico-page-link"
+                       href="#"
+                       data-page="@i"
+                       data-contrato-id="@contratoId">
+                        @i
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
+
+<script>
+    $(document).ready(function () {
+        $('.historico-page-link').on('click', function (e) {
+            e.preventDefault();
+
+            const page = $(this).data('page');
+            const contratoId = $(this).data('contrato-id');
+            const url = '@Url.Action("Historico", "Contratos")' + '?id=' + contratoId + '&pag=' + page;
+
+            $('#historico-container').html(
+                `<div class="text-center p-3">
+                    <div class="spinner-border text-primary"></div>
+                </div>`
+            );
+
+            $('#historico-container').load(url);
+        });
+    });
+</script>

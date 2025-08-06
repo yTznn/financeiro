@@ -1,0 +1,111 @@
+@model Financeiro.Models.ViewModels.PessoaFisicaViewModel
+@{
+    ViewBag.Title = Model.Id == 0 ? "Cadastrar nova pessoa física" : "Editar pessoa física";
+    Layout = "_Layout";
+}
+
+<div class="container-md mt-4" style="max-width: 700px;">
+    <h2 class="mb-4 fw-bold">
+        <i class="bi bi-person-lines-fill me-2"></i>@ViewBag.Title
+    </h2>
+
+    <form asp-controller="PessoasFisicas"
+          asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+          method="post"
+          class="row g-3">
+
+        @Html.AntiForgeryToken()
+        <input asp-for="Id" type="hidden" />
+
+        <div class="col-12">
+            <label asp-for="Nome" class="form-label fw-semibold">
+                <i class="bi bi-person-fill me-1 text-secondary"></i> Nome
+            </label>
+            <input asp-for="Nome" class="form-control" placeholder="Primeiro nome" />
+            <span asp-validation-for="Nome" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="Sobrenome" class="form-label fw-semibold">
+                <i class="bi bi-person-vcard me-1 text-secondary"></i> Sobrenome
+            </label>
+            <input asp-for="Sobrenome" class="form-control" placeholder="Sobrenome completo" />
+            <span asp-validation-for="Sobrenome" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="Cpf" class="form-label fw-semibold">
+                <i class="bi bi-file-earmark-text me-1 text-secondary"></i> CPF
+            </label>
+            <input asp-for="Cpf" class="form-control" placeholder="000.000.000-00" />
+            <span asp-validation-for="Cpf" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="DataNascimento" class="form-label fw-semibold">
+                <i class="bi bi-calendar-event-fill me-1 text-secondary"></i> Data de Nascimento
+            </label>
+            <input asp-for="DataNascimento" type="date" class="form-control" />
+            <span asp-validation-for="DataNascimento" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="Email" class="form-label fw-semibold">
+                <i class="bi bi-envelope-fill me-1 text-secondary"></i> E-mail
+            </label>
+            <input asp-for="Email" class="form-control" placeholder="exemplo@email.com" />
+            <span asp-validation-for="Email" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="Telefone" class="form-label fw-semibold">
+                <i class="bi bi-telephone-fill me-1 text-secondary"></i> Telefone
+            </label>
+            <input asp-for="Telefone" class="form-control" placeholder="(xx) 99999-9999" />
+            <span asp-validation-for="Telefone" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12 d-flex align-items-center">
+            <div class="form-check">
+                <input asp-for="SituacaoAtiva" class="form-check-input" />
+                <label asp-for="SituacaoAtiva" class="form-check-label fw-semibold">
+                    <i class="bi bi-check-circle text-success me-1"></i> Ativo
+                </label>
+            </div>
+        </div>
+
+        <div class="col-12 mt-3">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-save2-fill me-1"></i>
+                @(Model.Id == 0 ? "Salvar" : "Atualizar")
+            </button>
+            <a asp-action="Index" class="btn btn-secondary ms-2">
+                <i class="bi bi-arrow-left-circle me-1"></i> Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script src="~/lib/jquery-mask/jquery.mask.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            // CPF
+            $('#Cpf').mask('000.000.000-00');
+
+            // Telefone com máscara dinâmica (fixo e celular)
+            var options = {
+                onKeyPress: function(phone, e, field, options) {
+                    var masks = ['(00) 0000-00009', '(00) 00000-0000'];
+                    var mask = (phone.replace(/\D/g, '').length > 10) ? masks[1] : masks[0];
+                    $('#Telefone').mask(mask, options);
+                }
+            };
+            $('#Telefone').mask('(00) 0000-00009', options);
+        });
+    </script>
+}

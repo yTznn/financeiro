@@ -1,0 +1,112 @@
+@model Financeiro.Models.ViewModels.AditivoContratoViewModel
+@using Financeiro.Models
+
+@{
+    ViewBag.Title = "Registrar Aditivo de Contrato";
+    Layout = "_Layout";
+    var versaoAtual = ViewBag.VersaoAtual as ContratoVersao;
+}
+
+<div class="container py-4">
+    <div class="text-center mb-4">
+        <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+        <p class="text-muted">Preencha os dados do novo aditivo para o contrato abaixo.</p>
+    </div>
+
+    @if (versaoAtual != null)
+    {
+        <div class="alert alert-info shadow-sm">
+            <strong>Versão Atual (v@versaoAtual.Versao):</strong><br />
+            Valor: <span class="fw-semibold">@versaoAtual.ValorContrato.ToString("C")</span> |
+            Vigência: <span class="fw-semibold">@versaoAtual.DataInicio:dd/MM/yyyy</span> - 
+            <span class="fw-semibold">@versaoAtual.DataFim:dd/MM/yyyy</span><br />
+            Objeto: <span class="fw-semibold">@versaoAtual.ObjetoContrato</span>
+        </div>
+    }
+
+    <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+
+    <form asp-action="Salvar" method="post" class="row g-3 bg-light p-4 rounded shadow-sm border">
+        @Html.AntiForgeryToken()
+        <input asp-for="ContratoId" type="hidden" />
+
+        <div class="col-md-4">
+            <label asp-for="TipoAditivo" class="form-label fw-semibold"></label>
+            <select asp-for="TipoAditivo"
+                    asp-items="Html.GetEnumSelectList<TipoAditivo>()"
+                    class="form-select"
+                    id="tipoAditivoSelect">
+                <option value="">-- selecione --</option>
+            </select>
+            <span asp-validation-for="TipoAditivo" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-4">
+            <label asp-for="DataInicioAditivo" class="form-label fw-semibold"></label>
+            <input asp-for="DataInicioAditivo" type="date" class="form-control" />
+            <span asp-validation-for="DataInicioAditivo" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-4" id="campo-novo-valor" style="display: none;">
+            <label asp-for="NovoValor" class="form-label fw-semibold"></label>
+            <input asp-for="NovoValor" type="number" step="0.01" class="form-control" />
+            <span asp-validation-for="NovoValor" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-4" id="campo-nova-data" style="display: none;">
+            <label asp-for="NovaDataFim" class="form-label fw-semibold"></label>
+            <input asp-for="NovaDataFim" type="date" class="form-control" />
+            <span asp-validation-for="NovaDataFim" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12" id="campo-novo-objeto" style="display: none;">
+            <label asp-for="NovoObjeto" class="form-label fw-semibold"></label>
+            <textarea asp-for="NovoObjeto" class="form-control" rows="3"></textarea>
+            <span asp-validation-for="NovoObjeto" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="Observacao" class="form-label fw-semibold"></label>
+            <textarea asp-for="Observacao" rows="2" class="form-control" placeholder="Observações adicionais..."></textarea>
+            <span asp-validation-for="Observacao" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12 mt-2">
+            <button type="submit" class="btn btn-success me-2">
+                <i class="bi bi-check-circle"></i> Salvar Aditivo
+            </button>
+            <a asp-controller="Contratos"
+               asp-action="Editar"
+               asp-route-id="@Model.ContratoId"
+               class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left-circle"></i> Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const tipoAditivoSelect = document.getElementById('tipoAditivoSelect');
+            const campoNovoValor = document.getElementById('campo-novo-valor');
+            const campoNovaData = document.getElementById('campo-nova-data');
+            const campoNovoObjeto = document.getElementById('campo-novo-objeto');
+
+            function toggleCampos() {
+                const tipo = tipoAditivoSelect.value;
+
+                const mostraValor = ["5", "4", "2", "3"].includes(tipo);
+                const mostraPrazo = ["1", "2", "3"].includes(tipo);
+
+                campoNovoValor.style.display = mostraValor ? 'block' : 'none';
+                campoNovaData.style.display = mostraPrazo ? 'block' : 'none';
+                campoNovoObjeto.style.display = 'none'; // manter escondido por enquanto
+            }
+
+            tipoAditivoSelect.addEventListener('change', toggleCampos);
+            toggleCampos();
+        });
+    </script>
+}
