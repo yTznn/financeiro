@@ -7,12 +7,15 @@
 <h3>@ViewData["Title"]</h3>
 <hr />
 
-<form id="orcamento-form" asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+<form id="orcamento-form"
+      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      method="post">
     <div asp-validation-summary="All" class="text-danger mb-3"></div>
-    
+
     <input type="hidden" asp-for="Id" />
     <input type="hidden" id="detalhamentoJsonInput" name="detalhamentoJson" />
 
+    <!-- Cabeçalho -->
     <div class="row">
         <div class="col-12 mb-3">
             <label asp-for="Nome" class="form-label"></label>
@@ -24,12 +27,14 @@
     <div class="row">
         <div class="col-md-6 mb-3">
             <label asp-for="TipoAcordoId" class="form-label"></label>
-            <select asp-for="TipoAcordoId" class="form-select" 
+            <select asp-for="TipoAcordoId"
+                    class="form-select"
                     asp-items="@(new SelectList(ViewBag.TiposDeAcordo, "Id", "Numero"))">
                 <option value="">Selecione um termo</option>
             </select>
             <span asp-validation-for="TipoAcordoId" class="text-danger"></span>
         </div>
+
         <div class="col-md-6 mb-3">
             <label asp-for="ValorPrevistoTotal" class="form-label"></label>
             <input asp-for="ValorPrevistoTotal" class="form-control" readonly />
@@ -59,207 +64,276 @@
     </div>
 
     <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" asp-for="Ativo">
+        <input class="form-check-input" type="checkbox" asp-for="Ativo" />
         <label class="form-check-label" asp-for="Ativo"></label>
     </div>
 
-    <hr/>
+    <hr />
 
+    <!-- Detalhamento -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4>Detalhamento do Orçamento</h4>
-        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#modalDetalhamento">
+        <button type="button"
+                class="btn btn-info"
+                data-bs-toggle="modal"
+                data-bs-target="#modalDetalhamento">
             Gerenciar Detalhamento
         </button>
     </div>
-    
+
     <div class="mt-4">
         <button type="submit" class="btn btn-primary">Salvar</button>
         <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
     </div>
 </form>
 
-<!-- Modal -->
-<div class="modal fade" id="modalDetalhamento" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+<!-- Modal (fade removido) -->
+<div class="modal"
+     id="modalDetalhamento"
+     tabindex="-1"
+     aria-labelledby="modalLabel"
+     aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalLabel">Detalhamento do Orçamento</h5>
-                <button type="button" class="btn btn-primary ms-auto" id="btn-adicionar-nivel">+ Adicionar Nível</button>
+                <button type="button"
+                        class="btn btn-primary ms-auto"
+                        id="btn-adicionar-nivel">
+                    + Adicionar Nível
+                </button>
             </div>
+
             <div class="modal-body">
                 <div id="arvore-container"></div>
             </div>
+
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="salvar-detalhamento">Confirmar Detalhes</button>
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        class="btn btn-warning"
+                        id="btn-salvar-parcial">
+                    Salvar Preenchimento
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="salvar-detalhamento">
+                    Confirmar Detalhes
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 @section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
 
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Detalhamento ?? new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+    document.addEventListener('DOMContentLoaded', () => {
 
-        const form = document.getElementById('orcamento-form');
-        const arvoreContainer = document.getElementById('arvore-container');
-        const btnAdicionarNivel = document.getElementById('btn-adicionar-nivel');
+        // ---------- VARIÁVEIS ----------
+        let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                            Model.Detalhamento ??
+                            new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+
+        const form                  = document.getElementById('orcamento-form');
+        const arvoreContainer       = document.getElementById('arvore-container');
+        const btnAdicionarNivel     = document.getElementById('btn-adicionar-nivel');
         const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
-        const valorTotalInput = document.getElementById('ValorPrevistoTotal');
+        const btnSalvarParcial      = document.getElementById('btn-salvar-parcial');
+        const valorTotalInput       = document.getElementById('ValorPrevistoTotal');
         const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
 
+        // ---------- FUNÇÕES -----------
         function calcularTotaisNosDados() {
-            let grandTotal = 0;
-            function calcularSubtotal(node) {
-                if (!node.Filhos || node.Filhos.length === 0) {
-                    const valor = parseFloat(node.ValorPrevisto) || 0;
-                    grandTotal += valor;
-                    return valor;
-                } else {
-                    let subtotal = 0;
-                    node.Filhos.forEach(child => {
-                        subtotal += calcularSubtotal(child);
-                    });
-                    node.ValorPrevisto = subtotal;
-                    return subtotal;
-                }
+            function subtotal(node) {
+                if (!node.Filhos || node.Filhos.length === 0)
+                    return parseFloat(node.ValorPrevisto) || 0;
+
+                let soma = 0;
+                node.Filhos.forEach(c => soma += subtotal(c));
+                node.ValorPrevisto = soma;
+                return soma;
             }
-            detalhamento.forEach(calcularSubtotal);
-            return grandTotal;
+            const total = detalhamento.reduce((a,n) => a + subtotal(n), 0);
+            valorTotalInput.value = total.toFixed(2);
+            if (!valorTotalInput.value) valorTotalInput.value = "0.00";
+            return total;
+        }
+
+        function criarNodeElemento(node, path) {
+            const indent = (path.length - 1) * 25;
+            const div    = document.createElement('div');
+            div.className    = 'orcamento-node';
+            div.style.marginLeft = `${indent}px`;
+            div.dataset.path = path.join('-');
+
+            const isParent = node.Filhos && node.Filhos.length > 0;
+            const isL3     = path.length >= 3;
+
+            div.innerHTML = `
+                <div class="d-flex align-items-center mb-1 p-2 border rounded">
+                    <div class="flex-grow-1">
+                        <input type="text"
+                               class="form-control form-control-sm mb-1"
+                               data-prop="Nome"
+                               value="${node.Nome}"
+                               placeholder="Nome do item">
+                        <input type="number"
+                               class="form-control form-control-sm"
+                               data-prop="ValorPrevisto"
+                               value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}"
+                               step="0.01"
+                               placeholder="Valor"
+                               ${isParent ? 'readonly style="background-color:#e9ecef;"' : ''}>
+                    </div>
+                    <div class="ms-2">
+                        ${!isL3 ? `<button type="button"
+                                              class="btn btn-sm btn-success"
+                                              data-action="add-child"
+                                              title="Adicionar Filho">+</button>` : ''}
+                        <button type="button"
+                                class="btn btn-sm btn-danger"
+                                data-action="remove"
+                                title="Remover">x</button>
+                    </div>
+                </div>`;
+            if (isParent) {
+                const filhosDiv = document.createElement('div');
+                filhosDiv.className = 'orcamento-node-children';
+                node.Filhos.forEach((c,i) =>
+                    filhosDiv.appendChild(criarNodeElemento(c,[...path,i])));
+                div.appendChild(filhosDiv);
+            }
+            return div;
         }
 
         function renderizarArvore() {
             arvoreContainer.innerHTML = '';
-            detalhamento.forEach((node, index) => {
-                arvoreContainer.appendChild(criarNodeElemento(node, [index]));
+            detalhamento.forEach((n,i) =>
+                arvoreContainer.appendChild(criarNodeElemento(n,[i])));
+        }
+
+        function getNode(pathArr) {
+            let n = { Filhos: detalhamento };
+            for (const i of pathArr) {
+                if (!n.Filhos || !n.Filhos[i]) return null;
+                n = n.Filhos[i];
+            }
+            return n;
+        }
+
+        function atualizarReadonlyValores() {
+            document.querySelectorAll(
+                '.orcamento-node input[data-prop="ValorPrevisto"][readonly]'
+            ).forEach(inp => {
+                const path = inp.closest('.orcamento-node')
+                                .dataset.path.split('-').map(Number);
+                const n    = getNode(path);
+                if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
             });
         }
 
-        function criarNodeElemento(node, path) {
-            const indentacao = (path.length - 1) * 25;
-            const elemento = document.createElement('div');
-            elemento.className = 'orcamento-node';
-            elemento.style.marginLeft = `${indentacao}px`;
-            elemento.dataset.path = path.join('-');
-
-            const isParent = node.Filhos && node.Filhos.length > 0;
-            const isLevel3 = path.length >= 3;
-
-            elemento.innerHTML = `
-                <div class="d-flex align-items-center mb-1 p-2 border rounded">
-                    <div class="flex-grow-1">
-                        <input type="text" class="form-control form-control-sm mb-1" data-prop="Nome" value="${node.Nome}" placeholder="Nome do item">
-                        <input type="number" class="form-control form-control-sm" data-prop="ValorPrevisto" value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}" step="0.01" placeholder="Valor" ${isParent ? 'readonly style="background-color: #e9ecef;"' : ''}>
-                    </div>
-                    <div class="ms-2">
-                        ${!isLevel3 ? `<button type="button" class="btn btn-sm btn-success" data-action="add-child" title="Adicionar Filho">+</button>` : ''}
-                        <button type="button" class="btn btn-sm btn-danger" data-action="remove" title="Remover">x</button>
-                    </div>
-                </div>
-            `;
-            
-            if (isParent) {
-                const filhosContainer = document.createElement('div');
-                filhosContainer.className = 'orcamento-node-children';
-                node.Filhos.forEach((childNode, index) => {
-                    filhosContainer.appendChild(criarNodeElemento(childNode, [...path, index]));
-                });
-                elemento.appendChild(filhosContainer);
-            }
-            return elemento;
-        }
-
-        function getNodeFromPath(pathArray) {
-            let node = { Filhos: detalhamento };
-            for (const index of pathArray) {
-                if (!node.Filhos || !node.Filhos[index]) return null;
-                node = node.Filhos[index];
-            }
-            return node;
-        }
-
-        // --- EVENTOS ---
-
+        // ---------- EVENTOS -----------
         btnAdicionarNivel.addEventListener('click', () => {
-            detalhamento.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+            detalhamento.push({ Nome:'', ValorPrevisto:0, Filhos:[] });
             renderizarArvore();
         });
 
-        arvoreContainer.addEventListener('click', function(e) {
-            const button = e.target.closest('button[data-action]');
-            if (!button) return;
+        // + / x
+        arvoreContainer.addEventListener('click', e => {
+            const btn  = e.target.closest('button[data-action]');
+            if (!btn) return;
 
-            const nodeElement = button.closest('.orcamento-node');
-            const path = nodeElement.dataset.path.split('-').map(Number);
-            const action = button.dataset.action;
+            const elem = btn.closest('.orcamento-node');
+            const path = elem.dataset.path.split('-').map(Number);
+            const act  = btn.dataset.action;
 
-            if (action === 'add-child') {
-                const parentNode = getNodeFromPath(path);
-                if (parentNode) {
-                    if (!parentNode.Filhos) parentNode.Filhos = [];
-                    parentNode.Filhos.push({ Nome: '', ValorPrevisto: 0, Filhos: [] });
+            if (act === 'add-child') {
+                const p = getNode(path);
+                if (p) {
+                    p.Filhos = p.Filhos || [];
+                    p.Filhos.push({ Nome:'', ValorPrevisto:0, Filhos:[] });
+                }
+            }
+            if (act === 'remove') {
+                const parentPath = path.slice(0,-1);
+                const idx = path[path.length-1];
+                if (parentPath.length === 0)
+                    detalhamento.splice(idx,1);
+                else {
+                    const p = getNode(parentPath);
+                    if (p) p.Filhos.splice(idx,1);
                 }
             }
 
-            if (action === 'remove') {
-                const parentPath = path.slice(0, -1);
-                const indexToRemove = path[path.length - 1];
-                if (parentPath.length === 0) {
-                    detalhamento.splice(indexToRemove, 1);
-                } else {
-                    const parentNode = getNodeFromPath(parentPath);
-                    if (parentNode) parentNode.Filhos.splice(indexToRemove, 1);
-                }
-            }
-            
-            const total = calcularTotaisNosDados();
-            valorTotalInput.value = total.toFixed(2);
+            calcularTotaisNosDados();
             renderizarArvore();
         });
 
-        arvoreContainer.addEventListener('input', function(e) {
-            const input = e.target.closest('input[data-prop]');
-            if (!input) return;
-            
-            const nodeElement = input.closest('.orcamento-node');
-            const path = nodeElement.dataset.path.split('-').map(Number);
-            const prop = input.dataset.prop;
-            const node = getNodeFromPath(path);
+        // Digitação
+        arvoreContainer.addEventListener('input', e => {
+            const inp = e.target.closest('input[data-prop]');
+            if (!inp) return;
 
-            if (node) {
-                node[prop] = input.type === 'number' ? parseFloat(input.value) || 0 : input.value;
-                const total = calcularTotaisNosDados();
-                valorTotalInput.value = total.toFixed(2);
-            }
+            const path = inp.closest('.orcamento-node')
+                            .dataset.path.split('-').map(Number);
+            const node = getNode(path);
+            if (!node) return;
+
+            node[inp.dataset.prop] =
+                inp.type === 'number' ? parseFloat(inp.value)||0 : inp.value;
+
+            calcularTotaisNosDados();
+            atualizarReadonlyValores(); // não recria DOM
         });
 
-        btnSalvarDetalhamento.addEventListener('click', function() {
-            const total = calcularTotaisNosDados();
-            valorTotalInput.value = total.toFixed(2);
-            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-            var modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalhamento'));
-            modal.hide();
+        // limpa "0,00" ao focar
+        arvoreContainer.addEventListener('focusin', e => {
+            const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
+            if (inp && parseFloat(inp.value) === 0) inp.value = '';
+        });
+        arvoreContainer.addEventListener('focusout', e => {
+            const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
+            if (inp && inp.value.trim() === '') inp.value = '0.00';
         });
 
-        // ✅ CORREÇÃO: Adicionado um listener para o evento de submit do formulário
-        form.addEventListener('submit', function() {
-            // Garante que o JSON está atualizado antes de enviar
+        // Salvar parcial
+        btnSalvarParcial.addEventListener('click', () => {
+            calcularTotaisNosDados();
             detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+            alert('Preenchimento salvo!');
         });
 
-        // --- INICIALIZAÇÃO ---
-        function inicializar() {
-            const total = calcularTotaisNosDados();
-            valorTotalInput.value = total.toFixed(2);
-            renderizarArvore();
-            // ✅ CORREÇÃO: Popula o campo oculto assim que a página carrega
+        // Confirmar
+        btnSalvarDetalhamento.addEventListener('click', () => {
+            calcularTotaisNosDados();
             detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-        }
 
-        inicializar();
+            const mElem = document.getElementById('modalDetalhamento');
+            const inst  = bootstrap.Modal.getInstance(mElem);
+            if (inst) inst.hide();
+
+            // fallback se backdrop não sair
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            document.body.classList.remove('modal-open');
+        });
+
+        // Submit final
+        form.addEventListener('submit', () =>
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento)
+        );
+
+        // Inicialização
+        calcularTotaisNosDados();
+        detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+        renderizarArvore();
     });
     </script>
 }
