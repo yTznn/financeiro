@@ -13,7 +13,7 @@
     <header>
         <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand fw-bold" asp-area="" asp-controller="Escolhas" asp-action="Index">
+                <a class="navbar-brand fw-bold" asp-controller="Escolhas" asp-action="Index">
                     Financeiro
                 </a>
 
@@ -29,24 +29,48 @@
 
                 <div class="collapse navbar-collapse" id="navbarResponsive">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <!-- Home (escolha de cadastro) -->
+
+                        <!-- Menu Início -->
                         <li class="nav-item">
                             <a class="nav-link" asp-controller="Escolhas" asp-action="Index">Início</a>
                         </li>
 
-                        <!-- Listagem Pessoa Jurídica -->
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="PessoasJuridicas" asp-action="Index">
-                                Pessoas Jurídicas
+                        <!-- Dropdown: Cadastros -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="menuCadastros" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Cadastros
                             </a>
-                        </li>
-                        <li class="nav-item"></li>
-                            <a class="nav-link" asp-controller="PessoasFisicas" asp-action="Index">
-                                Pessoas Físicas
-                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="menuCadastros">
+                                <li>
+                                    <a class="dropdown-item" asp-controller="PessoasJuridicas" asp-action="Novo">Pessoa Jurídica</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" asp-controller="PessoasFisicas" asp-action="Novo">Pessoa Física</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" asp-controller="TipoAcordos" asp-action="Novo">Tipo de Acordo</a>
+                                </li>
+                            </ul>
                         </li>
 
-                        <!-- Espaço para novos menus futuramente -->
+                        <!-- Dropdown: Listagens -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="menuListagens" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Listagens
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="menuListagens">
+                                <li>
+                                    <a class="dropdown-item" asp-controller="PessoasJuridicas" asp-action="Index">Pessoas Jurídicas</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" asp-controller="PessoasFisicas" asp-action="Index">Pessoas Físicas</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" asp-controller="TipoAcordos" asp-action="Index">Tipos de Acordo</a>
+                                </li>
+                            </ul>
+                        </li>
+
                     </ul>
                 </div>
             </div>

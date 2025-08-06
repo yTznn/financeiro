@@ -1,0 +1,46 @@
+@model IEnumerable<Financeiro.Models.TipoAcordo>
+
+@{
+    ViewBag.Title = "Tipos de Acordo";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<a asp-action="Novo" class="btn btn-primary mb-3">
+    + Novo Tipo de Acordo
+</a>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Número</th>
+            <th>Valor</th>
+            <th>Objeto</th>
+            <th>Data Início</th>
+            <th>Data Fim</th>
+            <th>Ativo</th>
+            <th style="width:180px">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.Numero</td>
+                <td>@item.Valor.ToString("C")</td>
+                <td>@item.Objeto</td>
+                <td>@item.DataInicio.ToShortDateString()</td>
+                <td>@item.DataFim.ToShortDateString()</td>
+                <td>@(item.Ativo ? "Sim" : "Não")</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary"
+                       asp-action="Editar"
+                       asp-route-id="@item.Id">
+                        Editar
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

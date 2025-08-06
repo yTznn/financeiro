@@ -29,8 +29,11 @@ builder.Services.AddTransient<PessoaFisicaValidacoes>();
 // 5) Repositório — Endereço
 builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
 
-// 6) Repositório — Conta Bancária  ✅ NOVO
+// 6) Repositório — Conta Bancária
 builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
+
+// 7) Repositório — Tipo de Acordo ✅ NOVO
+builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
 
 var app = builder.Build();
 
