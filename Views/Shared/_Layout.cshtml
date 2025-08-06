@@ -6,6 +6,11 @@
     <title>@ViewData["Title"] - Financeiro</title>
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    
+    <!-- ✅ NOVO: Adicionando CSS do Select2 para os campos de busca -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/financeiro.styles.css" asp-append-version="true" />
 </head>
@@ -57,9 +62,12 @@
                                 <li>
                                     <a class="dropdown-item" asp-controller="Naturezas" asp-action="Novo">Natureza</a>
                                 </li>
+                                <li>
+                                    <a class="dropdown-item" asp-controller="Orcamentos" asp-action="Novo">Orçamento</a>
+                                </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li> <!-- ✅ NOVO -->
-                                    <a class="dropdown-item" asp-controller="Orcamentos" asp-action="Novo">Orçamento</a>
+                                    <a class="dropdown-item" asp-controller="Contratos" asp-action="Novo">Contrato</a>
                                 </li>
                             </ul>
                         </li>
@@ -89,9 +97,12 @@
                                 <li>
                                     <a class="dropdown-item" asp-controller="Naturezas" asp-action="Index">Naturezas</a>
                                 </li>
+                                <li>
+                                    <a class="dropdown-item" asp-controller="Orcamentos" asp-action="Index">Orçamentos</a>
+                                </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li> <!-- ✅ NOVO -->
-                                    <a class="dropdown-item" asp-controller="Orcamentos" asp-action="Index">Orçamentos</a>
+                                    <a class="dropdown-item" asp-controller="Contratos" asp-action="Index">Contratos</a>
                                 </li>
                             </ul>
                         </li>
@@ -117,6 +128,7 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

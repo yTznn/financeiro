@@ -50,8 +50,11 @@ builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
 // 10) Repositório — Natureza
 builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
 
-// 11) Repositório — Orçamento  ✅ NOVO
+// 11) Repositório — Orçamento
 builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
+
+// 12) Repositório — Contrato ✅ NOVO
+builder.Services.AddTransient<IContratoRepositorio, ContratoRepositorio>();
 
 
 var app = builder.Build();

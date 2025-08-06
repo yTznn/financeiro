@@ -1,0 +1,162 @@
+@model Financeiro.Models.ViewModels.ContratoViewModel
+@using Financeiro.Models
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
+    var naturezas = ViewBag.Naturezas as IEnumerable<Natureza> ?? Enumerable.Empty<Natureza>();
+    var fornecedorAtual = ViewBag.FornecedorAtual as VwFornecedor;
+}
+
+<h3>@ViewData["Title"]</h3>
+<hr />
+
+<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <input type="hidden" asp-for="Id" />
+
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <label asp-for="FornecedorIdCompleto" class="form-label"></label>
+            <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-control">
+                <!-- ✅ CORREÇÃO: Se for uma edição, pré-seleciona o fornecedor atual -->
+                @if (fornecedorAtual != null)
+                {
+                    <option value="@Model.FornecedorIdCompleto" selected>
+                        @fornecedorAtual.Nome (@fornecedorAtual.Documento)
+                    </option>
+                }
+            </select>
+            <span asp-validation-for="FornecedorIdCompleto" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label asp-for="AnoContrato" class="form-label"></label>
+            <input asp-for="AnoContrato" class="form-control" type="number" />
+            <span asp-validation-for="AnoContrato" class="text-danger"></span>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label asp-for="NumeroContrato" class="form-label"></label>
+            <input asp-for="NumeroContrato" class="form-control" type="number" />
+            <span asp-validation-for="NumeroContrato" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="ObjetoContrato" class="form-label"></label>
+            <textarea asp-for="ObjetoContrato" class="form-control" rows="3"></textarea>
+            <span asp-validation-for="ObjetoContrato" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="DataInicio" class="form-label"></label>
+            <input asp-for="DataInicio" class="form-control" type="date" />
+            <span asp-validation-for="DataInicio" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="DataFim" class="form-label"></label>
+            <input asp-for="DataFim" class="form-control" type="date" />
+            <span asp-validation-for="DataFim" class="text-danger"></span>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="DataAssinatura" class="form-label"></label>
+            <input asp-for="DataAssinatura" class="form-control" type="date" />
+            <span asp-validation-for="DataAssinatura" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="ValorContrato" class="form-label"></label>
+            <input asp-for="ValorContrato" class="form-control" type="number" step="0.01" />
+            <span asp-validation-for="ValorContrato" class="text-danger"></span>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="NaturezasIds" class="form-label"></label>
+            <select asp-for="NaturezasIds" class="form-control" id="naturezas-select" multiple>
+                @foreach(var natureza in naturezas)
+                {
+                    <option value="@natureza.Id">@natureza.Nome</option>
+                }
+            </select>
+            <span asp-validation-for="NaturezasIds" class="text-danger"></span>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="Observacao" class="form-label"></label>
+            <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
+        </div>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" asp-for="Ativo">
+        <label class="form-check-label" asp-for="Ativo"></label>
+    </div>
+
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            // Inicializa o campo de busca de fornecedores
+            $('#fornecedor-select').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Digite para buscar um fornecedor',
+                minimumInputLength: 1,
+                ajax: {
+                    url: '@Url.Action("BuscarFornecedores", "Contratos")',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            term: params.term, // termo da busca
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function (data, params) {
+                        params.page = params.page || 1;
+                        return {
+                            results: data.results,
+                            pagination: {
+                                more: data.pagination.more
+                            }
+                        };
+                    },
+                    cache: true
+                }
+            });
+
+            // Inicializa o campo de seleção múltipla de naturezas
+            $('#naturezas-select').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Selecione uma ou mais naturezas'
+            });
+
+            // Lógica para sugerir o número do contrato
+            $('#AnoContrato').on('change', function() {
+                var ano = $(this).val();
+                if (ano && @Model.Id == 0) { // Sugere apenas para novos contratos
+                    $.get('@Url.Action("SugerirNumero", "Contratos")', { ano: ano }, function(data) {
+                        $('#NumeroContrato').val(data.proximoNumero);
+                    });
+                }
+            }).trigger('change'); // Dispara o evento ao carregar a página
+        });
+    </script>
+}
