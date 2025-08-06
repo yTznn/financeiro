@@ -129,6 +129,7 @@
         </div>
     </div>
 </div>
+
 @section Scripts {
     @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
 
@@ -310,7 +311,6 @@
                     inicializarSelect2ParaElemento($(this));
                 });
                 
-                // CORREÇÃO: Bloqueia o campo do pai dinamicamente
                 const parentInput = elem.querySelector('input[data-prop="ValorPrevisto"]');
                 parentInput.readOnly = true;
                 parentInput.style.backgroundColor = '#e9ecef';
@@ -332,20 +332,48 @@
                 atualizarReadonlyValores();
             }
         });
-
-        // Evento para atualizar o NOME quando um item é selecionado
+        
+        // --- ATUALIZADO COM VALIDAÇÃO DE DUPLICIDADE ---
         arvoreContainer.addEventListener('change', e => {
             const select = e.target.closest('select[data-prop="Nome"]');
             if (!select) return;
 
-            const path = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
-            const node = getNode(path);
-            if (node) {
-                node.Nome = select.value;
+            const selectedValue = select.value;
+            const currentPath = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const currentNode = getNode(currentPath);
+
+            if (!selectedValue) {
+                if (currentNode) currentNode.Nome = '';
+                return;
+            }
+
+            const currentIndex = currentPath[currentPath.length - 1];
+            const parentPath = currentPath.slice(0, -1);
+
+            let siblings;
+            if (parentPath.length === 0) {
+                siblings = detalhamento;
+            } else {
+                const parentNode = getNode(parentPath);
+                siblings = parentNode ? parentNode.Filhos : [];
+            }
+
+            const isDuplicate = siblings.some((sibling, index) => {
+                return index !== currentIndex && sibling.Nome === selectedValue;
+            });
+
+            if (isDuplicate) {
+                alert('Este nível já foi adicionado neste agrupamento. Por favor, escolha outro.');
+                $(select).val(null).trigger('change.select2');
+                if (currentNode) currentNode.Nome = '';
+                return;
+            }
+
+            if (currentNode) {
+                currentNode.Nome = selectedValue;
             }
         });
 
-        // Evento para calcular o VALOR em tempo real
         arvoreContainer.addEventListener('input', e => {
             const inputValor = e.target.closest('input[data-prop="ValorPrevisto"]');
             if (!inputValor) return;
@@ -360,7 +388,6 @@
             atualizarReadonlyValores();
         });
         
-        // DEMAIS EVENTOS
         let ultimoNivelFocado = 1;
         arvoreContainer.addEventListener('focusin', e => {
             const select = e.target.closest('.select2-niveis');
@@ -391,7 +418,7 @@
         calcularTotaisNosDados();
         detalhamentoJsonInput.value = JSON.stringify(detalhamento);
         renderizarArvore();
-        atualizarReadonlyValores(); // Garante que os pais carregados já sejam atualizados
+        atualizarReadonlyValores();
     });
     </script>
 }
