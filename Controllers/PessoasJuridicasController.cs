@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
@@ -9,16 +10,22 @@ namespace Financeiro.Controllers
     public class PessoasJuridicasController : Controller
     {
         private readonly IPessoaJuridicaRepositorio _repo;
+        private readonly IEnderecoRepositorio _endRepo;
+        private readonly IContaBancariaRepositorio _contaRepo;     // NOVO
         private readonly PessoaJuridicaValidacoes _validador;
 
         public PessoasJuridicasController(IPessoaJuridicaRepositorio repo,
-                                          PessoaJuridicaValidacoes validador)
+                                          PessoaJuridicaValidacoes validador,
+                                          IEnderecoRepositorio endRepo,
+                                          IContaBancariaRepositorio contaRepo)  // NOVO
         {
-            _repo = repo;
+            _repo      = repo;
             _validador = validador;
+            _endRepo   = endRepo;
+            _contaRepo = contaRepo;                                // salva
         }
 
-        // ---------- NOVO CADASTRO ----------
+        /* ======================= NOVO ======================= */
         [HttpGet]
         public IActionResult Novo()
             => View("PessoaForm", new PessoaJuridicaViewModel());
@@ -26,12 +33,10 @@ namespace Financeiro.Controllers
         [HttpPost]
         public async Task<IActionResult> Salvar(PessoaJuridicaViewModel vm)
         {
-            var resultado = _validador.Validar(vm);
-            if (!resultado.EhValido)
+            var res = _validador.Validar(vm);
+            if (!res.EhValido)
             {
-                foreach (var erro in resultado.Erros)
-                    ModelState.AddModelError(string.Empty, erro);
-
+                foreach (var e in res.Erros) ModelState.AddModelError(string.Empty, e);
                 return View("PessoaForm", vm);
             }
 
@@ -39,7 +44,7 @@ namespace Financeiro.Controllers
             return RedirectToAction("Index");
         }
 
-        // ---------- 🆕  EDITAR ----------
+        /* ======================= EDITAR ======================= */
         [HttpGet]
         public async Task<IActionResult> Editar(int id)
         {
@@ -57,7 +62,7 @@ namespace Financeiro.Controllers
                 SituacaoAtiva   = pj.SituacaoAtiva
             };
 
-            return View("PessoaForm", vm);   // mesma view para edição
+            return View("PessoaForm", vm);
         }
 
         [HttpPost]
@@ -65,12 +70,10 @@ namespace Financeiro.Controllers
         {
             if (id != vm.Id) return BadRequest();
 
-            var resultado = _validador.Validar(vm);
-            if (!resultado.EhValido)
+            var res = _validador.Validar(vm);
+            if (!res.EhValido)
             {
-                foreach (var erro in resultado.Erros)
-                    ModelState.AddModelError(string.Empty, erro);
-
+                foreach (var e in res.Erros) ModelState.AddModelError(string.Empty, e);
                 return View("PessoaForm", vm);
             }
 
@@ -78,9 +81,27 @@ namespace Financeiro.Controllers
             return RedirectToAction("Index");
         }
 
-        // ---------- LISTA ----------
+        /* ======================= LISTA ======================= */
         [HttpGet]
         public async Task<IActionResult> Index()
-            => View(await _repo.ListarAsync());
+        {
+            var pessoas = await _repo.ListarAsync();
+            var lista   = new List<PessoaJuridicaListaViewModel>();
+
+            foreach (var p in pessoas)
+            {
+                var possuiEnd   = await _endRepo  .ObterPorPessoaAsync        (p.Id) != null;
+                var possuiConta = await _contaRepo.ObterPorPessoaJuridicaAsync(p.Id) != null;
+
+                lista.Add(new PessoaJuridicaListaViewModel
+                {
+                    Pessoa         = p,
+                    PossuiEndereco = possuiEnd,
+                    PossuiConta    = possuiConta      // NOVO
+                });
+            }
+
+            return View(lista);
+        }
     }
 }

@@ -8,13 +8,12 @@ var builder = WebApplication.CreateBuilder(args);
 // 1) MVC
 builder.Services.AddControllersWithViews();
 
-// 2) Connection-string → registra DbConnectionFactory como Singleton
+// 2) Connection-string → fábrica de conexões
 builder.Services.AddSingleton<IDbConnectionFactory>(sp =>
 {
     var connStr = builder.Configuration.GetConnectionString("DefaultConnection")
-                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' não encontrada.");
-    
-    // Logger opcional injetado automaticamente
+        ?? throw new InvalidOperationException("Connection string 'DefaultConnection' não encontrada.");
+
     var logger = sp.GetRequiredService<ILogger<DbConnectionFactory>>();
     return new DbConnectionFactory(connStr, logger);
 });
@@ -26,6 +25,12 @@ builder.Services.AddTransient<PessoaJuridicaValidacoes>();
 // 4) Repositórios e Validações — Pessoa Física
 builder.Services.AddTransient<IPessoaFisicaRepositorio, PessoaFisicaRepositorio>();
 builder.Services.AddTransient<PessoaFisicaValidacoes>();
+
+// 5) Repositório — Endereço
+builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
+
+// 6) Repositório — Conta Bancária  ✅ NOVO
+builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
 
 var app = builder.Build();
 

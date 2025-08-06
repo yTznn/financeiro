@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
@@ -9,16 +10,19 @@ namespace Financeiro.Controllers
     public class PessoasFisicasController : Controller
     {
         private readonly IPessoaFisicaRepositorio _repo;
+        private readonly IContaBancariaRepositorio _contaRepo;       // NOVO
         private readonly PessoaFisicaValidacoes _validador;
 
         public PessoasFisicasController(IPessoaFisicaRepositorio repo,
-                                        PessoaFisicaValidacoes validador)
+                                        PessoaFisicaValidacoes validador,
+                                        IContaBancariaRepositorio contaRepo)   // NOVO
         {
-            _repo = repo;
-            _validador = validador;
+            _repo       = repo;
+            _validador  = validador;
+            _contaRepo  = contaRepo;                                 // salva
         }
 
-        // Novo
+        /* ======================= NOVO ======================= */
         [HttpGet]
         public IActionResult Novo()
             => View("PessoaForm", new PessoaFisicaViewModel());
@@ -37,7 +41,7 @@ namespace Financeiro.Controllers
             return RedirectToAction("Index");
         }
 
-        // Editar
+        /* ======================= EDITAR ======================= */
         [HttpGet]
         public async Task<IActionResult> Editar(int id)
         {
@@ -75,9 +79,25 @@ namespace Financeiro.Controllers
             return RedirectToAction("Index");
         }
 
-        // Listagem
+        /* ======================= LISTAGEM ======================= */
         [HttpGet]
         public async Task<IActionResult> Index()
-            => View(await _repo.ListarAsync());
+        {
+            var pessoas = await _repo.ListarAsync();
+            var lista   = new List<PessoaFisicaListaViewModel>();
+
+            foreach (var p in pessoas)
+            {
+                var possuiConta = await _contaRepo.ObterPorPessoaFisicaAsync(p.Id) != null;
+
+                lista.Add(new PessoaFisicaListaViewModel
+                {
+                    Pessoa      = p,
+                    PossuiConta = possuiConta
+                });
+            }
+
+            return View(lista);
+        }
     }
 }

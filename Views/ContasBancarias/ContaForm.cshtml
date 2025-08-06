@@ -1,0 +1,84 @@
+@model Financeiro.Models.ViewModels.ContaBancariaViewModel
+@{
+    ViewBag.Title = "Dados Bancários";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+
+<div asp-validation-summary="All" class="text-danger"></div>
+
+<form asp-controller="ContasBancarias"
+      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      asp-route-pf="@(Model.PessoaFisicaId != null ? "true" : null)"
+      method="post"
+      class="row g-3">
+
+    @Html.AntiForgeryToken()
+
+    <!-- Id e vínculo -->
+    <input asp-for="Id" type="hidden" />
+    <input asp-for="PessoaJuridicaId" type="hidden" />
+    <input asp-for="PessoaFisicaId" type="hidden" />
+
+    <div class="col-md-4">
+        <label asp-for="Banco" class="form-label"></label>
+        <input asp-for="Banco"
+               placeholder="Banco do Brasil"
+               class="form-control" />
+        <span asp-validation-for="Banco" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-2">
+        <label asp-for="Agencia" class="form-label"></label>
+        <input asp-for="Agencia"
+               placeholder="1234-5"
+               class="form-control" />
+        <span asp-validation-for="Agencia" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-3">
+        <label asp-for="Conta" class="form-label"></label>
+        <input asp-for="Conta"
+               placeholder="987654-0"
+               class="form-control" />
+        <span asp-validation-for="Conta" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-3">
+        <label asp-for="ChavePix" class="form-label"></label>
+        <input asp-for="ChavePix"
+               placeholder="(opcional)"
+               class="form-control" />
+        <span asp-validation-for="ChavePix" class="text-danger"></span>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">
+            @(Model.Id == 0 ? "Salvar" : "Atualizar")
+        </button>
+
+        <!-- Botão Cancelar redireciona para o índice correto -->
+        @if (Model.PessoaFisicaId != null)
+        {
+            <a asp-controller="PessoasFisicas"
+               asp-action="Index"
+               class="btn btn-secondary ms-2">
+                Cancelar
+            </a>
+        }
+        else
+        {
+            <a asp-controller="PessoasJuridicas"
+               asp-action="Index"
+               class="btn btn-secondary ms-2">
+                Cancelar
+            </a>
+        }
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

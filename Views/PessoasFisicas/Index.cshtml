@@ -1,4 +1,4 @@
-@model IEnumerable<Financeiro.Models.PessoaFisica>
+@model IEnumerable<Financeiro.Models.ViewModels.PessoaFisicaListaViewModel>
 
 @{
     ViewBag.Title = "Pessoas Físicas";
@@ -20,25 +20,48 @@
             <th>E-mail</th>
             <th>Telefone</th>
             <th>Situação</th>
-            <th style="width:140px">Ações</th>
+            <th style="width:220px">Ações</th>
         </tr>
     </thead>
     <tbody>
-        @foreach (var pf in Model)
+        @foreach (var item in Model)
         {
             <tr>
-                <td>@pf.Nome</td>
-                <td>@pf.Sobrenome</td>
-                <td>@pf.Cpf</td>
-                <td>@pf.Email</td>
-                <td>@pf.Telefone</td>
-                <td>@(pf.SituacaoAtiva ? "Ativo" : "Inativo")</td>
-                <td>
+                <td>@item.Pessoa.Nome</td>
+                <td>@item.Pessoa.Sobrenome</td>
+                <td>@item.Pessoa.Cpf</td>
+                <td>@item.Pessoa.Email</td>
+                <td>@item.Pessoa.Telefone</td>
+                <td>@(item.Pessoa.SituacaoAtiva ? "Ativo" : "Inativo")</td>
+                <td class="d-flex flex-wrap gap-1">
+
+                    <!-- Editar Pessoa Física -->
                     <a class="btn btn-sm btn-outline-primary"
                        asp-action="Editar"
-                       asp-route-id="@pf.Id">
+                       asp-route-id="@item.Pessoa.Id">
                         Editar
                     </a>
+                    <!-- Conta Bancária -->
+                    @if (item.PossuiConta)
+                    {
+                        <a class="btn btn-sm btn-outline-success"
+                        asp-controller="ContasBancarias"
+                        asp-action="Editar"
+                        asp-route-pessoaId="@item.Pessoa.Id"
+                        asp-route-pf="true">        <!-- aqui -->
+                            Editar Conta
+                        </a>
+                    }
+                    else
+                    {
+                        <a class="btn btn-sm btn-outline-success"
+                        asp-controller="ContasBancarias"
+                        asp-action="Novo"
+                        asp-route-pessoaId="@item.Pessoa.Id"
+                        asp-route-pf="true">        <!-- e aqui -->
+                            Preencher Conta
+                        </a>
+                    }
                 </td>
             </tr>
         }
