@@ -6,7 +6,6 @@
     var fornecedorAtual = ViewBag.FornecedorAtual as VwFornecedor;
 }
 
-<!-- ✅ Bloco para exibir a mensagem de sucesso -->
 @if (TempData["MensagemSucesso"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -15,108 +14,103 @@
     </div>
 }
 
-<h3>@ViewData["Title"]</h3>
+<h3 class="fw-bold mb-4">
+    <i class="bi bi-file-earmark-text-fill me-2"></i>@ViewData["Title"]
+</h3>
 <hr />
 
-<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post" class="container px-3">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
     <input type="hidden" asp-for="Id" />
 
-    <div class="row">
-        <div class="col-md-12 mb-3">
-            <label asp-for="FornecedorIdCompleto" class="form-label"></label>
-            <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-control">
-                @if (fornecedorAtual != null)
-                {
-                    <option value="@Model.FornecedorIdCompleto" selected>
-                        @fornecedorAtual.Nome (@fornecedorAtual.Documento)
-                    </option>
-                }
-            </select>
-            <span asp-validation-for="FornecedorIdCompleto" class="text-danger"></span>
-        </div>
+    <div class="mb-3">
+        <label asp-for="FornecedorIdCompleto" class="form-label fw-semibold"></label>
+        <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-select">
+            @if (fornecedorAtual != null)
+            {
+                <option value="@Model.FornecedorIdCompleto" selected>
+                    @fornecedorAtual.Nome (@fornecedorAtual.Documento)
+                </option>
+            }
+        </select>
+        <span asp-validation-for="FornecedorIdCompleto" class="text-danger"></span>
     </div>
 
-    <div class="row">
-        <div class="col-md-6 mb-3">
-            <label asp-for="AnoContrato" class="form-label"></label>
-            <input asp-for="AnoContrato" class="form-control" type="number" />
-            <span asp-validation-for="AnoContrato" class="text-danger"></span>
-        </div>
-        <div class="col-md-6 mb-3">
-            <label asp-for="NumeroContrato" class="form-label"></label>
-            <input asp-for="NumeroContrato" class="form-control" type="number" />
-            <span asp-validation-for="NumeroContrato" class="text-danger"></span>
-        </div>
+    <div class="mb-3">
+        <label asp-for="AnoContrato" class="form-label fw-semibold"></label>
+        <input asp-for="AnoContrato" class="form-control" type="number" />
+        <span asp-validation-for="AnoContrato" class="text-danger"></span>
     </div>
 
-    <div class="row">
-        <div class="col-12 mb-3">
-            <label asp-for="ObjetoContrato" class="form-label"></label>
-            <textarea asp-for="ObjetoContrato" class="form-control" rows="3"></textarea>
-            <span asp-validation-for="ObjetoContrato" class="text-danger"></span>
-        </div>
+    <div class="mb-3">
+        <label asp-for="NumeroContrato" class="form-label fw-semibold"></label>
+        <input asp-for="NumeroContrato" class="form-control" type="number" />
+        <span asp-validation-for="NumeroContrato" class="text-danger"></span>
     </div>
 
-    <div class="row">
-        <div class="col-md-4 mb-3">
-            <label asp-for="DataInicio" class="form-label"></label>
+    <div class="mb-3">
+        <label asp-for="ObjetoContrato" class="form-label fw-semibold"></label>
+        <textarea asp-for="ObjetoContrato" class="form-control" rows="3"></textarea>
+        <span asp-validation-for="ObjetoContrato" class="text-danger"></span>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label asp-for="DataInicio" class="form-label fw-semibold"></label>
             <input asp-for="DataInicio" class="form-control" type="date" />
             <span asp-validation-for="DataInicio" class="text-danger"></span>
         </div>
-        <div class="col-md-4 mb-3">
-            <label asp-for="DataFim" class="form-label"></label>
+        <div class="col-md-4">
+            <label asp-for="DataFim" class="form-label fw-semibold"></label>
             <input asp-for="DataFim" class="form-control" type="date" />
             <span asp-validation-for="DataFim" class="text-danger"></span>
         </div>
-        <div class="col-md-4 mb-3">
-            <label asp-for="DataAssinatura" class="form-label"></label>
+        <div class="col-md-4">
+            <label asp-for="DataAssinatura" class="form-label fw-semibold"></label>
             <input asp-for="DataAssinatura" class="form-control" type="date" />
             <span asp-validation-for="DataAssinatura" class="text-danger"></span>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12 mb-3">
-            <label asp-for="ValorContrato" class="form-label"></label>
-            <input asp-for="ValorContrato" class="form-control" type="number" step="0.01" />
-            <span asp-validation-for="ValorContrato" class="text-danger"></span>
-        </div>
+    <div class="mb-3">
+        <label asp-for="ValorContrato" class="form-label fw-semibold"></label>
+        <input asp-for="ValorContrato" class="form-control" type="number" step="0.01" />
+        <span asp-validation-for="ValorContrato" class="text-danger"></span>
     </div>
 
-    <div class="row">
-        <div class="col-12 mb-3">
-            <label asp-for="NaturezasIds" class="form-label"></label>
-            <select asp-for="NaturezasIds" class="form-control" id="naturezas-select" multiple>
-                @foreach(var natureza in naturezas)
-                {
-                    <option value="@natureza.Id">@natureza.Nome</option>
-                }
-            </select>
-            <span asp-validation-for="NaturezasIds" class="text-danger"></span>
-        </div>
-    </div>
-    
-    <div class="row">
-        <div class="col-12 mb-3">
-            <label asp-for="Observacao" class="form-label"></label>
-            <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
-        </div>
+    <div class="mb-3">
+        <label asp-for="NaturezasIds" class="form-label fw-semibold"></label>
+        <select asp-for="NaturezasIds" class="form-select" id="naturezas-select" multiple>
+            @foreach(var natureza in naturezas)
+            {
+                <option value="@natureza.Id">@natureza.Nome</option>
+            }
+        </select>
+        <span asp-validation-for="NaturezasIds" class="text-danger"></span>
     </div>
 
-    <div class="form-check mb-3">
+    <div class="mb-3">
+        <label asp-for="Observacao" class="form-label fw-semibold"></label>
+        <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="form-check mb-4">
         <input class="form-check-input" type="checkbox" asp-for="Ativo">
-        <label class="form-check-label" asp-for="Ativo"></label>
+        <label class="form-check-label fw-semibold" asp-for="Ativo"></label>
     </div>
 
-    <div class="mt-4">
-        <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    <div>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-1"></i> Salvar Alterações
+        </button>
+        <a asp-action="Index" class="btn btn-secondary ms-2">
+            <i class="bi bi-x-circle me-1"></i> Cancelar
+        </a>
 
         @if (Model.Id > 0)
         {
             <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-info float-end">
-                Aditivar Contrato
+                <i class="bi bi-plus-circle me-1"></i> Aditivar Contrato
             </a>
         }
     </div>
@@ -125,21 +119,19 @@
 @if (Model.Id > 0)
 {
     <hr class="my-4" />
-    <h4>Histórico de Aditivos</h4>
+    <h4 class="fw-bold">Histórico de Aditivos</h4>
     <div id="historico-container">
         <p>Carregando histórico...</p>
     </div>
 }
 
-
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-    
+
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        $(document).ready(function() {
-            // Inicializa o campo de busca de fornecedores
+        $(document).ready(function () {
             $('#fornecedor-select').select2({
                 theme: 'bootstrap-5',
                 placeholder: 'Digite para buscar um fornecedor',
@@ -167,23 +159,20 @@
                 }
             });
 
-            // Inicializa o campo de seleção múltipla de naturezas
             $('#naturezas-select').select2({
                 theme: 'bootstrap-5',
                 placeholder: 'Selecione uma ou mais naturezas'
             });
 
-            // Lógica para sugerir o número do contrato
-            $('#AnoContrato').on('change', function() {
+            $('#AnoContrato').on('change', function () {
                 var ano = $(this).val();
                 if (ano && @Model.Id == 0) {
-                    $.get('@Url.Action("SugerirNumero", "Contratos")', { ano: ano }, function(data) {
+                    $.get('@Url.Action("SugerirNumero", "Contratos")', { ano: ano }, function (data) {
                         $('#NumeroContrato').val(data.proximoNumero);
                     });
                 }
             }).trigger('change');
 
-            // Carrega o histórico de aditivos assim que a página carrega
             if (@Model.Id > 0) {
                 $('#historico-container').load('@Url.Action("Historico", "Contratos", new { id = Model.Id })');
             }

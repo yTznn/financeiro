@@ -14,7 +14,6 @@ namespace Financeiro.Models.ViewModels
         public string Sobrenome { get; set; }
 
         [Required, Display(Name = "CPF")]
-        [RegularExpression(@"\d{11}", ErrorMessage = "CPF deve conter 11 dígitos.")]
         public string Cpf { get; set; }
 
         [Required, Display(Name = "Data de Nascimento")]

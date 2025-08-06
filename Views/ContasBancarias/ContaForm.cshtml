@@ -1,83 +1,87 @@
 @model Financeiro.Models.ViewModels.ContaBancariaViewModel
+
 @{
     ViewBag.Title = "Dados Bancários";
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
-
-
-<div asp-validation-summary="All" class="text-danger"></div>
-
-<form asp-controller="ContasBancarias"
-      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
-      asp-route-pf="@(Model.PessoaFisicaId != null ? "true" : null)"
-      method="post"
-      class="row g-3">
-
-    @Html.AntiForgeryToken()
-
-    <!-- Id e vínculo -->
-    <input asp-for="Id" type="hidden" />
-    <input asp-for="PessoaJuridicaId" type="hidden" />
-    <input asp-for="PessoaFisicaId" type="hidden" />
-
-    <div class="col-md-4">
-        <label asp-for="Banco" class="form-label"></label>
-        <input asp-for="Banco"
-               placeholder="Banco do Brasil"
-               class="form-control" />
-        <span asp-validation-for="Banco" class="text-danger"></span>
+<div class="container py-4">
+    <div class="text-center mb-4">
+        <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+        <p class="text-muted">Informe os dados bancários para transferência ou depósito.</p>
     </div>
 
-    <div class="col-md-2">
-        <label asp-for="Agencia" class="form-label"></label>
-        <input asp-for="Agencia"
-               placeholder="1234-5"
-               class="form-control" />
-        <span asp-validation-for="Agencia" class="text-danger"></span>
-    </div>
+    <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
 
-    <div class="col-md-3">
-        <label asp-for="Conta" class="form-label"></label>
-        <input asp-for="Conta"
-               placeholder="987654-0"
-               class="form-control" />
-        <span asp-validation-for="Conta" class="text-danger"></span>
-    </div>
+    <form asp-controller="ContasBancarias"
+          asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+          asp-route-pf="@(Model.PessoaFisicaId != null ? "true" : null)"
+          method="post"
+          class="row g-4 bg-light p-4 rounded shadow-sm">
 
-    <div class="col-md-3">
-        <label asp-for="ChavePix" class="form-label"></label>
-        <input asp-for="ChavePix"
-               placeholder="(opcional)"
-               class="form-control" />
-        <span asp-validation-for="ChavePix" class="text-danger"></span>
-    </div>
+        @Html.AntiForgeryToken()
 
-    <div class="col-12">
-        <button type="submit" class="btn btn-success">
-            @(Model.Id == 0 ? "Salvar" : "Atualizar")
-        </button>
+        <!-- Ids ocultos -->
+        <input asp-for="Id" type="hidden" />
+        <input asp-for="PessoaJuridicaId" type="hidden" />
+        <input asp-for="PessoaFisicaId" type="hidden" />
 
-        <!-- Botão Cancelar redireciona para o índice correto -->
-        @if (Model.PessoaFisicaId != null)
-        {
-            <a asp-controller="PessoasFisicas"
-               asp-action="Index"
-               class="btn btn-secondary ms-2">
-                Cancelar
-            </a>
-        }
-        else
-        {
-            <a asp-controller="PessoasJuridicas"
-               asp-action="Index"
-               class="btn btn-secondary ms-2">
-                Cancelar
-            </a>
-        }
-    </div>
-</form>
+        <div class="col-md-4">
+            <label asp-for="Banco" class="form-label fw-semibold"></label>
+            <input asp-for="Banco"
+                   class="form-control"
+                   placeholder="Ex: Banco do Brasil" />
+            <span asp-validation-for="Banco" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-2">
+            <label asp-for="Agencia" class="form-label fw-semibold"></label>
+            <input asp-for="Agencia"
+                   class="form-control"
+                   placeholder="1234-5" />
+            <span asp-validation-for="Agencia" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Conta" class="form-label fw-semibold"></label>
+            <input asp-for="Conta"
+                   class="form-control"
+                   placeholder="987654-0" />
+            <span asp-validation-for="Conta" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="ChavePix" class="form-label fw-semibold"></label>
+            <input asp-for="ChavePix"
+                   class="form-control"
+                   placeholder="(opcional)" />
+            <span asp-validation-for="ChavePix" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12 mt-3">
+            <button type="submit" class="btn btn-success me-2">
+                <i class="bi bi-check-circle"></i> @(Model.Id == 0 ? "Salvar" : "Atualizar")
+            </button>
+
+            @if (Model.PessoaFisicaId != null)
+            {
+                <a asp-controller="PessoasFisicas"
+                   asp-action="Index"
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left-circle"></i> Cancelar
+                </a>
+            }
+            else
+            {
+                <a asp-controller="PessoasJuridicas"
+                   asp-action="Index"
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left-circle"></i> Cancelar
+                </a>
+            }
+        </div>
+    </form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

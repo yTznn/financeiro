@@ -5,8 +5,8 @@
     int paginaAtual  = ViewBag.PaginaAtual  ?? 1;
 }
 
-<table class="table table-sm table-bordered table-hover table-striped">
-    <thead class="table-light">
+<table class="table table-sm table-bordered table-hover table-striped align-middle">
+    <thead class="table-light text-center">
         <tr>
             <th style="width:80px">Versão</th>
             <th>Vigência</th>
@@ -19,14 +19,14 @@
         @foreach (var v in Model)
         {
             <tr>
-                <td>@v.Versao</td>
-                <td>
-                    @v.VigenciaInicio.ToString("dd/MM/yyyy") -
+                <td class="text-center fw-semibold">@v.Versao</td>
+                <td class="text-center">
+                    @v.VigenciaInicio:dd/MM/yyyy —
                     @(v.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")
                 </td>
-                <td>@v.Valor.ToString("C")</td>
-                <td>@(v.TipoAditivo?.ToString() ?? "Original")</td>
-                <td>@(v.DataAssinatura?.ToString("dd/MM/yyyy") ?? "-")</td>
+                <td class="text-end">@v.Valor.ToString("C")</td>
+                <td class="text-center">@((v.TipoAditivo?.ToString()) ?? "Original")</td>
+                <td class="text-center">@((v.DataAssinatura?.ToString("dd/MM/yyyy")) ?? "-")</td>
             </tr>
         }
     </tbody>
@@ -35,7 +35,7 @@
 @if (totalPaginas > 1)
 {
     <nav>
-        <ul class="pagination pagination-sm">
+        <ul class="pagination pagination-sm justify-content-center">
             @for (int p = 1; p <= totalPaginas; p++)
             {
                 <li class="page-item @(p == paginaAtual ? "active" : "")">

@@ -4,42 +4,61 @@
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
-
-<div asp-validation-summary="All" class="text-danger"></div>
-
-<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
-      method="post"
-      class="row g-3">
-
-    @Html.AntiForgeryToken()
-    <input type="hidden" asp-for="Id" />
-
-    <div class="col-md-6">
-        <label asp-for="Nome" class="form-label"></label>
-        <input asp-for="Nome"
-               placeholder="Ex.: Cardiologia"
-               class="form-control" />
-        <span asp-validation-for="Nome" class="text-danger"></span>
+<div class="container py-4">
+    <div class="mb-4 text-center">
+        <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+        <p class="text-muted">Preencha os dados abaixo para registrar a natureza desejada.</p>
     </div>
 
-    <div class="col-md-3 form-check align-self-end">
-        <input asp-for="NaturezaMedica" class="form-check-input" />
-        <label asp-for="NaturezaMedica" class="form-check-label"></label>
-    </div>
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
 
-    <div class="col-md-3 form-check align-self-end">
-        <input asp-for="Ativo" class="form-check-input" />
-        <label asp-for="Ativo" class="form-check-label"></label>
-    </div>
+            <form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+                  method="post"
+                  class="row g-3 bg-light p-4 rounded shadow-sm">
 
-    <div class="col-12">
-        <button type="submit" class="btn btn-success">
-            @(Model.Id == 0 ? "Salvar" : "Atualizar")
-        </button>
-        <a asp-action="Index" class="btn btn-secondary ms-2">Cancelar</a>
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id" />
+
+                <!-- Nome -->
+                <div class="col-md-12">
+                    <label asp-for="Nome" class="form-label fw-semibold"></label>
+                    <input asp-for="Nome"
+                           placeholder="Ex.: Cardiologia, Ortopedia, Cirurgia Geral..."
+                           class="form-control" />
+                    <span asp-validation-for="Nome" class="text-danger small"></span>
+                </div>
+
+                <!-- Natureza Médica -->
+                <div class="col-md-6 d-flex align-items-center">
+                    <div class="form-check form-switch">
+                        <input asp-for="NaturezaMedica" class="form-check-input" type="checkbox" role="switch" />
+                        <label asp-for="NaturezaMedica" class="form-check-label ms-2"></label>
+                    </div>
+                </div>
+
+                <!-- Ativo -->
+                <div class="col-md-6 d-flex align-items-center">
+                    <div class="form-check form-switch">
+                        <input asp-for="Ativo" class="form-check-input" type="checkbox" role="switch" />
+                        <label asp-for="Ativo" class="form-check-label ms-2"></label>
+                    </div>
+                </div>
+
+                <!-- Botões -->
+                <div class="col-12 mt-3">
+                    <button type="submit" class="btn btn-success me-2">
+                        <i class="bi bi-check-circle"></i> @(Model.Id == 0 ? "Salvar" : "Atualizar")
+                    </button>
+                    <a asp-action="Index" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left-circle"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
     </div>
-</form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

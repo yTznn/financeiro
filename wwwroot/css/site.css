@@ -1,5 +1,8 @@
+/* Fonte responsiva */
 html {
   font-size: 14px;
+  position: relative;
+  min-height: 100%;
 }
 
 @media (min-width: 768px) {
@@ -8,15 +11,138 @@ html {
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
-}
-
+/* Layout */
 body {
   margin-bottom: 60px;
+  background-color: #f9fbfc; /* atualizei de #f8f9fa para um tom mais claro */
+  color: #212529;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Cabeçalhos */
+h2, h3, h4 {
+  color: #212529;
+}
+
+/* Foco em elementos */
+.btn:focus,
+.btn:active:focus,
+.btn-link.nav-link:focus,
+.form-control:focus,
+.form-check-input:focus {
+  box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+  border-color: #1e88e5;
+  outline: none;
+}
+
+/* Botões */
+.btn-primary {
+  background-color: #1e88e5;
+  border-color: #1e88e5;
+}
+
+.btn-primary:hover {
+  background-color: #1565c0;
+  border-color: #1565c0;
+}
+
+.btn-info {
+  background-color: #00acc1;
+  border-color: #00acc1;
+}
+
+.btn-info:hover {
+  background-color: #00838f;
+  border-color: #00838f;
+}
+
+.btn-success {
+  background-color: #28a745;
+  border-color: #28a745;
+}
+
+.btn-success:hover {
+  background-color: #218838;
+  border-color: #1e7e34;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+  border-color: #545b62;
+}
+
+/* Tabelas */
+.table-sm td, .table-sm th {
+  padding: 0.45rem;
+  vertical-align: middle;
+}
+
+.table thead.table-light th {
+  background-color: #e3f2fd;
+  border-bottom: 1px solid #90caf9;
+}
+
+/* Paginação */
+.pagination .page-item.active .page-link {
+  background-color: #1e88e5;
+  border-color: #1e88e5;
+  color: white;
+}
+
+.pagination .page-link {
+  color: #1e88e5;
+}
+
+.pagination .page-link:hover {
+  background-color: #e3f2fd;
+}
+
+/* Modal */
+.modal-header {
+  background-color: #1e88e5;
+  color: white;
+  border-bottom: none;
+}
+
+/* Alertas */
+.alert-info {
+  background-color: #e3f2fd;
+  border-color: #90caf9;
+  color: #1565c0;
+}
+
+/* Formulários */
+label {
+  font-weight: 500;
+}
+
+label.form-label {
+  color: #495057;
+}
+
+.form-check-label {
+  margin-left: 0.25rem;
+}
+
+select.form-control[multiple],
+select.form-select[multiple] {
+  min-height: 120px;
+}
+
+.text-danger {
+  font-size: 0.875rem;
+}
+
+/* Ajustes diversos */
+hr {
+  border-top: 1px solid #ccc;
+}
+
+a {
+  text-decoration: none;
 }

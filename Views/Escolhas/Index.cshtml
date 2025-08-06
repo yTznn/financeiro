@@ -2,20 +2,41 @@
     ViewBag.Title = "Novo Cadastro";
 }
 
-<h2>O que você deseja cadastrar?</h2>
+<div class="container py-5">
+    <div class="text-center mb-4">
+        <h1 class="display-6 fw-bold text-primary">📋 Novo Cadastro</h1>
+        <p class="text-muted">Escolha o tipo de pessoa que deseja cadastrar no sistema.</p>
+    </div>
 
-<div class="d-flex gap-3">
-    <!-- Pessoa Jurídica -->
-    <a asp-controller="PessoasJuridicas"
-       asp-action="Novo"
-       class="btn btn-primary">
-        Pessoa Jurídica
-    </a>
+    <div class="row justify-content-center">
+        <!-- Pessoa Jurídica -->
+        <div class="col-md-4 mb-3">
+            <div class="card border-primary shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pessoa Jurídica</h5>
+                    <p class="card-text text-muted">Empresas, instituições, organizações.</p>
+                    <a asp-controller="PessoasJuridicas"
+                       asp-action="Novo"
+                       class="btn btn-primary w-100">
+                        Cadastrar
+                    </a>
+                </div>
+            </div>
+        </div>
 
-    <!-- Pessoa Física (controller ainda será criado) -->
-    <a asp-controller="PessoasFisicas"
-       asp-action="Novo"
-       class="btn btn-secondary">
-        Pessoa Física
-    </a>
+        <!-- Pessoa Física -->
+        <div class="col-md-4 mb-3">
+            <div class="card border-secondary shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pessoa Física</h5>
+                    <p class="card-text text-muted">Indivíduos, profissionais autônomos.</p>
+                    <a asp-controller="PessoasFisicas"
+                       asp-action="Novo"
+                       class="btn btn-secondary w-100">
+                        Cadastrar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

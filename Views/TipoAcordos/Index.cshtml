@@ -11,29 +11,29 @@
     + Novo Tipo de Acordo
 </a>
 
-<table class="table table-striped">
-    <thead>
+<table class="table table-striped table-hover table-bordered align-middle">
+    <thead class="table-light text-center">
         <tr>
             <th>Número</th>
-            <th>Valor</th>
+            <th style="width:120px">Valor</th>
             <th>Objeto</th>
-            <th>Data Início</th>
-            <th>Data Fim</th>
-            <th>Ativo</th>
-            <th style="width:180px">Ações</th>
+            <th style="width:130px">Data Início</th>
+            <th style="width:130px">Data Fim</th>
+            <th style="width:80px">Ativo</th>
+            <th style="width:150px">Ações</th>
         </tr>
     </thead>
     <tbody>
         @foreach (var item in Model)
         {
             <tr>
-                <td>@item.Numero</td>
-                <td>@item.Valor.ToString("C")</td>
+                <td class="text-center fw-semibold">@item.Numero</td>
+                <td class="text-end">@item.Valor.ToString("C")</td>
                 <td>@item.Objeto</td>
-                <td>@item.DataInicio.ToShortDateString()</td>
-                <td>@item.DataFim.ToShortDateString()</td>
-                <td>@(item.Ativo ? "Sim" : "Não")</td>
-                <td>
+                <td class="text-center">@item.DataInicio.ToString("dd/MM/yyyy")</td>
+                <td class="text-center">@item.DataFim.ToString("dd/MM/yyyy")</td>
+                <td class="text-center">@((item.Ativo) ? "Sim" : "Não")</td>
+                <td class="text-center">
                     <a class="btn btn-sm btn-outline-primary"
                        asp-action="Editar"
                        asp-route-id="@item.Id">

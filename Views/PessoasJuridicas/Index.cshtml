@@ -5,84 +5,93 @@
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
+<h2 class="mb-4 fw-bold">
+    <i class="bi bi-buildings me-2 text-primary"></i> Gerencie seus fornecedores PJ
+</h2>
 
-<a asp-action="Novo" class="btn btn-primary mb-3">
-    + Nova Pessoa Jurídica
+<a asp-action="Novo" class="btn btn-primary mb-4">
+    <i class="bi bi-plus-circle me-1"></i> Nova Pessoa Jurídica
 </a>
 
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Razão Social</th>
-            <th>Nome Fantasia</th>
-            <th>CNPJ</th>
-            <th>E-mail</th>
-            <th>Telefone</th>
-            <th>Situação</th>
-            <th style="width:300px">Ações</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in Model)
-        {
+<div class="table-responsive">
+    <table class="table table-striped align-middle table-hover">
+        <thead class="table-light">
             <tr>
-                <td>@item.Pessoa.RazaoSocial</td>
-                <td>@item.Pessoa.NomeFantasia</td>
-                <td>@item.Pessoa.NumeroInscricao</td>
-                <td>@item.Pessoa.Email</td>
-                <td>@item.Pessoa.Telefone</td>
-                <td>@(item.Pessoa.SituacaoAtiva ? "Ativo" : "Inativo")</td>
-                <td class="d-flex flex-wrap gap-1">
-
-                    <!-- Editar fornecedor -->
-                    <a class="btn btn-sm btn-outline-primary"
-                       asp-action="Editar"
-                       asp-route-id="@item.Pessoa.Id">
-                        Editar
-                    </a>
-
-                    <!-- Endereço -->
-                    @if (item.PossuiEndereco)
-                    {
-                        <a class="btn btn-sm btn-outline-secondary"
-                           asp-controller="Enderecos"
-                           asp-action="Editar"
-                           asp-route-pessoaId="@item.Pessoa.Id">
-                            Editar Endereço
-                        </a>
-                    }
-                    else
-                    {
-                        <a class="btn btn-sm btn-outline-secondary"
-                           asp-controller="Enderecos"
-                           asp-action="Novo"
-                           asp-route-pessoaId="@item.Pessoa.Id">
-                            Preencher Endereço
-                        </a>
-                    }
-
-                    <!-- Conta Bancária -->
-                    @if (item.PossuiConta)
-                    {
-                        <a class="btn btn-sm btn-outline-success"
-                           asp-controller="ContasBancarias"
-                           asp-action="Editar"
-                           asp-route-pessoaId="@item.Pessoa.Id">
-                            Editar Conta
-                        </a>
-                    }
-                    else
-                    {
-                        <a class="btn btn-sm btn-outline-success"
-                           asp-controller="ContasBancarias"
-                           asp-action="Novo"
-                           asp-route-pessoaId="@item.Pessoa.Id">
-                            Preencher Conta
-                        </a>
-                    }
-                </td>
+                <th>Razão Social</th>
+                <th>Nome Fantasia</th>
+                <th>CNPJ</th>
+                <th>E-mail</th>
+                <th>Telefone</th>
+                <th>Situação</th>
+                <th style="width:300px">Ações</th>
             </tr>
-        }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td>@item.Pessoa.RazaoSocial</td>
+                    <td>@item.Pessoa.NomeFantasia</td>
+                    <td>@item.Pessoa.NumeroInscricao</td>
+                    <td>@item.Pessoa.Email</td>
+                    <td>@item.Pessoa.Telefone</td>
+                    <td>
+                        <span class="badge bg-@(item.Pessoa.SituacaoAtiva ? "primary" : "secondary")">
+                            @(item.Pessoa.SituacaoAtiva ? "Ativo" : "Inativo")
+                        </span>
+                    </td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-2">
+                            <!-- Editar fornecedor -->
+                            <a class="btn btn-sm btn-outline-primary"
+                               asp-action="Editar"
+                               asp-route-id="@item.Pessoa.Id">
+                                <i class="bi bi-pencil-square me-1"></i> Editar
+                            </a>
+
+                            <!-- Endereço -->
+                            @if (item.PossuiEndereco)
+                            {
+                                <a class="btn btn-sm btn-outline-info"
+                                   asp-controller="Enderecos"
+                                   asp-action="Editar"
+                                   asp-route-pessoaId="@item.Pessoa.Id">
+                                    <i class="bi bi-geo-alt-fill me-1"></i> Editar Endereço
+                                </a>
+                            }
+                            else
+                            {
+                                <a class="btn btn-sm btn-outline-info"
+                                   asp-controller="Enderecos"
+                                   asp-action="Novo"
+                                   asp-route-pessoaId="@item.Pessoa.Id">
+                                    <i class="bi bi-geo-alt me-1"></i> Preencher Endereço
+                                </a>
+                            }
+
+                            <!-- Conta Bancária -->
+                            @if (item.PossuiConta)
+                            {
+                                <a class="btn btn-sm btn-outline-success"
+                                   asp-controller="ContasBancarias"
+                                   asp-action="Editar"
+                                   asp-route-pessoaId="@item.Pessoa.Id">
+                                    <i class="bi bi-bank me-1"></i> Editar Conta
+                                </a>
+                            }
+                            else
+                            {
+                                <a class="btn btn-sm btn-outline-success"
+                                   asp-controller="ContasBancarias"
+                                   asp-action="Novo"
+                                   asp-route-pessoaId="@item.Pessoa.Id">
+                                    <i class="bi bi-bank2 me-1"></i> Preencher Conta
+                                </a>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

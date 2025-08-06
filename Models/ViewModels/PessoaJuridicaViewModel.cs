@@ -13,7 +13,6 @@ namespace Financeiro.Models.ViewModels
         public string NomeFantasia { get; set; }
 
         [Required, Display(Name = "CNPJ")]
-        [RegularExpression(@"\d{14}", ErrorMessage = "CNPJ deve conter 14 dígitos.")]
         public string NumeroInscricao { get; set; }
 
         [EmailAddress, Display(Name = "E-mail")]

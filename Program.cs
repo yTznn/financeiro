@@ -80,6 +80,6 @@ app.UseAuthorization();
 // Rota padrão → tela de escolha
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Escolhas}/{action=Index}/{id?}");
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.Run();

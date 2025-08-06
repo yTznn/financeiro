@@ -1,8 +1,40 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Início";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="display-4">🎯 Sistema Financeiro</h1>
+        <p class="lead">Bem-vindo! Aqui você gerencia contratos, fornecedores e recursos com praticidade e organização.</p>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card border-primary h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Cadastrar Fornecedor</h5>
+                    <p class="card-text">Registre novas pessoas jurídicas ou físicas.</p>
+                    <a href="/Escolhas/Index" class="btn btn-outline-primary">Ir para cadastro</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card border-success h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Gerenciar Contratos</h5>
+                    <p class="card-text">Lance contratos e aditivos com vínculo completo.</p>
+                    <a href="/Contratos/Index" class="btn btn-outline-success">Ver contratos</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card border-warning h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Visualizar Relatórios</h5>
+                    <p class="card-text">Acompanhe orçamento, despesas e previsões.</p>
+                    <a href="#" class="btn btn-outline-warning disabled">Em breve</a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

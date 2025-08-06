@@ -10,7 +10,7 @@
 @if (Model.Id != 0)
 {
     <!-- Botões utilitários -->
-    <div class="mb-3 d-flex gap-2">
+    <div class="mb-3 d-flex flex-wrap gap-2">
         <a asp-controller="Aditivos"
            asp-action="Novo"
            asp-route-acordoId="@Model.Id"
@@ -18,7 +18,6 @@
             + Registrar Aditivo
         </a>
 
-        <!-- Botão abre modal -->
         <button type="button"
                 class="btn btn-outline-primary"
                 data-bs-toggle="modal"
@@ -73,9 +72,11 @@
         <span asp-validation-for="DataAssinatura" class="text-danger"></span>
     </div>
 
-    <div class="col-md-3 form-check align-self-end">
-        <input asp-for="Ativo" class="form-check-input" />
-        <label asp-for="Ativo" class="form-check-label"></label>
+    <div class="col-md-3 d-flex align-items-center">
+        <div class="form-check mt-4">
+            <input asp-for="Ativo" class="form-check-input" />
+            <label asp-for="Ativo" class="form-check-label">Ativo</label>
+        </div>
     </div>
 
     <div class="col-md-12">
@@ -94,11 +95,10 @@
 
 @if (Model.Id != 0)
 {
-    <!-- Modal -->
+    <!-- Modal com histórico -->
     <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
-
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">Histórico de Aditivos</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -109,7 +109,6 @@
                         <div class="spinner-border"></div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -123,8 +122,8 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const acordoId = @Model.Id;
-            const modal    = document.getElementById('modalHistorico');
-            const bodyDiv  = document.getElementById('histBody');
+            const modal = document.getElementById('modalHistorico');
+            const bodyDiv = document.getElementById('histBody');
 
             const loadHistPage = pag => {
                 bodyDiv.innerHTML =
@@ -136,10 +135,10 @@
                         bodyDiv.innerHTML = html;
 
                         bodyDiv.querySelectorAll('.hist-page-link')
-                               .forEach(a => a.addEventListener('click', e => {
-                                   e.preventDefault();
-                                   loadHistPage(a.dataset.pagina);
-                               }));
+                            .forEach(a => a.addEventListener('click', e => {
+                                e.preventDefault();
+                                loadHistPage(a.dataset.pagina);
+                            }));
                     });
             };
 
@@ -150,9 +149,10 @@
 
     <style>
         .modal-header { border-bottom: none; }
-        .table thead.table-light th { background-color:#0d6efd20; }
+        .table thead.table-light th { background-color: #0d6efd20; }
         .pagination .page-item.active .page-link {
-            background:#0d6efd; border-color:#0d6efd;
+            background: #0d6efd;
+            border-color: #0d6efd;
         }
     </style>
 }
