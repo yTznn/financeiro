@@ -1,6 +1,6 @@
 @model Financeiro.Models.ViewModels.PessoaJuridicaViewModel
 @{
-    ViewBag.Title = "Cadastre uma nova pessoa jurídica";
+    ViewBag.Title = Model.Id == 0 ? "Cadastrar nova pessoa jurídica" : "Editar pessoa jurídica";
     Layout = "_Layout";
 }
 
@@ -37,7 +37,7 @@
             <label asp-for="NumeroInscricao" class="form-label fw-semibold">
                 <i class="bi bi-file-earmark-text me-1 text-secondary"></i> CNPJ
             </label>
-            <input asp-for="NumeroInscricao" class="form-control" placeholder="CNPJ" />
+            <input asp-for="NumeroInscricao" class="form-control" placeholder="00.000.000/0000-00" />
             <span asp-validation-for="NumeroInscricao" class="text-danger small"></span>
         </div>
 
@@ -67,6 +67,7 @@
         </div>
 
         <div class="col-12 mt-3">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
             <button type="submit" class="btn btn-success">
                 <i class="bi bi-save2-fill me-1"></i>
                 @(Model.Id == 0 ? "Salvar" : "Atualizar")
@@ -85,11 +86,18 @@
 
     <script>
         $(document).ready(function () {
-            // Aplica a máscara no campo de CNPJ
-            $('input[name="NumeroInscricao"]').mask('00.000.000/0000-00');
+            // CNPJ
+            $('#NumeroInscricao').mask('00.000.000/0000-00');
 
-            // Aplica a máscara no campo de telefone (com ou sem 9)
-            $('input[name="Telefone"]').mask('(00) 0000-0000');
+            // Telefone com máscara dinâmica (fixo e celular)
+            var options = {
+                onKeyPress: function(phone, e, field, options) {
+                    var masks = ['(00) 0000-00009', '(00) 00000-0000'];
+                    var mask = (phone.replace(/\D/g, '').length > 10) ? masks[1] : masks[0];
+                    $('#Telefone').mask(mask, options);
+                }
+            };
+            $('#Telefone').mask('(00) 0000-00009', options);
         });
     </script>
 }

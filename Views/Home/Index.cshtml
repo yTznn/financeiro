@@ -2,37 +2,72 @@
     ViewData["Title"] = "Início";
 }
 
+<style>
+    .card-link {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .card-link:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
+    }
+</style>
+
 <div class="container py-5">
-    <div class="text-center mb-5">
-        <h1 class="display-4">🎯 Sistema Financeiro</h1>
-        <p class="lead">Bem-vindo! Aqui você gerencia contratos, fornecedores e recursos com praticidade e organização.</p>
+    <div class="text-center mb-5 p-4 bg-white rounded-3 shadow-sm animate__animated animate__fadeInDown">
+        <h1 class="display-4 fw-bold">
+            <i class="bi bi-bank2 me-2 text-primary"></i> Sistema Financeiro
+        </h1>
+        <p class="lead text-muted">Bem-vindo! Gerencie contratos, fornecedores e recursos com praticidade e organização.</p>
     </div>
 
     <div class="row">
-        <div class="col-md-4 mb-4">
-            <div class="card border-primary h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Cadastrar Fornecedor</h5>
-                    <p class="card-text">Registre novas pessoas jurídicas ou físicas.</p>
-                    <a href="/Escolhas/Index" class="btn btn-outline-primary">Ir para cadastro</a>
+        <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp">
+            <div class="card h-100 shadow-sm card-link">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-person-plus-fill fs-1 text-primary"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">Cadastrar Fornecedor</h5>
+                    <p class="card-text text-muted small">Registre novas pessoas jurídicas ou físicas para iniciar contratos.</p>
+                    <div class="mt-auto pt-3">
+                        <a href="/Escolhas/Index" class="btn btn-primary">
+                            <i class="bi bi-arrow-right-circle-fill me-2"></i> Iniciar Cadastro
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-4">
-            <div class="card border-success h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Gerenciar Contratos</h5>
-                    <p class="card-text">Lance contratos e aditivos com vínculo completo.</p>
-                    <a href="/Contratos/Index" class="btn btn-outline-success">Ver contratos</a>
+
+        <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp" style="animation-delay: 0.2s;">
+            <div class="card h-100 shadow-sm card-link">
+                <div class="card-body d-flex flex-column text-center p-4">
+                     <div class="mb-3">
+                        <i class="bi bi-file-earmark-text-fill fs-1 text-success"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">Gerenciar Contratos</h5>
+                    <p class="card-text text-muted small">Lance contratos e aditivos com vínculo completo aos fornecedores.</p>
+                    <div class="mt-auto pt-3">
+                         <a href="/Contratos/Index" class="btn btn-success">
+                            <i class="bi bi-folder-check me-2"></i> Ver Contratos
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-4">
-            <div class="card border-warning h-100 shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">Visualizar Relatórios</h5>
-                    <p class="card-text">Acompanhe orçamento, despesas e previsões.</p>
-                    <a href="#" class="btn btn-outline-warning disabled">Em breve</a>
+
+        <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp" style="animation-delay: 0.4s;">
+            <div class="card h-100 shadow-sm card-link">
+                <div class="card-body d-flex flex-column text-center p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-bar-chart-line-fill fs-1 text-warning"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">Visualizar Relatórios</h5>
+                    <p class="card-text text-muted small">Acompanhe orçamentos, despesas e previsões financeiras.</p>
+                    <div class="mt-auto pt-3">
+                        <a href="#" class="btn btn-warning disabled text-dark">
+                           <i class="bi bi-hourglass-split me-2"></i> Em Breve
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

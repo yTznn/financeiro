@@ -1,6 +1,6 @@
 @model Financeiro.Models.ViewModels.PessoaFisicaViewModel
 @{
-    ViewBag.Title = "Cadastre uma nova pessoa física";
+    ViewBag.Title = Model.Id == 0 ? "Cadastrar nova pessoa física" : "Editar pessoa física";
     Layout = "_Layout";
 }
 
@@ -37,7 +37,7 @@
             <label asp-for="Cpf" class="form-label fw-semibold">
                 <i class="bi bi-file-earmark-text me-1 text-secondary"></i> CPF
             </label>
-            <input asp-for="Cpf" class="form-control" placeholder="CPF (somente números)" />
+            <input asp-for="Cpf" class="form-control" placeholder="000.000.000-00" />
             <span asp-validation-for="Cpf" class="text-danger small"></span>
         </div>
 
@@ -75,6 +75,7 @@
         </div>
 
         <div class="col-12 mt-3">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
             <button type="submit" class="btn btn-success">
                 <i class="bi bi-save2-fill me-1"></i>
                 @(Model.Id == 0 ? "Salvar" : "Atualizar")
@@ -94,10 +95,17 @@
     <script>
         $(document).ready(function () {
             // CPF
-            $('input[name="Cpf"]').mask('000.000.000-00');
+            $('#Cpf').mask('000.000.000-00');
 
-            // Telefone
-            $('input[name="Telefone"]').mask('(00) 00000-0000');
+            // Telefone com máscara dinâmica (fixo e celular)
+            var options = {
+                onKeyPress: function(phone, e, field, options) {
+                    var masks = ['(00) 0000-00009', '(00) 00000-0000'];
+                    var mask = (phone.replace(/\D/g, '').length > 10) ? masks[1] : masks[0];
+                    $('#Telefone').mask(mask, options);
+                }
+            };
+            $('#Telefone').mask('(00) 0000-00009', options);
         });
     </script>
 }

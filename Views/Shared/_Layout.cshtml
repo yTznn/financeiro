@@ -15,8 +15,8 @@
             --blue: #3c91e6;
             --white: #fff;
             --gray: #f5f6fa;
-            --dark: #23242a;
-            --light-dark: #2c2f35;
+            --dark: #102444;
+            --light-dark: #1a3a6a;
         }
         body {
             margin: 0;
@@ -132,6 +132,8 @@
                     <li><a href="http://localhost:5044/Escolhas/Index"><i class='bx bx-plus-circle'></i><span class="links_name">Novo Fornecedor</span></a></li>
                     <li><a asp-controller="TipoAcordos" asp-action="Novo"><i class='bx bx-plus-circle'></i><span class="links_name">Novo Tipo de Acordo</span></a></li>
                     <li><a asp-controller="Naturezas" asp-action="Novo"><i class='bx bx-plus-circle'></i><span class="links_name">Nova Natureza</span></a></li>
+                    <li><a asp-controller="Usuarios" asp-action="Novo"><i class='bx bx-user-plus'></i><span class="links_name">Novo Usuário</span></a></li>
+                    <li><a asp-controller="Orcamentos" asp-action="Novo"><i class='bx bx-dollar-circle'></i><span class="links_name">Novo Orçamento</span></a></li>
                 </ul>
             </li>
             <li><a href="#" class="menu-toggle" data-target="#submenu-consultas"><i class='bx bx-search'></i><span class="links_name">Consultas</span></a>
@@ -146,8 +148,18 @@
                     <li><a asp-controller="Contratos" asp-action="Index"><i class='bx bx-list-ul'></i><span class="links_name">Listar Contratos</span></a></li>
                 </ul>
             </li>
-            <li><a asp-controller="Home" asp-action="Logout"><i class='bx bx-log-out'></i><span class="links_name">Sair</span></a></li>
+
+            <!-- Botão de logout seguro -->
+            <li>
+                <form asp-controller="Conta" asp-action="Logout" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-link text-white text-start ps-4" style="text-decoration: none;">
+                        <i class='bx bx-log-out'></i><span class="links_name">Sair</span>
+                    </button>
+                </form>
+            </li>
         </ul>
+
         <div class="profile">
             <span class="text-white small">Elielton Souza<br /><span class="text-muted small">Administrador</span></span>
         </div>

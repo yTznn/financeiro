@@ -1,0 +1,64 @@
+@model Financeiro.Models.ViewModels.UsuarioViewModel
+@{
+    ViewBag.Title = "Cadastro de Usuário";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+@if (TempData["MensagemSucesso"] != null)
+{
+    <div class="alert alert-success">@TempData["MensagemSucesso"]</div>
+}
+
+<div asp-validation-summary="All" class="alert alert-danger"></div>
+
+<form asp-action="Salvar" method="post" enctype="multipart/form-data" class="row g-4">
+    @Html.AntiForgeryToken()
+
+    <div class="col-md-4">
+        <label asp-for="NameSkip" class="form-label fw-semibold"></label>
+        <input asp-for="NameSkip" class="form-control" placeholder="Ex: elielton.souza" />
+        <span asp-validation-for="NameSkip" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Email" class="form-label fw-semibold"></label>
+        <input asp-for="Email" class="form-control" placeholder="Ex: email@exemplo.com" />
+        <span asp-validation-for="Email" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="PessoaFisicaId" class="form-label fw-semibold">Pessoa Física</label>
+        <select asp-for="PessoaFisicaId" asp-items="ViewBag.PessoasFisicas" class="form-select">
+            <option value="">-- Selecione --</option>
+        </select>
+        <span asp-validation-for="PessoaFisicaId" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="Senha" class="form-label fw-semibold"></label>
+        <input asp-for="Senha" class="form-control" type="password" />
+        <span asp-validation-for="Senha" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="ConfirmarSenha" class="form-label fw-semibold"></label>
+        <input asp-for="ConfirmarSenha" class="form-control" type="password" />
+        <span asp-validation-for="ConfirmarSenha" class="text-danger small"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label asp-for="ImagemPerfil" class="form-label fw-semibold"></label>
+        <input asp-for="ImagemPerfil" type="file" class="form-control" />
+        <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Salvar Usuário</button>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

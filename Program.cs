@@ -2,19 +2,34 @@ using Financeiro.Infraestrutura;
 using Financeiro.Repositorios;
 using Financeiro.Validacoes;
 using Financeiro.Servicos;
+using Financeiro.Servicos.Anexos;
+using Financeiro.Servicos.Seguranca;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 1) Cultura padrão (formato de número, data etc.)
 var cultureInfo = new CultureInfo("en-US");
 CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
 CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
-// 1) MVC
+// 2) MVC
 builder.Services.AddControllersWithViews();
 
-// 2) Connection-string → fábrica de conexões
+// 3) Autenticação com cookies
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Conta/Login";
+        options.LogoutPath = "/Conta/Logout";
+        options.AccessDeniedPath = "/Conta/AcessoNegado";
+    });
+
+builder.Services.AddAuthorization();
+
+// 4) Connection-string → fábrica de conexões
 builder.Services.AddSingleton<IDbConnectionFactory>(sp =>
 {
     var connStr = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -24,44 +39,49 @@ builder.Services.AddSingleton<IDbConnectionFactory>(sp =>
     return new DbConnectionFactory(connStr, logger);
 });
 
-// 3) Repositórios e Validações — Pessoa Jurídica
+// 5) Repositórios e Validações — Pessoa Jurídica
 builder.Services.AddTransient<IPessoaJuridicaRepositorio, PessoaJuridicaRepositorio>();
 builder.Services.AddTransient<PessoaJuridicaValidacoes>();
 
-// 4) Repositórios e Validações — Pessoa Física
+// 6) Repositórios e Validações — Pessoa Física
 builder.Services.AddTransient<IPessoaFisicaRepositorio, PessoaFisicaRepositorio>();
 builder.Services.AddTransient<PessoaFisicaValidacoes>();
 
-// 5) Repositório — Endereço
+// 7) Repositório — Endereço
 builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
 
-// 6) Repositório — Conta Bancária
+// 8) Repositório — Conta Bancária
 builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
 
-// 7) Repositório — Tipo de Acordo
+// 9) Repositório — Tipo de Acordo
 builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
 
-// 8) Repositório — Aditivo / Versões de Acordo
+// 10) Repositório — Aditivo / Versões de Acordo
 builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
 
-// 9) Serviço domínio — Versão / Aditivo de Acordo
+// 11) Serviço domínio — Versão / Aditivo de Acordo
 builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
 
-// 10) Repositório — Natureza
+// 12) Repositório — Natureza
 builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
 
-// 11) Repositório — Orçamento
+// 13) Repositório — Orçamento
 builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
 
-// 12) Repositório — Contrato
+// 14) Repositório — Contrato
 builder.Services.AddTransient<IContratoRepositorio, ContratoRepositorio>();
 
-// 13) Repositório — Versão de Contrato ✅ NOVO
+// 15) Repositório — Versão de Contrato
 builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
 
-// 14) Serviço — Versão de Contrato ✅ NOVO
+// 16) Serviço — Versão de Contrato
 builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
 
+// 17) Serviços adicionais
+builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
+builder.Services.AddScoped<IAnexoService, AnexoService>();
+builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
+builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
 
 var app = builder.Build();
 
@@ -75,9 +95,12 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+// 💡 IMPORTANTE: ordem correta de middlewares
+app.UseAuthentication();
 app.UseAuthorization();
 
-// Rota padrão → tela de escolha
+// Rota padrão
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
