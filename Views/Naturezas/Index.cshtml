@@ -1,0 +1,39 @@
+@model IEnumerable<Financeiro.Models.Natureza>
+@{
+    ViewBag.Title = "Naturezas";
+    Layout = "_Layout";
+}
+
+<h2 class="mb-4">@ViewBag.Title</h2>
+
+<a asp-action="Novo" class="btn btn-primary mb-3">
+    + Nova Natureza
+</a>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th style="width:140px">Natureza Médica</th>
+            <th style="width:100px">Ativo</th>
+            <th style="width:140px"></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var n in Model)
+        {
+            <tr>
+                <td>@n.Nome</td>
+                <td>@(n.NaturezaMedica ? "Sim" : "Não")</td>
+                <td>@(n.Ativo ? "Sim" : "Não")</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary"
+                       asp-action="Editar"
+                       asp-route-id="@n.Id">
+                        Editar
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
