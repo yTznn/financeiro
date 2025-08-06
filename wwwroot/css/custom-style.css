@@ -1,0 +1,48 @@
+/* Paleta de Cores IPGSE */
+:root {
+    --ipgse-dark-blue: #003352; /* Azul escuro para fundos, como a navbar */
+    --ipgse-blue: #0081c9;      /* Azul principal para botões, links e destaques */
+    --ipgse-light-gray: #f8f9fa; /* Cinza claro para textos em fundos escuros */
+}
+
+/* Estilização da Barra de Navegação */
+.navbar-ipgse {
+    background-color: var(--ipgse-dark-blue);
+}
+
+    .navbar-ipgse .navbar-brand,
+    .navbar-ipgse .nav-link {
+        color: var(--ipgse-light-gray);
+    }
+
+    .navbar-ipgse .nav-link:hover {
+        color: #ffffff;
+    }
+
+    .navbar-ipgse .navbar-brand img {
+        max-height: 40px; /* Ajuste a altura do logo conforme necessário */
+    }
+
+/* Sobrescrevendo as cores padrão do Bootstrap */
+.btn-primary {
+    background-color: var(--ipgse-blue);
+    border-color: var(--ipgse-blue);
+}
+
+.btn-primary:hover {
+    background-color: #006ca8; /* Um tom um pouco mais escuro para o hover */
+    border-color: #006ca8;
+}
+
+.page-item.active .page-link {
+    background-color: var(--ipgse-blue);
+    border-color: var(--ipgse-blue);
+}
+
+.page-link {
+    color: var(--ipgse-blue);
+}
+
+a {
+    color: var(--ipgse-blue);
+}

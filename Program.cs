@@ -99,7 +99,10 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
+<<<<<<< HEAD
 // 💡 IMPORTANTE: ordem correta de middlewares
+=======
+>>>>>>> master
 app.UseAuthentication();
 app.UseAuthorization();
 
