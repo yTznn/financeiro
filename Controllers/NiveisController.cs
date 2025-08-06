@@ -75,8 +75,8 @@ namespace Financeiro.Controllers
 
             // A LINHA ABAIXO É A "TRADUTORA" QUE ESTAVA FALTANDO OU INCORRETA.
             // Ela transforma a lista de NivelDto para uma lista com os campos 'id' e 'text'.
-            var resultadoParaSelect2 = niveis.Select(n => new 
-            { 
+            var resultadoParaSelect2 = niveis.Select(n => new
+            {
                 id = n.Nome,    // A propriedade 'id' do resultado será o Nome do nível
                 text = n.Nome   // A propriedade 'text' (o que aparece na tela) também será o Nome
             });
@@ -93,6 +93,19 @@ namespace Financeiro.Controllers
             var novoId = await _repo.InserirAsync(dto);
             var nivelCriado = await _repo.ObterPorIdAsync(novoId);
             return Ok(new { id = nivelCriado.Nome, text = nivelCriado.Nome });
+        }
+        // NiveisController.cs
+
+        [HttpGet("NovoNivelPartial")]
+        public IActionResult NovoNivelPartial(int nivel)
+        {
+            var dto = new NivelDto { Ativo = true };
+            if (nivel == 1) dto.IsNivel1 = true;
+            if (nivel == 2) dto.IsNivel2 = true;
+            if (nivel == 3) dto.IsNivel3 = true;
+
+            // Retorna uma PartialView que contém o modal e o formulário
+            return PartialView("_NivelFormModal", dto);
         }
     }
 }

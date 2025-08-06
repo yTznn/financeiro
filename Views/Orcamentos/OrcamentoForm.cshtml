@@ -115,9 +115,10 @@
 
                 <button type="button"
                         class="btn btn-warning"
-                        id="btn-salvar-parcial">
-                    Salvar Preenchimento
+                        id="btn-abrir-modal-nivel">
+                    Cadastrar Novo Nível
                 </button>
+                <div id="modal-nivel-placeholder"></div>
 
                 <button type="button"
                         class="btn btn-primary"
@@ -144,11 +145,9 @@
         const arvoreContainer       = document.getElementById('arvore-container');
         const btnAdicionarNivel     = document.getElementById('btn-adicionar-nivel');
         const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
-        const btnSalvarParcial      = document.getElementById('btn-salvar-parcial');
         const valorTotalInput       = document.getElementById('ValorPrevistoTotal');
         const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
         
-        // Pega o token CSRF para as requisições POST via AJAX (para criar novas tags)
         const antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
         // ---------- FUNÇÕES -----------
@@ -227,15 +226,15 @@
 
                 selectElement.select2({
                     theme: 'bootstrap-5',
-                    dropdownParent: $('#modalDetalhamento'), // Importante para o Select2 funcionar dentro de um modal
+                    dropdownParent: $('#modalDetalhamento'),
                     placeholder: 'Digite para buscar um nível...',
                     minimumInputLength: 1,
                     allowClear: true,
-                    tags: true,
                     ajax: {
                         url: '/Niveis/Search',
                         dataType: 'json',
                         delay: 250,
+                        cache: false, 
                         data: function (params) {
                             return {
                                 term: params.term,
@@ -246,35 +245,7 @@
                             return {
                                 results: data.results
                             };
-                        },
-                        cache: true
-                    },
-                    createTag: function (params) {
-                        const term = $.trim(params.term);
-                        if (term === '') return null;
-
-                        $.ajax({
-                            url: '/Niveis/Create',
-                            type: 'POST',
-                            contentType: 'application/json',
-                            headers: {
-                                'RequestVerificationToken': antiForgeryToken
-                            },
-                            data: JSON.stringify({
-                                Nome: term,
-                                IsNivel1: nivel === 1,
-                                IsNivel2: nivel === 2,
-                                IsNivel3: nivel === 3,
-                                Ativo: true
-                            })
-                        }).done(function (data) {
-                            const newOption = new Option(data.text, data.id, true, true);
-                            selectElement.append(newOption).trigger('change');
-                        }).fail(function (jqXHR) {
-                            alert('Erro ao criar o nível: ' + jqXHR.responseText);
-                        });
-
-                        return { id: term, text: term };
+                        }
                     }
                 });
             });
@@ -360,15 +331,10 @@
             const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
             if (inp && parseFloat(inp.value) === 0) inp.value = '';
         });
+        
         arvoreContainer.addEventListener('focusout', e => {
             const inp = e.target.closest('input[data-prop="ValorPrevisto"]');
             if (inp && inp.value.trim() === '') inp.value = '0.00';
-        });
-
-        btnSalvarParcial.addEventListener('click', () => {
-            calcularTotaisNosDados();
-            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-            alert('Preenchimento salvo!');
         });
 
         btnSalvarDetalhamento.addEventListener('click', () => {
@@ -384,6 +350,29 @@
         form.addEventListener('submit', () =>
             detalhamentoJsonInput.value = JSON.stringify(detalhamento)
         );
+
+        // --- CÓDIGO NOVO ADICIONADO PARA O MODAL DE CADASTRO ---
+
+        // Variável para guardar o último nível focado pelo usuário
+        let ultimoNivelFocado = 1;
+
+        // Este evento "ouve" qual dropdown de nível o usuário usou por último
+        arvoreContainer.addEventListener('focusin', e => {
+            const select = e.target.closest('.select2-niveis');
+            if (select) {
+                ultimoNivelFocado = parseInt(select.dataset.nivel) || 1;
+            }
+        });
+
+        // Evento de clique no botão "Cadastrar Novo Nível"
+        // Lembre-se que o ID do botão no HTML deve ser "btn-abrir-modal-nivel"
+        $(document).on('click', '#btn-abrir-modal-nivel', function() {
+            // Faz a requisição AJAX para buscar a PartialView do modal
+            $.get('/Niveis/NovoNivelPartial?nivel=' + ultimoNivelFocado, function(data) {
+                // Carrega o HTML retornado no nosso container placeholder
+                $('#modal-nivel-placeholder').html(data);
+            });
+        });
 
         // ---------- INICIALIZAÇÃO ----------
         calcularTotaisNosDados();

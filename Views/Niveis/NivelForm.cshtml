@@ -1,12 +1,19 @@
 @model Financeiro.Models.Dto.NivelDto
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo Nível" : "Editar Nível";
+    // Define um ID único para o formulário, para o nosso AJAX encontrar depois
+    var formId = $"nivel-form-{Model.GetHashCode()}";
 }
 
-<h3>@ViewData["Title"]</h3>
-<hr />
+@* Esta linha verifica se o formulário está sendo chamado pela página inteira ou dentro do nosso modal.
+   Se for na página inteira, ele mostra o título e a linha. Se for no modal, ele esconde. *@
+@if (!Context.Request.Headers["X-Requested-With"].Equals("XMLHttpRequest"))
+{
+    <h3>@ViewData["Title"]</h3>
+    <hr />
+}
 
-<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+<form id="@formId" asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
 
@@ -16,30 +23,23 @@
         <span asp-validation-for="Nome" class="text-danger"></span>
     </div>
 
-    <div class="mb-3">
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" asp-for="IsNivel1" />
-            <label class="form-check-label" asp-for="IsNivel1">Nível 1</label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" asp-for="IsNivel2" />
-            <label class="form-check-label" asp-for="IsNivel2">Nível 2</label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" asp-for="IsNivel3" />
-            <label class="form-check-label" asp-for="IsNivel3">Nível 3</label>
-        </div>
-    </div>
+    @* As checkboxes de nível agora ficam escondidas.
+       O sistema preenche automaticamente qual é o nível (1, 2 ou 3)
+       quando você clica em "Cadastrar Novo Nível", simplificando para o usuário. *@
+    <input type="hidden" asp-for="IsNivel1" />
+    <input type="hidden" asp-for="IsNivel2" />
+    <input type="hidden" asp-for="IsNivel3" />
 
     <div class="form-check mb-3">
         <input class="form-check-input" asp-for="Ativo" />
         <label class="form-check-label" asp-for="Ativo">Ativo</label>
     </div>
 
-    <button type="submit" class="btn btn-primary">Salvar</button>
-    <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    @* Este if esconde os botões principais quando o formulário está dentro do modal,
+       pois o modal já terá seus próprios botões "Salvar" e "Cancelar". *@
+    @if (!Context.Request.Headers["X-Requested-With"].Equals("XMLHttpRequest"))
+    {
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    }
 </form>
-
-@section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-}
