@@ -8,7 +8,15 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Globalization;
 
+// 🔧 Criação do builder
 var builder = WebApplication.CreateBuilder(args);
+
+// 🛠️ Leitura de configurações por ambiente (ex: Homologacao, Production, Development)
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
 
 // 1) Cultura padrão (formato de número, data etc.)
 var cultureInfo = new CultureInfo("en-US");
@@ -77,7 +85,7 @@ builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoReposito
 // 16) Serviço — Versão de Contrato
 builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
 
-builder.Services.AddScoped<Financeiro.Repositorios.INivelRepositorio, Financeiro.Repositorios.NivelRepositorio>();
+builder.Services.AddScoped<INivelRepositorio, NivelRepositorio>();
 
 // 17) Serviços adicionais
 builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
