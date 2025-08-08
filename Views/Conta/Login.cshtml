@@ -12,6 +12,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewBag.Title</title>
     <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+    <style>
+        .entity-group {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .entity-select.invalid {
+            border: 2px solid red;
+        }
+
+        .talking-bot {
+            font-size: 0.85rem;
+            color: #c0392b;
+            background-color: #fce4e4;
+            border-radius: 5px;
+            padding: 5px 10px;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="login-background">
@@ -23,12 +43,12 @@
                 <div class="error-message">@Model.MensagemErro</div>
             }
 
-            <form asp-controller="Conta" asp-action="Login" method="post">
+            <form id="login-form" asp-controller="Conta" asp-action="Login" method="post">
                 @Html.AntiForgeryToken()
 
                 <div class="input-group">
                     <label asp-for="Login"></label>
-                    <input asp-for="Login" placeholder="Digite seu e-mail ou NameSkip" />
+                    <input asp-for="Login" id="login" placeholder="Digite seu e-mail ou NameSkip" />
                     <span asp-validation-for="Login" class="text-danger small"></span>
                 </div>
 
@@ -38,11 +58,61 @@
                     <span asp-validation-for="Senha" class="text-danger small"></span>
                 </div>
 
+                <div class="input-group entity-group" id="entidade-group">
+                    <label for="EntidadeId">Entidade</label>
+                    <select id="EntidadeId" name="EntidadeId" class="form-select entity-select">
+                        <option value="">Selecione uma entidade...</option>
+                    </select>
+                    <div id="bot-msg" class="talking-bot">
+                        🤖 Opa! Você esqueceu de escolher a entidade! Dá uma olhadinha aí 👀
+                    </div>
+                </div>
+
                 <div class="actions">
                     <button type="submit">Entrar</button>
                 </div>
             </form>
         </div>
     </div>
+
+    <script>
+        const loginInput = document.getElementById("login");
+        const entidadeGroup = document.getElementById("entidade-group");
+        const entidadeSelect = document.getElementById("EntidadeId");
+        const botMsg = document.getElementById("bot-msg");
+
+        loginInput.addEventListener("blur", async () => {
+            const login = loginInput.value.trim();
+            entidadeGroup.style.display = "none";
+            entidadeSelect.innerHTML = '<option value="">Buscando entidades...</option>';
+
+            if (login.length < 5) return;
+
+            try {
+                const res = await fetch(`/Conta/BuscarEntidadesPorLogin?login=${encodeURIComponent(login)}`);
+                const entidades = await res.json();
+
+                if (entidades.length > 0) {
+                    entidadeGroup.style.display = "block";
+                    entidadeSelect.classList.remove("invalid");
+                    botMsg.style.display = "none";
+                    entidadeSelect.innerHTML = '<option value="">Selecione uma entidade...</option>';
+                    entidades.forEach(e => {
+                        entidadeSelect.innerHTML += `<option value="${e.id}">${e.sigla}</option>`;
+                    });
+                }
+            } catch (error) {
+                console.error("Erro ao buscar entidades", error);
+            }
+        });
+
+        document.getElementById("login-form").addEventListener("submit", function (e) {
+            if (entidadeGroup.style.display === "block" && entidadeSelect.value === "") {
+                e.preventDefault();
+                entidadeSelect.classList.add("invalid");
+                botMsg.style.display = "block";
+            }
+        });
+    </script>
 </body>
 </html>

@@ -16,5 +16,6 @@ namespace Financeiro.Repositorios
         Task<IEnumerable<Usuario>> ListarAsync();
         Task AtualizarAsync(Usuario usuario);
         Task ExcluirAsync(int id);
+        Task<IEnumerable<Entidade>> ObterEntidadesPorUsuarioIdAsync(int usuarioId);
     }
 }

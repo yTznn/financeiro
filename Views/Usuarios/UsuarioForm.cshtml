@@ -3,9 +3,8 @@
 @{
     ViewBag.Title = Model.Id == 0 ? "Novo Usuário" : "Editar Usuário";
     Layout = "_Layout";
-    var isAdmin = User.IsInRole("Administrador");
-    var nameSkipReadonly = !isAdmin ? "readonly" : "";
-    var emailReadonly = !isAdmin ? "readonly" : "";
+
+    bool isAdmin = User.IsInRole("Administrador");
 }
 
 <h2 class="mb-4">@ViewBag.Title</h2>
@@ -13,89 +12,170 @@
 <div asp-validation-summary="All" class="alert alert-danger"></div>
 
 <form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
-      method="post"
-      enctype="multipart/form-data"
+      method="post" enctype="multipart/form-data"
       class="row g-4">
     @Html.AntiForgeryToken()
     <input asp-for="Id" type="hidden" />
 
-    <div class="col-md-4">
-        <label asp-for="NameSkip" class="form-label fw-semibold">NameSkip</label>
-        @if (isAdmin)
-        {
-            <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" />
-        }
-        else
-        {
-            <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" readonly="readonly" />
-        }
-        <span asp-validation-for="NameSkip" class="text-danger small"></span>
-    </div>
+    <!-- ============ COLUNA ESQUERDA ============ -->
+    <div class="col-lg-6">
+        <!-- NameSkip -->
+        <div class="mb-2">
+            <label asp-for="NameSkip" class="form-label fw-semibold">NameSkip</label>
 
-    <div class="col-md-4">
-        <label asp-for="Email" class="form-label fw-semibold">E-mail</label>
-        @if (isAdmin)
-        {
-            <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" />
-        }
-        else
-        {
-            <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" readonly="readonly" />
-        }
-        <span asp-validation-for="Email" class="text-danger small"></span>
-    </div>
+            @if (isAdmin)
+            {
+                <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" />
+            }
+            else
+            {
+                <input asp-for="NameSkip" class="form-control" placeholder="Ex: joao.silva" readonly="readonly" />
+            }
 
-    <div class="col-md-4">
-        <label asp-for="PessoaFisicaId" class="form-label fw-semibold">Pessoa Física</label>
-        <select asp-for="PessoaFisicaId" class="form-select" asp-items="Model.PessoasFisicas">
-            <option value="">Selecione...</option>
-        </select>
-        <span asp-validation-for="PessoaFisicaId" class="text-danger small"></span>
-    </div>
+            <span asp-validation-for="NameSkip" class="text-danger small"></span>
+        </div>
 
-    @if (Model.Id == 0 || isAdmin)
-    {
-        <div class="col-md-4">
-            <label asp-for="PerfilId" class="form-label fw-semibold">Perfil</label>
-            <select asp-for="PerfilId" class="form-select" asp-items="Model.PerfisDisponiveis">
+        <!-- Email -->
+        <div class="mb-2">
+            <label asp-for="Email" class="form-label fw-semibold">E-mail</label>
+
+            @if (isAdmin)
+            {
+                <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" />
+            }
+            else
+            {
+                <input asp-for="Email" class="form-control" placeholder="email@exemplo.com" readonly="readonly" />
+            }
+
+            <span asp-validation-for="Email" class="text-danger small"></span>
+        </div>
+
+        <!-- Pessoa Física -->
+        <div class="mb-2">
+            <label asp-for="PessoaFisicaId" class="form-label fw-semibold">Pessoa Física</label>
+            <select asp-for="PessoaFisicaId" class="form-select" asp-items="Model.PessoasFisicas">
                 <option value="">Selecione...</option>
             </select>
-            <span asp-validation-for="PerfilId" class="text-danger small"></span>
+            <span asp-validation-for="PessoaFisicaId" class="text-danger small"></span>
         </div>
-    }
 
-    <div class="col-md-4">
-        <label asp-for="Senha" class="form-label fw-semibold">Senha @(Model.Id > 0 ? "(opcional)" : "")</label>
-        <input asp-for="Senha" class="form-control" type="password" />
-        <span asp-validation-for="Senha" class="text-danger small"></span>
-    </div>
+        <!-- Perfil -->
+        @if (Model.Id == 0 || isAdmin)
+        {
+            <div class="mb-2">
+                <label asp-for="PerfilId" class="form-label fw-semibold">Perfil</label>
+                <select asp-for="PerfilId" class="form-select" asp-items="Model.PerfisDisponiveis">
+                    <option value="">Selecione...</option>
+                </select>
+                <span asp-validation-for="PerfilId" class="text-danger small"></span>
+            </div>
+        }
 
-    <div class="col-md-4">
-        <label asp-for="ConfirmarSenha" class="form-label fw-semibold">Confirmar Senha</label>
-        <input asp-for="ConfirmarSenha" class="form-control" type="password" />
-        <span asp-validation-for="ConfirmarSenha" class="text-danger small"></span>
-    </div>
+        <!-- Senha / Confirmar -->
+        <div class="row">
+            <div class="col-md-6 mb-2">
+                <label asp-for="Senha" class="form-label fw-semibold">
+                    Senha @(Model.Id > 0 ? "(opcional)" : "")
+                </label>
+                <input asp-for="Senha" class="form-control" type="password" />
+                <span asp-validation-for="Senha" class="text-danger small"></span>
+            </div>
 
-    <div class="col-md-4">
-        <label asp-for="ImagemPerfil" class="form-label fw-semibold">Foto de Perfil</label>
-        <input asp-for="ImagemPerfil" class="form-control" type="file" />
-        <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
-    </div>
-
-    @if (!string.IsNullOrEmpty(Model.HashImagem))
-    {
-        <div class="col-md-4">
-            <label class="form-label fw-semibold">Imagem Atual</label><br />
-            <img src="/Usuarios/ImagemPerfil?hash=@Model.HashImagem" class="rounded border" width="80" height="80" />
+            <div class="col-md-6 mb-2">
+                <label asp-for="ConfirmarSenha" class="form-label fw-semibold">Confirmar Senha</label>
+                <input asp-for="ConfirmarSenha" class="form-control" type="password" />
+                <span asp-validation-for="ConfirmarSenha" class="text-danger small"></span>
+            </div>
         </div>
-    }
 
+        <!-- Imagem / Preview -->
+        <div class="mb-3">
+            <label asp-for="ImagemPerfil" class="form-label fw-semibold">Foto de Perfil</label>
+            <input asp-for="ImagemPerfil" class="form-control" type="file" />
+            <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.HashImagem))
+        {
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Imagem Atual</label><br />
+                <img src="/Usuarios/ImagemPerfil?hash=@Model.HashImagem"
+                     class="rounded border" width="80" height="80" />
+            </div>
+        }
+    </div>
+
+    <!-- ============ COLUNA DIREITA (ENTIDADES) ============ -->
+    <div class="col-lg-6">
+        <h5 class="mb-3">Entidades vinculadas</h5>
+
+        <!-- Multi-select -->
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Selecionar entidades</label>
+            <select asp-for="EntidadesSelecionadas"
+                    asp-items="Model.TodasEntidades"
+                    class="form-select" multiple id="selEntidades" style="width:100%;">
+            </select>
+            <span asp-validation-for="EntidadesSelecionadas" class="text-danger small"></span>
+        </div>
+
+        <!-- Dropdown ativa -->
+        <div class="mb-2">
+            <label class="form-label fw-semibold">Entidade ativa</label>
+            <select asp-for="EntidadeAtivaId" class="form-select" id="selEntidadeAtiva" style="width:100%;">
+                <option value="">-- escolha a ativa --</option>
+            </select>
+            <span asp-validation-for="EntidadeAtivaId" class="text-danger small"></span>
+        </div>
+
+        <small class="text-muted">
+            O usuário pode ter várias entidades, mas apenas <strong>uma</strong> ficará ativa por sessão.
+        </small>
+    </div>
+
+    <!-- Botões -->
     <div class="col-12">
-        <button type="submit" class="btn btn-primary">@((Model.Id == 0) ? "Salvar" : "Atualizar")</button>
+        <button type="submit" class="btn btn-primary">
+            @(Model.Id == 0 ? "Salvar" : "Atualizar")
+        </button>
         <a asp-action="Index" class="btn btn-secondary ms-2">Voltar</a>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        // Init Select2
+        $('#selEntidades').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Selecione as entidades'
+        });
+
+        // Preenche dropdown da ativa
+        function atualizarDropdownAtiva() {
+            const selecionadas = $('#selEntidades').val() || [];
+            const $ativa       = $('#selEntidadeAtiva');
+            const antigo       = $ativa.val();
+
+            $ativa.empty().append('<option value=\"\">-- escolha a ativa --</option>');
+            $('#selEntidades option:selected').each(function () {
+                $ativa.append($('<option>', {
+                    value: this.value,
+                    text : $(this).text()
+                }));
+            });
+
+            if (selecionadas.includes(antigo)) {
+                $ativa.val(antigo);
+            } else if (selecionadas.length) {
+                $ativa.val(selecionadas[0]);
+            }
+        }
+
+        atualizarDropdownAtiva();
+        $('#selEntidades').on('change', atualizarDropdownAtiva);
+    </script>
 }

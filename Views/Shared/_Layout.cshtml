@@ -197,7 +197,12 @@
                 {
                     <img src="/Usuarios/ImagemPerfil?hash=@hash" alt="Avatar" />
                 }
-                <span class="text-white small">@User.Identity.Name<br /><span class="text-muted small">Usuário Logado</span></span>
+                <div class="text-white small">
+                    @User.Identity?.Name
+                    <div class="fw-bold text-white">
+                        @User.FindFirst("SiglaEntidade")?.Value
+                    </div>
+                </div>
             }
         </div>
     </div>

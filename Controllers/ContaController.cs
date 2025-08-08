@@ -57,9 +57,23 @@ namespace Financeiro.Controllers
                 return View(model);
             }
 
+            if (model.EntidadeId is null || model.EntidadeId == 0)
+            {
+                model.MensagemErro = "Por favor, selecione uma entidade.";
+                return View(model);
+            }
+
+            var entidades = await _usuarioRepositorio.ObterEntidadesPorUsuarioIdAsync(usuario.Id);
+            var entidadeSelecionada = entidades.FirstOrDefault(e => e.Id == model.EntidadeId);
+
+            if (entidadeSelecionada is null)
+            {
+                model.MensagemErro = "Entidade selecionada inválida.";
+                return View(model);
+            }
+
             await _usuarioRepositorio.AtualizarUltimoAcessoAsync(usuario.Id);
 
-            // Define role com base no PerfilId
             var perfil = usuario.PerfilId switch
             {
                 1 => "Administrador",
@@ -73,7 +87,8 @@ namespace Financeiro.Controllers
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
                 new Claim(ClaimTypes.Name, usuario.NameSkip),
                 new Claim("EmailCriptografado", usuario.EmailCriptografado ?? ""),
-                new Claim(ClaimTypes.Role, perfil) // <- Agora com a Claim de Role
+                new Claim("SiglaEntidade", entidadeSelecionada.Sigla),
+                new Claim(ClaimTypes.Role, perfil)
             };
 
             if (!string.IsNullOrEmpty(usuario.HashImagem))
@@ -93,6 +108,38 @@ namespace Financeiro.Controllers
         {
             await HttpContext.SignOutAsync();
             return RedirectToAction("Login", "Conta");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> BuscarEntidadesPorLogin(string login)
+        {
+            if (string.IsNullOrWhiteSpace(login))
+                return BadRequest("Login inválido.");
+
+            Usuario? usuario;
+
+            if (login.Contains("@"))
+            {
+                var emailHash = _criptografiaService.HashEmailParaLogin(login.Trim().ToLower());
+                usuario = await _usuarioRepositorio.ObterPorEmailHashAsync(emailHash);
+            }
+            else
+            {
+                usuario = await _usuarioRepositorio.ObterPorNameSkipAsync(login.Trim());
+            }
+
+            if (usuario == null || !usuario.Ativo)
+                return NotFound();
+
+            var entidades = await _usuarioRepositorio.ObterEntidadesPorUsuarioIdAsync(usuario.Id);
+
+            var resultado = entidades.Select(e => new
+            {
+                id = e.Id,
+                sigla = e.Sigla
+            });
+
+            return Json(resultado);
         }
     }
 }

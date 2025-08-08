@@ -117,5 +117,16 @@ namespace Financeiro.Repositorios
 
             await conn.ExecuteAsync(sql, new { Id = id });
         }
+        public async Task<IEnumerable<Entidade>> ObterEntidadesPorUsuarioIdAsync(int usuarioId)
+        {
+            const string sql = @"
+                SELECT e.Id, e.Sigla
+                FROM Entidade e
+                INNER JOIN UsuarioEntidade ue ON ue.EntidadeId = e.Id
+                WHERE ue.UsuarioId = @UsuarioId AND e.Ativo = 1";
+
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QueryAsync<Entidade>(sql, new { UsuarioId = usuarioId });
+        }
     }
 }

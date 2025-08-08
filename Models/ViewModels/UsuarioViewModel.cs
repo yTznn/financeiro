@@ -31,30 +31,39 @@ namespace Financeiro.Models.ViewModels
 
         public string? HashImagem { get; set; }
         public string? MensagemErro { get; set; }
+
         public List<SelectListItem> PessoasFisicas { get; set; } = new();
 
+        /* ---------- PERFIL ---------- */
         [Display(Name = "Perfil")]
         public int? PerfilId { get; set; }
-
-        public List<SelectListItem> Perfis { get; set; } = new();
+        public List<SelectListItem> Perfis            { get; set; } = new();
         public List<SelectListItem> PerfisDisponiveis { get; set; } = new();
 
+        /* ---------- NOVO: ENTIDADES ---------- */
+        /// <summary>Ids das entidades marcadas no formulário.</summary>
+        public List<int> EntidadesSelecionadas { get; set; } = new();
+
+        /// <summary>Id da entidade que deve ficar ativa após salvar.</summary>
+        public int? EntidadeAtivaId { get; set; }
+
+        /// <summary>Lista completa de entidades para montar o multi-select.</summary>
+        public IEnumerable<SelectListItem>? TodasEntidades { get; set; }
+
+        /* ---------- Validações ---------- */
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             var erros = new List<ValidationResult>();
             bool emEdicao = Id > 0;
 
             if (!emEdicao && string.IsNullOrWhiteSpace(Senha))
-            {
                 erros.Add(new ValidationResult("A senha é obrigatória.", new[] { "Senha" }));
-            }
 
             if (!string.IsNullOrEmpty(Senha))
             {
                 if (!string.IsNullOrEmpty(NameSkip))
                 {
                     var partesNome = NameSkip.ToLower().Split('.', '-', '_');
-
                     foreach (var parte in partesNome)
                     {
                         if (parte.Length >= 4 && Senha.ToLower().Contains(parte))
@@ -63,44 +72,39 @@ namespace Financeiro.Models.ViewModels
                             break;
                         }
                     }
-
                     if (Regex.IsMatch(Senha.ToLower(), @"(abc|123|senha|qwerty|0000|1111)"))
-                    {
                         erros.Add(new ValidationResult("A senha não pode conter sequências simples.", new[] { "Senha" }));
-                    }
                 }
 
                 if (string.IsNullOrEmpty(ConfirmarSenha))
-                {
                     erros.Add(new ValidationResult("O campo ConfirmarSenha é obrigatório quando a senha é informada.", new[] { "ConfirmarSenha" }));
-                }
             }
 
             if (!emEdicao && PerfilId == null)
-            {
                 erros.Add(new ValidationResult("O perfil é obrigatório.", new[] { "PerfilId" }));
-            }
 
             if (ImagemPerfil != null)
             {
                 var extensao = Path.GetExtension(ImagemPerfil.FileName).ToLower();
-                var nome = Path.GetFileNameWithoutExtension(ImagemPerfil.FileName);
+                var nome     = Path.GetFileNameWithoutExtension(ImagemPerfil.FileName);
 
                 if (ImagemPerfil.Length > 10 * 1024 * 1024)
-                {
                     erros.Add(new ValidationResult("A imagem não pode ultrapassar 10MB.", new[] { "ImagemPerfil" }));
-                }
 
                 if (extensao != ".png" && extensao != ".jpeg" && extensao != ".jpg")
-                {
                     erros.Add(new ValidationResult("Apenas arquivos .png ou .jpeg são permitidos para perfil.", new[] { "ImagemPerfil" }));
-                }
 
                 if (nome.Length > 10 || Regex.IsMatch(nome, @"[^a-zA-Z0-9\-]"))
-                {
                     erros.Add(new ValidationResult("O nome do arquivo deve ter até 10 caracteres e não pode conter espaços ou caracteres especiais.", new[] { "ImagemPerfil" }));
-                }
             }
+
+            /* Validação de entidades: pelo menos uma selecionada */
+            if (!EntidadesSelecionadas.Any())
+                erros.Add(new ValidationResult("Selecione ao menos uma entidade para o usuário.", new[] { "EntidadesSelecionadas" }));
+
+            /* Entidade ativa deve pertencer à lista selecionada */
+            if (EntidadeAtivaId.HasValue && !EntidadesSelecionadas.Contains(EntidadeAtivaId.Value))
+                erros.Add(new ValidationResult("A entidade ativa deve estar entre as entidades selecionadas.", new[] { "EntidadeAtivaId" }));
 
             return erros;
         }

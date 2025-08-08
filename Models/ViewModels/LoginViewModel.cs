@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
 
 namespace Financeiro.Models.ViewModels
@@ -11,6 +12,11 @@ namespace Financeiro.Models.ViewModels
         [Required(ErrorMessage = "Informe a senha.")]
         [DataType(DataType.Password)]
         public string Senha { get; set; }
+
+        [Display(Name = "Entidade")]
+        public int? EntidadeId { get; set; }
+
+        public List<SelectListItem> EntidadesDisponiveis { get; set; } = new();
 
         public string? MensagemErro { get; set; }
     }
