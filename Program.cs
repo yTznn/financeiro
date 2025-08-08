@@ -1,7 +1,7 @@
 using System.Globalization;
-using AutoMapper;                                // AutoMapper
+using AutoMapper;
 using Financeiro.Infraestrutura;
-using Financeiro.Mappings;                       // EntidadeProfile
+using Financeiro.Mappings;
 using Financeiro.Repositorios;
 using Financeiro.Servicos;
 using Financeiro.Servicos.Anexos;
@@ -10,7 +10,6 @@ using Financeiro.Validacoes;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Logging;
 
-// 🔧 Criação do builder
 var builder = WebApplication.CreateBuilder(args);
 
 // 🛠️ Configurações por ambiente
@@ -69,19 +68,25 @@ builder.Services.AddTransient<IContratoRepositorio, ContratoRepositorio>();
 builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
 builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
 
-builder.Services.AddScoped<INivelRepositorio,  NivelRepositorio>();
+builder.Services.AddScoped<INivelRepositorio, NivelRepositorio>();
 builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
-builder.Services.AddScoped<IAnexoService,      AnexoService>();
+builder.Services.AddScoped<IAnexoService, AnexoService>();
 builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
 builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
-builder.Services.AddScoped<IPerfilRepositorio,   PerfilRepositorio>();
+builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
+builder.Services.AddScoped<ILogRepositorio, LogRepositorio>();
 #endregion
 
 #region Novos – Entidade e vínculo Usuário↔Entidade
-builder.Services.AddScoped<IEntidadeRepositorio,            EntidadeRepositorio>();
-builder.Services.AddScoped<IEntidadeService,                EntidadeService>();
-builder.Services.AddScoped<IUsuarioEntidadeRepositorio,     UsuarioEntidadeRepositorio>(); // ↔
-builder.Services.AddScoped<IUsuarioService,                 UsuarioService>();              // ↔
+builder.Services.AddScoped<IEntidadeRepositorio, EntidadeRepositorio>();
+builder.Services.AddScoped<IEntidadeService, EntidadeService>();
+builder.Services.AddScoped<IUsuarioEntidadeRepositorio, UsuarioEntidadeRepositorio>();
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+#endregion
+
+#region 🚀 Novos – Serviços de Logs
+builder.Services.AddScoped<ILogService, LogService>();
+builder.Services.AddHttpContextAccessor(); // <- necessário para obter dados do usuário logado
 #endregion
 
 var app = builder.Build();
