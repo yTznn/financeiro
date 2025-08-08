@@ -16,9 +16,9 @@ namespace Financeiro.Repositorios
         public async Task InserirAsync(PessoaJuridicaViewModel vm)
         {
             const string sql = @"
-INSERT INTO PessoaJuridica
-      (RazaoSocial, NomeFantasia, NumeroInscricao, Email, Telefone, SituacaoAtiva)
-VALUES(@RazaoSocial, @NomeFantasia, @NumeroInscricao, @Email, @Telefone, @SituacaoAtiva);";
+        INSERT INTO PessoaJuridica
+            (RazaoSocial, NomeFantasia, NumeroInscricao, Email, Telefone, SituacaoAtiva)
+        VALUES(@RazaoSocial, @NomeFantasia, @NumeroInscricao, @Email, @Telefone, @SituacaoAtiva);";
 
             using var conn = _factory.CreateConnection();
             await conn.ExecuteAsync(sql, vm);
@@ -43,14 +43,14 @@ VALUES(@RazaoSocial, @NomeFantasia, @NumeroInscricao, @Email, @Telefone, @Situac
         public async Task AtualizarAsync(int id, PessoaJuridicaViewModel vm)
         {
             const string sql = @"
-UPDATE PessoaJuridica SET
-      RazaoSocial     = @RazaoSocial,
-      NomeFantasia    = @NomeFantasia,
-      NumeroInscricao = @NumeroInscricao,
-      Email           = @Email,
-      Telefone        = @Telefone,
-      SituacaoAtiva   = @SituacaoAtiva
-WHERE Id = @Id;";
+        UPDATE PessoaJuridica SET
+            RazaoSocial     = @RazaoSocial,
+            NomeFantasia    = @NomeFantasia,
+            NumeroInscricao = @NumeroInscricao,
+            Email           = @Email,
+            Telefone        = @Telefone,
+            SituacaoAtiva   = @SituacaoAtiva
+        WHERE Id = @Id;";
 
             using var conn = _factory.CreateConnection();
             await conn.ExecuteAsync(sql, new
@@ -64,5 +64,16 @@ WHERE Id = @Id;";
                 vm.SituacaoAtiva
             });
         }
+        public async Task<PessoaJuridica?> ObterPorCnpjAsync(string cnpj)
+        {
+            const string sql = @"
+        SELECT * 
+        FROM PessoaJuridica
+        WHERE NumeroInscricao = @Cnpj;";
+
+            using var conn = _factory.CreateConnection();
+            return await conn.QuerySingleOrDefaultAsync<PessoaJuridica>(sql, new { Cnpj = cnpj });
+        }
+
     }
 }

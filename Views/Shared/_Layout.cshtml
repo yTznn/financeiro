@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Financeiro</title>
 
+    <!-- Bootstrap -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    
+
+    <!-- Select2 + tema Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
-    
+
+    <!-- Boxicons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" />
+
+    <!-- Estilos do projeto -->
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/financeiro.styles.css" asp-append-version="true" />
 
@@ -128,11 +133,7 @@
         .sidebar .links_name { transition: opacity 0.3s ease; }
         .sidebar .nav-list li a { white-space: nowrap; }
         .sidebar.close .nav-list li a { justify-content: center; }
-
-        /* Garante que o dropdown do Select2 apareça sobre o modal do Bootstrap */
-        .select2-container--open {
-            z-index: 9999999 !important;
-        }
+        .select2-container--open { z-index: 9999999 !important; }
     </style>
 </head>
 <body>
@@ -151,6 +152,7 @@
                     <li><a asp-controller="Usuarios" asp-action="Novo"><i class='bx bx-user-plus'></i><span class="links_name">Novo Usuário</span></a></li>
                     <li><a asp-controller="Perfis" asp-action="Novo"><i class='bx bx-user-pin'></i><span class="links_name">Novo Perfil</span></a></li>
                     <li><a asp-controller="Orcamentos" asp-action="Novo"><i class='bx bx-dollar-circle'></i><span class="links_name">Novo Orçamento</span></a></li>
+                    <li><a asp-controller="Entidades" asp-action="Create"><i class='bx bx-dollar-circle'></i><span class="links_name">Nova Entidade</span></a></li>
                 </ul>
             </li>
             <li><a href="#" class="menu-toggle" data-target="#submenu-consultas"><i class='bx bx-search'></i><span class="links_name">Consultas</span></a>
@@ -159,6 +161,7 @@
                     <li><a asp-controller="PessoasJuridicas" asp-action="Index"><i class='bx bx-building'></i><span class="links_name">Pessoas Jurídicas</span></a></li>
                     <li><a asp-controller="Usuarios" asp-action="Index"><i class='bx bx-group'></i><span class="links_name">Usuários Cadastrados</span></a></li>
                     <li><a asp-controller="Perfis" asp-action="Index"><i class='bx bx-id-card'></i><span class="links_name">Perfis Cadastrados</span></a></li>
+                    <li><a asp-controller="Entidades" asp-action="Index"><i class='bx bx-id-card'></i><span class="links_name">Entidades Cadastradas</span></a></li>
                 </ul>
             </li>
             <li><a href="#" class="menu-toggle" data-target="#submenu-contratos"><i class='bx bx-file'></i><span class="links_name">Contratos</span></a>
@@ -213,6 +216,10 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <!-- SweetAlert2 + mixins globais -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="~/js/alertas.js"></script>
+
 
     <script>
         const sidebar = document.getElementById("sidebar");

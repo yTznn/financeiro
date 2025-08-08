@@ -1,0 +1,95 @@
+@model Financeiro.Models.ViewModels.EntidadeViewModel
+@{
+    bool isEdit = Model.Id.HasValue;
+    ViewData["Title"] = isEdit ? "Editar Entidade" : "Nova Entidade";
+}
+
+<h2>@ViewData["Title"]</h2>
+
+<form id="frmEntidade" autocomplete="off">
+    @if (isEdit) { <input type="hidden" asp-for="Id" /> }
+
+    <!-- campos -->
+    <div class="mb-2">
+        <label asp-for="Nome" class="form-label"></label>
+        <input asp-for="Nome" class="form-control" id="Nome" />
+        <span asp-validation-for="Nome" class="text-danger"></span>
+    </div>
+
+    <div class="mb-2">
+        <label asp-for="Sigla" class="form-label"></label>
+        <input asp-for="Sigla" class="form-control" id="Sigla" />
+        <span asp-validation-for="Sigla" class="text-danger"></span>
+    </div>
+
+    <div class="mb-2">
+        <label asp-for="Cnpj" class="form-label"></label>
+        <input asp-for="Cnpj" class="form-control" id="txtCnpj" />
+        <span asp-validation-for="Cnpj" class="text-danger"></span>
+    </div>
+
+    <div class="form-check form-switch mb-2">
+        <input asp-for="Ativo" class="form-check-input" />
+        <label asp-for="Ativo" class="form-check-label"></label>
+    </div>
+
+    <div class="form-check form-switch mb-3">
+        <input asp-for="VinculaUsuario" class="form-check-input" />
+        <label asp-for="VinculaUsuario" class="form-check-label"></label>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Observacao" class="form-label"></label>
+        <textarea asp-for="Observacao" class="form-control"></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+        @(isEdit ? "Salvar alterações" : "Criar")
+    </button>
+    <a asp-action="Index" class="btn btn-secondary">Voltar</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+
+    <script>
+        /* máscara */
+        $('#txtCnpj').mask('00.000.000/0000-00');
+
+        /* auto-fill */
+        $('#txtCnpj').on('blur', function () {
+            const cnpj = $(this).val().replace(/\D/g, '');
+            if (cnpj.length === 14) {
+                fetch(`/Entidades/AutoFill?cnpj=${cnpj}`)
+                    .then(r => r.json())
+                    .then(d => { if (d) { $('#Nome').val(d.nome); $('#Sigla').val(d.sigla); } });
+            }
+        });
+
+        /* submit */
+        $('#frmEntidade').on('submit', function (e) {
+            e.preventDefault();
+            if (!$(this).valid()) return;
+
+            /* URL correta para create / edit */
+            const url = '@(isEdit
+                ? Url.Action("Edit",   "Entidades", new { id = Model.Id })
+                : Url.Action("Create", "Entidades"))';
+
+            const formData = $(this).serialize();
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            })
+            .then(async resp => {
+                const j = await resp.json();
+                SwalDefault.fire(j.mensagem, '', j.sucesso ? 'success' : 'error')
+                    .then(() => { if (j.sucesso) location.href = '@Url.Action("Index","Entidades")'; });
+            })
+            .catch(() => SwalDefault.fire('Erro inesperado.', '', 'error'));
+        });
+    </script>
+}

@@ -10,9 +10,8 @@ namespace Financeiro.Repositorios
     {
         Task InserirAsync(PessoaJuridicaViewModel vm);
         Task<IEnumerable<PessoaJuridica>> ListarAsync();
-
-        /* novos métodos */
         Task<PessoaJuridica?> ObterPorIdAsync(int id);
         Task AtualizarAsync(int id, PessoaJuridicaViewModel vm);
+        Task<PessoaJuridica?> ObterPorCnpjAsync(string cnpj);
     }
 }

@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "eaM5LJeShR9ttJM8L0hkNTLMC6m7o/uyWKaUOny3KkE=",
+  "Hash": "cCnAIS/ynS7QG3hFUsF7PLA1a9JkUJEv7RmLf1lrolE=",
   "Source": "financeiro",
   "BasePath": "_content/financeiro",
   "Mode": "Default",
@@ -148,6 +148,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\favicon.ico"
+    },
+    {
+      "Identity": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\js\\alertas.js",
+      "SourceId": "financeiro",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\",
+      "BasePath": "_content/financeiro",
+      "RelativePath": "js/alertas.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\js\\alertas.js"
     },
     {
       "Identity": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\js\\coreui.bundle.min.js",

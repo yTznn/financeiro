@@ -1,17 +1,19 @@
+using System.Globalization;
+using AutoMapper;                                 // ← novo
 using Financeiro.Infraestrutura;
+using Financeiro.Mappings;                        // ← novo (onde está EntidadeProfile)
 using Financeiro.Repositorios;
-using Financeiro.Validacoes;
 using Financeiro.Servicos;
 using Financeiro.Servicos.Anexos;
 using Financeiro.Servicos.Seguranca;
-using Microsoft.Extensions.Logging;
+using Financeiro.Validacoes;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using System.Globalization;
+using Microsoft.Extensions.Logging;
 
 // 🔧 Criação do builder
 var builder = WebApplication.CreateBuilder(args);
 
-// 🛠️ Leitura de configurações por ambiente (ex: Homologacao, Production, Development)
+// 🛠️ Leitura de configurações por ambiente
 builder.Configuration
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -26,12 +28,15 @@ CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 // 2) MVC
 builder.Services.AddControllersWithViews();
 
+// 2.1) AutoMapper — registra todos os profiles do assembly Financeiro.Mappings
+builder.Services.AddAutoMapper(typeof(EntidadeProfile).Assembly);
+
 // 3) Autenticação com cookies
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.LoginPath = "/Conta/Login";
-        options.LogoutPath = "/Conta/Logout";
+        options.LoginPath        = "/Conta/Login";
+        options.LogoutPath       = "/Conta/Logout";
         options.AccessDeniedPath = "/Conta/AcessoNegado";
     });
 
@@ -85,14 +90,17 @@ builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoReposito
 // 16) Serviço — Versão de Contrato
 builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
 
+// 17) Outros repositórios/serviços
 builder.Services.AddScoped<INivelRepositorio, NivelRepositorio>();
-
-// 17) Serviços adicionais
 builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
 builder.Services.AddScoped<IAnexoService, AnexoService>();
 builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
 builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
 builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
+
+// 18) Novos – Entidade
+builder.Services.AddScoped<IEntidadeRepositorio, EntidadeRepositorio>();
+builder.Services.AddScoped<IEntidadeService, EntidadeService>();
 
 var app = builder.Build();
 
@@ -107,7 +115,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
-// 💡 IMPORTANTE: ordem correta de middlewares
+// 💡 Ordem correta de middlewares
 app.UseAuthentication();
 app.UseAuthorization();
 

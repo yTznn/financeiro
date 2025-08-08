@@ -25,6 +25,10 @@
       "PackagePath": "staticwebassets\\favicon.ico"
     },
     {
+      "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\js\\alertas.js",
+      "PackagePath": "staticwebassets\\js\\alertas.js"
+    },
+    {
       "Id": "C:\\Users\\Elielton Souza\\Desktop\\financeiro\\wwwroot\\js\\coreui.bundle.min.js",
       "PackagePath": "staticwebassets\\js\\coreui.bundle.min.js"
     },
