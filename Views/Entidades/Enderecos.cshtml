@@ -1,0 +1,206 @@
+@model int
+@{
+    ViewBag.Title = "Endereços da Entidade";
+    Layout = "_Layout";
+    var entidadeId = Model;
+}
+
+<div class="container py-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+            <p class="text-muted mb-0">Gerencie os endereços vinculados. Apenas um pode ser o principal.</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" asp-controller="Entidades" asp-action="Index">
+                <i class="bx bx-arrow-back"></i> Voltar
+            </a>
+            <a class="btn btn-primary" asp-controller="Entidades" asp-action="NovoEnderecoEntidade" asp-route-id="@entidadeId">
+                <i class="bx bx-plus-circle"></i> Novo Endereço
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table align-middle" id="tbl-enderecos-entidade">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:60px;">Principal</th>
+                            <th>Logradouro</th>
+                            <th style="width:120px;">Número</th>
+                            <th>Complemento</th>
+                            <th style="width:120px;">CEP</th>
+                            <th>Bairro</th>
+                            <th>Município</th>
+                            <th style="width:80px;">UF</th>
+                            <th style="width:110px;" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-enderecos-entidade">
+                        <tr><td colspan="9" class="text-muted">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+<script>
+(function () {
+    const entidadeId = @entidadeId;
+    const urlListar = `/Entidades/Enderecos/${entidadeId}`;
+
+    const $tbody = $("#tbody-enderecos-entidade");
+
+    function token() {
+        return $("#antiForgeryForm input[name='__RequestVerificationToken']").val();
+    }
+
+    function swalMsg(message, type) {
+        if (window.SwalDefault?.fire) {
+            SwalDefault.fire(message || '', '', type || 'info');
+        } else if (window.Swal?.fire) {
+            Swal.fire({ text: message || '', icon: type || 'info' });
+        } else {
+            alert(message || '');
+        }
+    }
+
+    function linha(e) {
+        const estrela = e.principal
+            ? `<button type="button" class="btn btn-link p-0" title="Endereço principal" disabled>
+                   <i class='bx bxs-star' style="font-size:1.2rem;"></i>
+               </button>`
+            : `<button type="button" class="btn btn-link p-0 btn-definir-principal" data-id="${e.id}" title="Definir como principal">
+                   <i class='bx bx-star' style="font-size:1.2rem;"></i>
+               </button>`;
+
+        const acoes = `
+            <button type="button" class="btn btn-light btn-sm btn-excluir" data-id="${e.id}" title="Excluir endereço">
+                <i class='bx bx-trash'></i>
+            </button>
+        `;
+
+        return `
+            <tr>
+                <td class="text-center">${estrela}</td>
+                <td>${e.logradouro ?? ""}</td>
+                <td>${e.numero ?? ""}</td>
+                <td>${e.complemento ?? ""}</td>
+                <td>${e.cep ?? ""}</td>
+                <td>${e.bairro ?? ""}</td>
+                <td>${e.municipio ?? ""}</td>
+                <td>${e.uf ?? ""}</td>
+                <td class="text-center">${acoes}</td>
+            </tr>
+        `;
+    }
+
+    function carregar() {
+        $.get(urlListar)
+            .done(function (resp) {
+                if (!resp || !resp.sucesso) {
+                    $tbody.html(`<tr><td colspan="9" class="text-danger">Falha ao carregar endereços.</td></tr>`);
+                    swalMsg("Falha ao carregar endereços.", "error");
+                    return;
+                }
+                const itens = resp.itens || [];
+                if (!itens.length) {
+                    $tbody.html(`<tr><td colspan="9" class="text-muted">Nenhum endereço cadastrado para esta entidade.</td></tr>`);
+                    return;
+                }
+                let html = "";
+                for (const e of itens) html += linha(e);
+                $tbody.html(html);
+            })
+            .fail(function () {
+                $tbody.html(`<tr><td colspan="9" class="text-danger">Erro ao consultar o servidor.</td></tr>`);
+                swalMsg("Erro ao consultar o servidor.", "error");
+            });
+    }
+
+    function definirPrincipal(enderecoId) {
+        const url = `/Entidades/Enderecos/${entidadeId}/DefinirPrincipal/${enderecoId}`;
+        $.ajax({
+            type: "POST",
+            url: url,
+            headers: { "RequestVerificationToken": token(), "X-Requested-With": "XMLHttpRequest" }
+        })
+        .done(function (resp) {
+            if (resp?.sucesso) {
+                swalMsg(resp.mensagem || "Endereço definido como principal!", "success");
+                carregar();
+            } else {
+                swalMsg(resp?.mensagem || "Não foi possível definir o principal.", "error");
+            }
+        })
+        .fail(function (xhr) {
+            const msg = xhr.responseJSON?.mensagem || `Falha ao definir o principal. (${xhr.status})`;
+            swalMsg(msg, "error");
+            console.error('DefinirPrincipal FAIL:', xhr);
+        });
+    }
+
+    function excluir(enderecoId) {
+        const url = `/Entidades/Enderecos/${entidadeId}/Excluir/${enderecoId}`;
+        if (window.SwalDelete?.fire) {
+            SwalDelete.fire({
+                title: 'Excluir endereço?',
+                text: 'Esta ação não poderá ser desfeita.',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, excluir',
+                cancelButtonText: 'Cancelar'
+            }).then(res => { if (res.isConfirmed) postExcluir(url); });
+        } else if (window.Swal?.fire) {
+            Swal.fire({
+                title: 'Excluir endereço?',
+                text: 'Esta ação não poderá ser desfeita.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, excluir',
+                cancelButtonText: 'Cancelar'
+            }).then(res => { if (res.isConfirmed) postExcluir(url); });
+        } else {
+            if (confirm('Confirma excluir este endereço?')) postExcluir(url);
+        }
+    }
+
+    function postExcluir(url) {
+        $.ajax({
+            type: "POST",
+            url: url,
+            headers: { "RequestVerificationToken": token(), "X-Requested-With": "XMLHttpRequest" }
+        })
+        .done(function (resp) {
+            if (resp?.sucesso) {
+                swalMsg(resp.mensagem || "Endereço excluído com sucesso.", "success");
+                carregar();
+            } else {
+                swalMsg(resp?.mensagem || "Não foi possível excluir.", "error");
+            }
+        })
+        .fail(function (xhr) {
+            const msg = xhr.responseJSON?.mensagem || `Falha ao excluir. (${xhr.status})`;
+            swalMsg(msg, "error");
+            console.error('ExcluirEndereco FAIL:', xhr);
+        });
+    }
+
+    $(document).on("click", ".btn-definir-principal", function () {
+        definirPrincipal($(this).data("id"));
+    });
+
+    $(document).on("click", ".btn-excluir", function () {
+        excluir($(this).data("id"));
+    });
+
+    carregar();
+})();
+</script>
+}

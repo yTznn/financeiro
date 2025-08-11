@@ -20,8 +20,6 @@ namespace Financeiro.Models
         public DateTime? DataAssinatura  { get; set; }
         public DateTime DataRegistro     { get; set; } = DateTime.Now;
     }
-
-    // Enum fica no mesmo arquivo ou em novo (Models/Enums/TipoAditivo.cs)
     public enum TipoAditivo
     {
         Prazo = 1,

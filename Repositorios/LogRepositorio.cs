@@ -1,8 +1,7 @@
 using Dapper;
-using Financeiro.Models;
-using System.Data;
-using System.Threading.Tasks;
 using Financeiro.Infraestrutura;
+using Financeiro.Models;
+using System.Threading.Tasks;
 
 namespace Financeiro.Repositorios
 {
@@ -17,15 +16,16 @@ namespace Financeiro.Repositorios
 
         public async Task RegistrarAsync(Log log)
         {
+            const string sql = @"
+                INSERT INTO LogAcao
+                    (UsuarioId, EntidadeId, Acao, Tabela, DataHora,
+                     ValoresAnteriores, ValoresNovos, RegistroId)
+                VALUES
+                    (@UsuarioId, @EntidadeId, @Acao, @Tabela, @DataHora,
+                     @ValoresAnteriores, @ValoresNovos, @RegistroId);";
+
             using var connection = _connectionFactory.CreateConnection();
-
-            var sql = @"
-                INSERT INTO Logs 
-                    (UsuarioId, EntidadeId, Acao, Tabela, DataHora, ValoresAnteriores, ValoresNovos)
-                VALUES 
-                    (@UsuarioId, @EntidadeId, @Acao, @Tabela, @DataHora, @ValoresAnteriores, @ValoresNovos)";
-
-            await connection.ExecuteAsync(sql, log);
+            await connection.ExecuteAsync(sql, log);   // passa o objeto log direto
         }
     }
 }

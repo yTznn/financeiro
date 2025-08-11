@@ -88,6 +88,7 @@ namespace Financeiro.Controllers
                 new Claim(ClaimTypes.Name, usuario.NameSkip),
                 new Claim("EmailCriptografado", usuario.EmailCriptografado ?? ""),
                 new Claim("SiglaEntidade", entidadeSelecionada.Sigla),
+                new Claim("EntidadeId", entidadeSelecionada.Id.ToString()),
                 new Claim(ClaimTypes.Role, perfil)
             };
 

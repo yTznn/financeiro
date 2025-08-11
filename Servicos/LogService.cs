@@ -27,14 +27,11 @@ namespace Financeiro.Servicos
 
         private int ObterEntidadeId()
         {
-            var siglaClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("SiglaEntidade")?.Value;
-            // Aqui você pode buscar no banco, se quiser pegar o ID pela sigla. Por enquanto vamos simular:
-            // Mas ideal é salvar também o ID da entidade nas claims depois.
             var idClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("EntidadeId")?.Value;
             return int.TryParse(idClaim, out var id) ? id : 0;
         }
 
-        public async Task RegistrarCriacaoAsync(string tabela, object novoValor)
+        public async Task RegistrarCriacaoAsync(string tabela, object novoValor, int? registroId = null)
         {
             var log = new Log
             {
@@ -43,13 +40,14 @@ namespace Financeiro.Servicos
                 Tabela = tabela,
                 Acao = "Criação",
                 DataHora = DateTime.Now,
-                ValoresNovos = JsonSerializer.Serialize(novoValor)
+                ValoresNovos = JsonSerializer.Serialize(novoValor),
+                RegistroId = registroId
             };
 
             await _logRepositorio.RegistrarAsync(log);
         }
 
-        public async Task RegistrarEdicaoAsync(string tabela, object valorAntigo, object valorNovo)
+        public async Task RegistrarEdicaoAsync(string tabela, object valorAntigo, object valorNovo, int? registroId = null)
         {
             var log = new Log
             {
@@ -59,13 +57,14 @@ namespace Financeiro.Servicos
                 Acao = "Edição",
                 DataHora = DateTime.Now,
                 ValoresAnteriores = JsonSerializer.Serialize(valorAntigo),
-                ValoresNovos = JsonSerializer.Serialize(valorNovo)
+                ValoresNovos = JsonSerializer.Serialize(valorNovo),
+                RegistroId = registroId
             };
 
             await _logRepositorio.RegistrarAsync(log);
         }
 
-        public async Task RegistrarExclusaoAsync(string tabela, object valorAntigo)
+        public async Task RegistrarExclusaoAsync(string tabela, object valorAntigo, int? registroId = null)
         {
             var log = new Log
             {
@@ -74,7 +73,8 @@ namespace Financeiro.Servicos
                 Tabela = tabela,
                 Acao = "Exclusão",
                 DataHora = DateTime.Now,
-                ValoresAnteriores = JsonSerializer.Serialize(valorAntigo)
+                ValoresAnteriores = JsonSerializer.Serialize(valorAntigo),
+                RegistroId = registroId
             };
 
             await _logRepositorio.RegistrarAsync(log);

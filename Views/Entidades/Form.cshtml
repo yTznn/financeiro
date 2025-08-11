@@ -6,6 +6,39 @@
 
 <h2>@ViewData["Title"]</h2>
 
+@if (isEdit)
+{
+    <!-- Card: Endereço Principal (preenchido via AJAX) -->
+    <div id="cardEnderecoPrincipal" class="card border-0 shadow-sm mb-3 d-none">
+        <div class="card-body d-flex align-items-start justify-content-between">
+            <div>
+                <div class="small text-muted mb-1">
+                    <i class="bx bx-star me-1"></i> Endereço principal
+                </div>
+                <div id="epLinha1" class="fw-semibold"></div>
+                <div id="epLinha2" class="text-muted"></div>
+            </div>
+            <div class="ms-3">
+                <a class="btn btn-sm btn-outline-secondary"
+                   asp-controller="Entidades"
+                   asp-action="GerenciarEnderecos"
+                   asp-route-id="@(Model.Id ?? 0)">
+                    <i class="bx bx-map"></i> Gerenciar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerta quando não há principal -->
+    <div id="alertSemPrincipal" class="alert alert-warning d-none mb-3">
+        Nenhum endereço principal definido para esta entidade.
+        <a class="alert-link"
+           asp-controller="Entidades"
+           asp-action="GerenciarEnderecos"
+           asp-route-id="@(Model.Id ?? 0)">Definir agora</a>.
+    </div>
+}
+
 <form id="frmEntidade" autocomplete="off">
     @if (isEdit) { <input type="hidden" asp-for="Id" /> }
 
@@ -43,10 +76,25 @@
         <textarea asp-for="Observacao" class="form-control"></textarea>
     </div>
 
-    <button type="submit" class="btn btn-primary">
-        @(isEdit ? "Salvar alterações" : "Criar")
-    </button>
-    <a asp-action="Index" class="btn btn-secondary">Voltar</a>
+    <div class="d-flex align-items-center gap-2">
+        <button type="submit" class="btn btn-primary">
+            @(isEdit ? "Salvar alterações" : "Criar")
+        </button>
+
+        <a asp-action="Index" class="btn btn-secondary">Voltar</a>
+
+        @* Botão Endereços: aparece só em edição *@
+        @if (isEdit)
+        {
+            <a class="btn btn-outline-secondary"
+               asp-controller="Entidades"
+               asp-action="GerenciarEnderecos"
+               asp-route-id="@(Model.Id ?? 0)"
+               title="Gerenciar Endereços da Entidade">
+                <i class="bx bx-map"></i> Endereços
+            </a>
+        }
+    </div>
 </form>
 
 @section Scripts {
@@ -66,6 +114,47 @@
                     .then(d => { if (d) { $('#Nome').val(d.nome); $('#Sigla').val(d.sigla); } });
             }
         });
+
+        /* helper: formata CEP */
+        function formatCep(cep) {
+            if (!cep) return '';
+            const digits = ('' + cep).replace(/\D/g, '');
+            return digits.replace(/^(\d{5})(\d{3})$/, '$1-$2');
+        }
+
+        /* carregar endereço principal (somente em edição) */
+        (function carregarEnderecoPrincipal() {
+            const isEdit = @(isEdit.ToString().ToLower());
+            if (!isEdit) return;
+
+            const id = @(Model.Id ?? 0);
+            fetch(`/Entidades/EnderecoPrincipal/${id}`)
+                .then(r => r.json())
+                .then(j => {
+                    const card = document.getElementById('cardEnderecoPrincipal');
+                    const alertSem = document.getElementById('alertSemPrincipal');
+
+                    if (!j?.sucesso) {
+                        // falha silenciosa
+                        return;
+                    }
+
+                    if (!j.possuiPrincipal) {
+                        alertSem?.classList.remove('d-none');
+                        return;
+                    }
+
+                    const e = j.endereco || {};
+                    const linha1 = `${e.Logradouro ?? ''}, ${e.Numero ?? ''} ${e.Complemento ? ' - ' + e.Complemento : ''}`.trim();
+                    const linha2 = `${e.Bairro ?? ''} — ${e.Municipio ?? ''}/${e.Uf ?? ''} ${e.Cep ? ' — CEP ' + formatCep(e.Cep) : ''}`.trim();
+
+                    document.getElementById('epLinha1').textContent = linha1;
+                    document.getElementById('epLinha2').textContent = linha2;
+
+                    card?.classList.remove('d-none');
+                })
+                .catch(() => { /* ignora erro */ });
+        })();
 
         /* submit */
         $('#frmEntidade').on('submit', function (e) {

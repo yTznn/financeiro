@@ -1,0 +1,165 @@
+@model int
+@{
+    ViewBag.Title = "Endereços da Pessoa Jurídica";
+    Layout = "_Layout";
+    var pessoaJuridicaId = Model; // id da PJ recebido pela rota
+}
+
+<div class="container py-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+            <p class="text-muted mb-0">Gerencie os endereços vinculados. Apenas um pode ser o principal.</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary"
+               asp-controller="PessoasJuridicas"
+               asp-action="Index">
+                <i class="bi bi-arrow-left-circle"></i> Voltar
+            </a>
+
+            <a class="btn btn-primary"
+               asp-controller="Enderecos"
+               asp-action="Novo"
+               asp-route-pessoaId="@pessoaJuridicaId">
+                <i class="bi bi-plus-circle"></i> Novo Endereço
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table align-middle" id="tbl-enderecos">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60px;">Principal</th>
+                            <th>Logradouro</th>
+                            <th style="width: 120px;">Número</th>
+                            <th>Complemento</th>
+                            <th style="width: 120px;">CEP</th>
+                            <th>Bairro</th>
+                            <th>Município</th>
+                            <th style="width: 80px;">UF</th>
+                            <th style="width: 110px;" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-enderecos">
+                        <tr><td colspan="9" class="text-muted">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Antiforgery para POST via AJAX -->
+<form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            const pessoaId = @pessoaJuridicaId;
+            const urlListar = '@Url.Action("ListarPorPessoaJuridica", "Enderecos", new { pessoaJuridicaId = pessoaJuridicaId })';
+            const urlDefinirPrincipalTpl = '@Url.Action("DefinirPrincipalPessoaJuridica", "Enderecos", new { pessoaJuridicaId = pessoaJuridicaId, enderecoId = "__ID__" })';
+
+            const $tbody = $("#tbody-enderecos");
+
+            function token() {
+                return $("#antiForgeryForm input[name='__RequestVerificationToken']").val();
+            }
+
+            function linhaEndereco(e) {
+                const estrela = e.Principal
+                    ? `<button type="button" class="btn btn-link p-0" title="Endereço principal" disabled>
+                          <i class="bi bi-star-fill" style="font-size:1.2rem;"></i>
+                       </button>`
+                    : `<button type="button" class="btn btn-link p-0 btn-definir-principal" 
+                               data-id="${e.Id}" title="Definir como principal">
+                          <i class="bi bi-star" style="font-size:1.2rem;"></i>
+                       </button>`;
+
+                const acoes = `
+                    <!-- Lixeira vira apenas alerta (exclusão desabilitada) -->
+                    <button type="button" class="btn btn-light btn-sm btn-excluir" title="Exclusão desabilitada">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                `;
+
+                return `
+                    <tr>
+                        <td class="text-center">${estrela}</td>
+                        <td>${e.Logradouro ?? ""}</td>
+                        <td>${e.Numero ?? ""}</td>
+                        <td>${e.Complemento ?? ""}</td>
+                        <td>${e.Cep ?? ""}</td>
+                        <td>${e.Bairro ?? ""}</td>
+                        <td>${e.Municipio ?? ""}</td>
+                        <td>${e.Uf ?? ""}</td>
+                        <td class="text-center">${acoes}</td>
+                    </tr>
+                `;
+            }
+
+            function carregar() {
+                $.get(urlListar)
+                    .done(function (resp) {
+                        if (!resp || !resp.sucesso) {
+                            $tbody.html(`<tr><td colspan="9" class="text-danger">Falha ao carregar endereços.</td></tr>`);
+                            window.showAlert?.("Falha ao carregar endereços.", "danger");
+                            return;
+                        }
+
+                        const itens = resp.itens || [];
+                        if (itens.length === 0) {
+                            $tbody.html(`<tr><td colspan="9" class="text-muted">Nenhum endereço cadastrado para esta pessoa jurídica.</td></tr>`);
+                            return;
+                        }
+
+                        let html = "";
+                        for (const e of itens) html += linhaEndereco(e);
+                        $tbody.html(html);
+                    })
+                    .fail(function () {
+                        $tbody.html(`<tr><td colspan="9" class="text-danger">Erro ao consultar o servidor.</td></tr>`);
+                        window.showAlert?.("Erro ao consultar o servidor.", "danger");
+                    });
+            }
+
+            function definirPrincipal(enderecoId) {
+                const url = urlDefinirPrincipalTpl.replace("__ID__", enderecoId);
+                $.ajax({
+                    type: "POST",
+                    url: url,
+                    headers: { "RequestVerificationToken": token() }
+                })
+                .done(function (resp) {
+                    if (resp?.sucesso) {
+                        window.showAlert?.(resp.mensagem || "Endereço definido como principal!", "success");
+                        carregar();
+                    } else {
+                        window.showAlert?.(resp?.mensagem || "Não foi possível definir o principal.", "danger");
+                    }
+                })
+                .fail(function (xhr) {
+                    const msg = xhr.responseJSON?.mensagem || "Falha ao definir o principal.";
+                    window.showAlert?.(msg, "danger");
+                });
+            }
+
+            // Eventos
+            $(document).on("click", ".btn-definir-principal", function () {
+                const id = $(this).data("id");
+                definirPrincipal(id);
+            });
+
+            $(document).on("click", ".btn-excluir", function () {
+                window.showAlert?.("Exclusão desabilitada para endereços. A operação foi bloqueada.", "warning");
+            });
+
+            // Inicial
+            carregar();
+        })();
+    </script>
+}

@@ -75,6 +75,7 @@ builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
 builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
 builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
 builder.Services.AddScoped<ILogRepositorio, LogRepositorio>();
+builder.Services.AddScoped<IEntidadeEnderecoRepositorio, EntidadeEnderecoRepositorio>();
 #endregion
 
 #region Novos – Entidade e vínculo Usuário↔Entidade
@@ -84,9 +85,14 @@ builder.Services.AddScoped<IUsuarioEntidadeRepositorio, UsuarioEntidadeRepositor
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 #endregion
 
-#region 🚀 Novos – Serviços de Logs
+#region 🚀 Novos – Serviços de Endereço e Logs
+// Serviços de Endereço (adicionados agora)
+builder.Services.AddScoped<IEntidadeEnderecoService, EntidadeEnderecoService>();
+builder.Services.AddScoped<IEnderecoService, EnderecoService>();
+
+// Serviços de Logs
 builder.Services.AddScoped<ILogService, LogService>();
-builder.Services.AddHttpContextAccessor(); // <- necessário para obter dados do usuário logado
+builder.Services.AddHttpContextAccessor(); // necessário para obter dados do usuário logado
 #endregion
 
 var app = builder.Build();

@@ -23,6 +23,7 @@
                 <th>E-mail</th>
                 <th>Telefone</th>
                 <th>Situação</th>
+                <th style="width:220px">End. Principal</th>
                 <th style="width:300px">Ações</th>
             </tr>
         </thead>
@@ -40,6 +41,12 @@
                             @(item.Pessoa.SituacaoAtiva ? "Ativo" : "Inativo")
                         </span>
                     </td>
+
+                    <!-- Coluna preenchida via AJAX -->
+                    <td id="col-principal-@item.Pessoa.Id" data-pj="@item.Pessoa.Id">
+                        <span class="text-muted small">Verificando...</span>
+                    </td>
+
                     <td>
                         <div class="d-flex flex-wrap gap-2">
                             <!-- Gerenciar Endereços (lista completa, definir principal, etc.) -->
@@ -104,3 +111,47 @@
         </tbody>
     </table>
 </div>
+
+@section Scripts {
+    <script>
+        (function () {
+            // Template de URL para consultar o principal de cada PJ
+            const urlTpl = '@Url.Action("PrincipalPorPessoaJuridica", "Enderecos", new { pessoaJuridicaId = "__ID__" })';
+
+            function urlPrincipal(pjId) {
+                return urlTpl.replace("__ID__", pjId);
+            }
+
+            // Para cada linha, busca o principal e preenche a coluna
+            $("[id^='col-principal-']").each(function () {
+                const $cell = $(this);
+                const pjId = $cell.data("pj");
+
+                $.get(urlPrincipal(pjId))
+                    .done(function (resp) {
+                        if (!resp?.sucesso) {
+                            $cell.html('<span class="text-danger small">Falha ao carregar</span>');
+                            return;
+                        }
+
+                        if (!resp.possuiPrincipal) {
+                            $cell.html('<span class="badge bg-secondary"><i class="bi bi-dash-lg"></i> Sem principal</span>');
+                            return;
+                        }
+
+                        const e = resp.endereco;
+                        const resumo = `${e.Logradouro ?? ""}, ${e.Numero ?? ""} — ${e.Municipio ?? ""}/${e.Uf ?? ""}`;
+                        $cell.html(
+                            `<span class="badge bg-warning text-dark me-1">
+                                <i class="bi bi-star-fill me-1"></i> Principal
+                              </span>
+                              <div class="small text-muted mt-1">${resumo}</div>`
+                        );
+                    })
+                    .fail(function () {
+                        $cell.html('<span class="text-danger small">Erro</span>');
+                    });
+            });
+        })();
+    </script>
+}
