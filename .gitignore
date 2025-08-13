@@ -1,12 +1,54 @@
-## ASP.NET / .NET
+# IDE / ferramentas
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build / artefatos .NET
 bin/
 obj/
-.vscode/
-*.user
-*.suo
+out/
+artifacts/
+TestResults/
+BenchmarkDotNet.Artifacts/
+docker-publish/
+publish/
+
+# Logs / temporários
 *.log
-*.zip
+*.tmp
+*.bak
+*.swp
+*.DS_Store
+Thumbs.db
+
+# Cobertura / análises
+coverage/
+*.cov
+*.coverage
+*.coveragexml
+
+# Frontend (se houver)
+node_modules/
+dist/
+
+# Bancos locais
 *.db
 *.sqlite
+*.mdf
+*.ldf
+
+# Segredos / configs locais (NÃO versionar)
 .env
+secrets.json
+local.settings.json
 appsettings.json
+appsettings.*.json
+!appsettings.template.json
+
+# Certs dev (se existirem)
+*.pfx
+*.p12

@@ -65,12 +65,12 @@
 @section Scripts {
 <script>
 (function () {
-    // ===== URLs geradas pelo servidor (ANTI virtual-dir quebrado)
-    const urlListar              = '@Url.Action("ListarPorPessoaFisica", "Enderecos", new { pessoaFisicaId = pessoaFisicaId })';
-    const urlPrincipal           = '@Url.Action("PrincipalPorPessoaFisica","Enderecos", new { pessoaFisicaId = pessoaFisicaId })';
-    const urlDefinirPrincipalTpl = '@Url.Action("DefinirPrincipalPessoaFisica","Enderecos", new { pessoaFisicaId = pessoaFisicaId, enderecoId="__ID__" })';
-    const urlEditarTpl           = '@Url.Action("EditarEnderecoPF","Enderecos", new { pessoaFisicaId = pessoaFisicaId, enderecoId="__ID__" })';
-    const urlExcluirTpl          = '@Url.Action("ExcluirPessoaFisica","Enderecos", new { pessoaFisicaId = pessoaFisicaId, enderecoId="__ID__" })';
+    // ===== URLs geradas por template literal, alinhadas às rotas por atributo
+    const urlListar              = `/Enderecos/PessoaFisica/${@pessoaFisicaId}/Listar`;
+    const urlPrincipal           = `/Enderecos/PessoaFisica/${@pessoaFisicaId}/Principal`;
+    const urlDefinirPrincipalTpl = `/Enderecos/PessoaFisica/${@pessoaFisicaId}/DefinirPrincipal/__ID__`;
+    const urlEditarTpl           = `/Enderecos/PessoaFisica/${@pessoaFisicaId}/Editar/__ID__`;
+    const urlExcluirTpl          = `/Enderecos/PessoaFisica/${@pessoaFisicaId}/Excluir/__ID__`;
 
     const $tbody = $("#tbody-enderecos-pf");
 

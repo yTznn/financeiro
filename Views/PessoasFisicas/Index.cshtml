@@ -1,103 +1,125 @@
 @model IEnumerable<Financeiro.Models.ViewModels.PessoaFisicaListaViewModel>
+@using System.Linq
 
 @{
     ViewBag.Title = "Pessoas Físicas";
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
+@functions {
+    // 000.000.000-00
+    string FormatCpf(string? cpf)
+    {
+        if (string.IsNullOrWhiteSpace(cpf)) return "";
+        var d = new string(cpf.Where(char.IsDigit).ToArray());
+        if (d.Length != 11) return cpf ?? "";
+        return $"{d[..3]}.{d.Substring(3,3)}.{d.Substring(6,3)}-{d.Substring(9,2)}";
+    }
+
+    // (00) 0000-0000 ou (00) 00000-0000
+    string FormatPhoneBr(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return "";
+        var d = new string(phone.Where(char.IsDigit).ToArray());
+        if (d.Length == 10) // fixo
+            return $"({d[..2]}) {d.Substring(2,4)}-{d.Substring(6,4)}";
+        if (d.Length == 11) // celular
+            return $"({d[..2]}) {d.Substring(2,5)}-{d.Substring(7,4)}";
+        return phone; // mantém como veio se não encaixar
+    }
+}
+
+<style>
+    .pf-card{ border-left:4px solid var(--primary); transition:transform .06s ease, box-shadow .06s ease; }
+    .pf-card:hover{ transform:translateY(-1px); box-shadow:0 .25rem .75rem rgba(16,36,68,.08); }
+    .num { font-variant-numeric: tabular-nums; letter-spacing:.2px; }
+</style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="fw-bold text-primary mb-0">@ViewBag.Title</h2>
     <a asp-action="Novo" class="btn btn-primary">
-        + Nova Pessoa Física
+        <i class="bx bx-user-plus me-1"></i> Nova Pessoa Física
     </a>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-hover align-middle shadow-sm">
-        <thead class="table-light">
-            <tr>
-                <th>Nome</th>
-                <th>Sobrenome</th>
-                <th>CPF</th>
-                <th>E-mail</th>
-                <th>Telefone</th>
-                <th>Situação</th>
-                <th>Endereço principal</th>
-                <th style="width:320px">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model)
-            {
-                var pf = item.Pessoa;
-                <tr data-id="@pf.Id">
-                    <td>@pf.Nome</td>
-                    <td>@pf.Sobrenome</td>
-                    <td>@pf.Cpf</td>
-                    <td>@pf.Email</td>
-                    <td>@pf.Telefone</td>
-                    <td>
-                        <span class="badge @(pf.SituacaoAtiva ? "bg-success" : "bg-secondary")">
-                            @(pf.SituacaoAtiva ? "Ativo" : "Inativo")
-                        </span>
-                    </td>
+<div class="row g-3">
+@foreach (var item in Model)
+{
+    var pf = item.Pessoa;
+    <div class="col-12 col-md-6 col-lg-4" data-id="@pf.Id">
+        <div class="card shadow-sm h-100 pf-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <h5 class="card-title mb-1">@pf.Nome @pf.Sobrenome</h5>
+                        <div class="small text-muted num">@FormatCpf(pf.Cpf)</div>
+                    </div>
+                    <span class="badge @(pf.SituacaoAtiva ? "bg-success" : "bg-secondary")">
+                        @(pf.SituacaoAtiva ? "Ativo" : "Inativo")
+                    </span>
+                </div>
 
-                    <!-- Slot do endereço principal (preenche via AJAX) -->
-                    <td id="addr-@pf.Id" class="text-muted">
+                <div class="mt-3">
+                    <div class="small text-muted mb-1">Endereço principal</div>
+                    <div id="addr-@pf.Id" class="small">
                         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                         Carregando…
-                    </td>
+                    </div>
+                </div>
 
-                    <td class="d-flex flex-wrap gap-1">
-                        <!-- Endereços (PF) -->
-                        <a class="btn btn-sm btn-outline-secondary"
-                           asp-controller="Enderecos"
-                           asp-action="GerenciarPessoaFisica"
-                           asp-route-pessoaFisicaId="@pf.Id" title="Endereços">
-                            <i class='bx bx-map'></i> Endereços
-                        </a>
+                <div class="mt-3 small">
+                    <div><i class="bx bx-envelope me-1"></i>@pf.Email</div>
+                    <div class="num"><i class="bx bx-phone me-1"></i>@FormatPhoneBr(pf.Telefone)</div>
+                </div>
 
-                        <!-- Conta Bancária -->
-                        @if (item.PossuiConta)
-                        {
-                            <a class="btn btn-sm btn-outline-success"
-                               asp-controller="ContasBancarias"
-                               asp-action="Editar"
-                               asp-route-pessoaId="@pf.Id"
-                               asp-route-pf="true">
-                                <i class='bx bx-bank'></i> Editar Conta
-                            </a>
-                        }
-                        else
-                        {
-                            <a class="btn btn-sm btn-outline-success"
-                               asp-controller="ContasBancarias"
-                               asp-action="Novo"
-                               asp-route-pessoaId="@pf.Id"
-                               asp-route-pf="true">
-                                <i class='bx bx-bank'></i> Preencher Conta
-                            </a>
-                        }
+                <div class="mt-auto d-flex flex-wrap gap-2 pt-3">
+                    <a class="btn btn-sm btn-outline-secondary"
+                       asp-controller="Enderecos"
+                       asp-action="GerenciarPessoaFisica"
+                       asp-route-pessoaFisicaId="@pf.Id" title="Endereços">
+                        <i class='bx bx-map'></i> Endereços
+                    </a>
 
-                        <!-- Editar PF -->
-                        <a class="btn btn-sm btn-outline-primary"
+                    @if (item.PossuiConta)
+                    {
+                        <a class="btn btn-sm btn-outline-success"
+                           asp-controller="ContasBancarias"
                            asp-action="Editar"
-                           asp-route-id="@pf.Id">
-                            <i class='bx bx-pencil'></i> Editar
+                           asp-route-pessoaId="@pf.Id"
+                           asp-route-pf="true">
+                            <i class='bx bx-bank'></i> Editar Conta
                         </a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                    }
+                    else
+                    {
+                        <a class="btn btn-sm btn-outline-success"
+                           asp-controller="ContasBancarias"
+                           asp-action="Novo"
+                           asp-route-pessoaId="@pf.Id"
+                           asp-route-pf="true">
+                            <i class='bx bx-bank'></i> Preencher Conta
+                        </a>
+                    }
+
+                    <a class="btn btn-sm btn-outline-primary"
+                       asp-action="Editar"
+                       asp-route-id="@pf.Id">
+                        <i class='bx bx-pencil'></i> Editar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 </div>
 
 @section Scripts {
 <script>
 (function () {
-    function buildLinha(e) {
-        if (!e) return "<span class='text-muted'>Sem principal</span>";
+    const base = '@Url.Content("~")'.replace(/\/?$/, '/');
+
+    function formatEndereco(e) {
+        if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
         const log = e.logradouro ?? e.Logradouro ?? "";
         const num = e.numero ?? e.Numero ?? "";
         const bai = e.bairro ?? e.Bairro ?? "";
@@ -105,41 +127,28 @@
         const uf  = e.uf ?? e.Uf ?? "";
         const cep = e.cep ?? e.Cep ?? "";
 
-        const pedacos = [
-            [log, num].filter(Boolean).join(", "),
-            [bai, mun].filter(Boolean).join(" - "),
-            [uf, cep].filter(Boolean).join(" • ")
-        ].filter(Boolean).join(" | ");
+        const linha1 = [log, num].filter(Boolean).join(", ");
+        const linha2 = [bai, mun].filter(Boolean).join(" - ");
+        const linha3 = [uf, cep].filter(Boolean).join(" • ");
 
-        return pedacos || "<span class='text-muted'>Sem principal</span>";
+        return [linha1, linha2, linha3].filter(Boolean).join("<br>");
     }
 
-    const base = '@Url.Content("~")'.replace(/\/?$/, '/');
-
-    document.querySelectorAll("tr[data-id]").forEach(function(row){
-        const id   = row.getAttribute("data-id");
+    document.querySelectorAll("[data-id]").forEach(function (wrap) {
+        const id = wrap.getAttribute("data-id");
         const slot = document.getElementById(`addr-${id}`);
         const url  = `${base}Enderecos/PessoaFisica/${id}/Principal`;
 
         fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
           .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
           .then(j => {
-              if(!j?.sucesso){
-                  slot.classList.add("text-danger");
-                  slot.textContent = "Falha ao carregar";
-                  return;
+              if(!j?.sucesso) {
+                  slot.classList.add("text-danger"); slot.textContent = "Falha ao carregar"; return;
               }
-              if(!j.possuiPrincipal){
-                  slot.innerHTML = "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
-                  return;
-              }
-              slot.innerHTML = buildLinha(j.endereco);
+              slot.innerHTML = j.possuiPrincipal ? formatEndereco(j.endereco) :
+                               "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
           })
-          .catch((err) => {
-              console.error("Falha ao buscar principal PF:", err);
-              slot.classList.add("text-danger");
-              slot.textContent = "Erro";
-          });
+          .catch(() => { slot.classList.add("text-danger"); slot.textContent = "Erro"; });
     });
 })();
 </script>

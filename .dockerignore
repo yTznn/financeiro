@@ -1,8 +1,44 @@
-bin/
-obj/
-.vscode/
-*.user
-*.suo
-*.db
-*.mdf
+# Git / IDE
+.git
+.gitignore
+.vs
+.vscode
+.idea
+
+# Build / artefatos .NET
+bin
+obj
+out
+publish
+artifacts
+docker-publish
+TestResults
+coverage
+BenchmarkDotNet.Artifacts
+
+# Frontend (se existir)
+node_modules
+dist
+wwwroot/lib
+
+# Logs / temporários
 *.log
+*.tmp
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# Bancos locais
+*.db
+*.sqlite
+*.mdf
+*.ldf
+
+# Segredos e configs locais (NÃO vão para o contexto de build)
+.env
+secrets.json
+local.settings.json
+appsettings.json
+appsettings.*.json
+!appsettings.template.json
