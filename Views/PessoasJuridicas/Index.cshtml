@@ -29,6 +29,16 @@
     .addr-grid .value{
         color:var(--dark); font-weight:600; font-size:1.05rem; line-height:1.3;
     }
+
+    /* conta principal */
+    .acc-item { border:1px solid #e9ecef; border-radius:.5rem; padding:.6rem .75rem; display:flex; align-items:start; gap:.5rem; }
+    .acc-main { flex:1; }
+    .acc-muted { color:#6c757d; font-size:.85rem; }
+    .acc-actions .btn { padding:.25rem .5rem; }
+    .acc-chip { font-size:.75rem; padding:.15rem .4rem; border-radius:999px; }
+    .chip-principal { background:#fff3cd; color:#8a6d3b; border:1px solid #ffe8a1; }
+    .secret { filter: blur(3px); transition: filter .15s ease; }
+    .secret.show { filter: none; }
 </style>
 
 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -39,6 +49,9 @@
         <i class='bx bx-plus-circle'></i> Nova Pessoa Jurídica
     </a>
 </div>
+
+<!-- Antiforgery token para AJAX -->
+<form id="af-token-form" class="d-none">@Html.AntiForgeryToken()</form>
 
 <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
 @foreach (var item in Model)
@@ -73,19 +86,32 @@
                     </div>
                 </div>
 
-                <!-- Conta bancária -->
+                <!-- Conta bancária (somente principal) -->
                 <div class="mt-3">
                     <div class="small text-muted mb-1">
-                        <i class="bx bx-bank me-1"></i> Conta bancária
+                        <i class="bx bx-bank me-1"></i> Conta bancária (principal)
                     </div>
-                    @if (item.PossuiConta)
-                    {
-                        <div class="text-success fw-semibold">Cadastrada</div>
-                    }
-                    else
-                    {
-                        <div class="text-muted">Nenhuma cadastrada</div>
-                    }
+
+                    <div id="acc-@pj.Id" class="small">
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Carregando…
+                    </div>
+
+                    <div class="mt-2 d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-success"
+                           asp-controller="ContasBancarias"
+                           asp-action="Novo"
+                           asp-route-pessoaId="@pj.Id">
+                            <i class='bx bx-plus-circle'></i> Nova conta
+                        </a>
+
+                        <a class="btn btn-sm btn-outline-secondary"
+                           asp-controller="ContasBancarias"
+                           asp-action="IndexPJ"
+                           asp-route-pessoaId="@pj.Id">
+                            <i class='bx bx-list-ul'></i> Ver todas
+                        </a>
+                    </div>
                 </div>
 
                 <div class="mt-auto"></div>
@@ -99,26 +125,6 @@
                        asp-route-pessoaJuridicaId="@pj.Id" title="Endereços">
                         <i class='bx bx-map'></i> Endereços
                     </a>
-
-                    @* Conta bancária *@
-                    @if (item.PossuiConta)
-                    {
-                        <a class="btn btn-sm btn-outline-success"
-                           asp-controller="ContasBancarias"
-                           asp-action="Editar"
-                           asp-route-pessoaId="@pj.Id">
-                            <i class='bx bx-bank'></i> Editar Conta
-                        </a>
-                    }
-                    else
-                    {
-                        <a class="btn btn-sm btn-outline-success"
-                           asp-controller="ContasBancarias"
-                           asp-action="Novo"
-                           asp-route-pessoaId="@pj.Id">
-                            <i class='bx bx-bank'></i> Preencher Conta
-                        </a>
-                    }
 
                     <a class="btn btn-sm btn-outline-primary"
                        asp-action="Editar" asp-route-id="@pj.Id" title="Editar">
@@ -135,7 +141,14 @@
 <script>
 (function () {
     // base do app (suporta app em subpasta; termina com '/')
-    const base = '@Url.Content("~")';
+    const base = '@Url.Content("~")'.replace(/\/?$/, '/');
+
+    // ====== antiforgery ======
+    function getRequestVerificationToken() {
+        const form = document.getElementById('af-token-form');
+        const inp = form ? form.querySelector('input[name="__RequestVerificationToken"]') : null;
+        return inp ? inp.value : null;
+    }
 
     // helper CEP
     function formatCep(cep){
@@ -144,14 +157,11 @@
         return d.replace(/^(\d{5})(\d{3})$/,'$1-$2');
     }
 
-    // ROTA DE ATRIBUTO — igual ao controller:
-    // [HttpGet("Enderecos/PessoaJuridica/{pessoaJuridicaId:int}/Principal")]
-    const urlPrincipal = (id) => `${base}Enderecos/PessoaJuridica/${id}/Principal`;
-
+    // ====== Endereço principal PJ ======
     document.querySelectorAll(".pj-card").forEach(function(card){
         const id   = card.getAttribute("data-id");
         const slot = document.getElementById(`addr-${id}`);
-        const url  = urlPrincipal(id);
+        const url  = `${base}Enderecos/PessoaJuridica/${id}/Principal`;
 
         fetch(url)
           .then(r => {
@@ -209,11 +219,82 @@
                     </div>
                 </div>`;
           })
-          .catch(err => {
-              console.error('PrincipalPorPessoaJuridica FAIL:', err);
-              slot.classList.add("text-danger");
-              slot.textContent = "Erro";
-          });
+          .catch(() => { slot.classList.add("text-danger"); slot.textContent = "Erro"; });
+    });
+
+    // ====== Conta bancária principal (UI) ======
+    function mask(val) {
+        if (!val) return '';
+        const t = String(val);
+        if (t.length <= 2) return '*'.repeat(t.length);
+        return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
+    }
+
+    function renderPrincipal(slot, acc, pjId){
+        if (!acc) {
+            slot.innerHTML = `<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>`;
+            return;
+        }
+
+        const banco     = acc.banco ?? acc.Banco ?? '';
+        const agencia   = acc.agencia ?? acc.Agencia ?? '';
+        const conta     = acc.conta ?? acc.Conta ?? '';
+        const pix       = acc.chavePix ?? acc.ChavePix ?? '';
+        const vinculoId = acc.vinculoId ?? acc.VinculoId;
+
+        slot.innerHTML = `
+          <div class="acc-item" data-vinculo="${vinculoId}">
+            <div class="acc-main">
+              <div><strong>${banco || '(Sem banco)'}</strong>
+                <span class="acc-chip chip-principal ms-2"><i class='bx bxs-star me-1'></i> Principal</span>
+              </div>
+              <div class="acc-muted">
+                Agência: <span class="secret" data-secret>${mask(agencia)}</span> ·
+                Conta: <span class="secret" data-secret>${mask(conta)}</span>
+                ${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}
+              </div>
+            </div>
+            <div class="acc-actions d-flex gap-1">
+              <button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar">
+                <i class='bx bx-low-vision'></i>
+              </button>
+              <a class="btn btn-light border" href="${base}ContasBancarias/Editar?vinculoId=${vinculoId}" title="Editar">
+                <i class='bx bx-pencil'></i>
+              </a>
+              <a class="btn btn-light border" href="${base}ContasBancarias/IndexPJ?pessoaId=${pjId}" title="Ver todas">
+                <i class='bx bx-list-ul'></i>
+              </a>
+            </div>
+          </div>`;
+
+        slot.querySelector('.toggle-visibility')?.addEventListener('click', function(e){
+            e.preventDefault();
+            slot.querySelectorAll('[data-secret]').forEach(s => s.classList.toggle('show'));
+        });
+    }
+
+    async function loadPrincipalAccountFor(pjId) {
+        const slot = document.getElementById(`acc-${pjId}`);
+        if (!slot) return;
+        slot.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…`;
+        try {
+            const url = `${base}ContasBancarias/PessoaJuridica/${pjId}/Principal`;
+            const r = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const j = await r.json();
+            if (!j?.sucesso) { slot.classList.add("text-danger"); slot.textContent = "Falha ao carregar"; return; }
+            renderPrincipal(slot, j.possuiPrincipal ? j.conta : null, pjId);
+        } catch {
+            slot.classList.add("text-danger"); slot.textContent = "Erro";
+        }
+    }
+
+    // carregar endereço + conta principal por cartão
+    document.querySelectorAll(".pj-card").forEach(function(card){
+        const id = card.getAttribute("data-id");
+
+        // já carregamos o endereço acima; agora a conta principal
+        loadPrincipalAccountFor(id);
     });
 })();
 </script>

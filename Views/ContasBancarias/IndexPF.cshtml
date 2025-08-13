@@ -1,0 +1,325 @@
+@model int
+@{
+    ViewBag.Title = "Contas bancárias da Pessoa Física";
+    Layout = "_Layout";
+    var pessoaFisicaId = Model;
+}
+
+<style>
+    .secret { filter: blur(3px); transition: filter .15s ease; }
+    .revealed .secret { filter: none; } /* quando revelar, tira o blur */
+    .chip-principal { background:#fff3cd; color:#8a6d3b; border:1px solid #ffe8a1; padding:.15rem .4rem; border-radius:999px; font-size:.75rem; }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+            <p class="text-muted mb-0">Gerencie as contas bancárias vinculadas. Apenas uma pode ser a principal.</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary"
+               asp-controller="PessoasFisicas"
+               asp-action="Index">
+                <i class="bx bx-arrow-back me-1"></i> Voltar
+            </a>
+
+            <a class="btn btn-primary"
+               asp-controller="ContasBancarias"
+               asp-action="Novo"
+               asp-route-pessoaId="@pessoaFisicaId"
+               asp-route-pf="true">
+                <i class="bx bx-plus-circle me-1"></i> Nova Conta
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table align-middle" id="tbl-contas-pf">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:60px;">Principal</th>
+                            <th>Banco</th>
+                            <th style="width:140px;">Agência</th>
+                            <th style="width:160px;">Conta</th>
+                            <th>Pix</th>
+                            <th style="width:220px;" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-contas-pf">
+                        <tr><td colspan="6" class="text-muted">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toasters vindos de TempData -->
+<div id="pageFlags"
+     data-success="@TempData["toast:success"]"
+     data-info="@TempData["toast:info"]"></div>
+
+<!-- Antiforgery para POST via AJAX -->
+<form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+<script>
+(function(){
+    const pessoaId = @pessoaFisicaId;
+
+    // ENDPOINTS *PF*
+    const urlListar = `/ContasBancarias/PessoaFisica/${pessoaId}/Listar`;
+    const urlDefinirPrincipalTpl = (vinculoId) => `/ContasBancarias/${vinculoId}/DefinirPrincipal`;
+    const urlRemoverTpl = (vinculoId) => `/ContasBancarias/${vinculoId}/Remover?removerContaSeOrfa=true`;
+    const urlEditarTpl = (vinculoId) => `/ContasBancarias/Editar?vinculoId=${vinculoId}`;
+
+    const $tbody = $("#tbody-contas-pf");
+
+    function token() {
+        return $("#antiForgeryForm input[name='__RequestVerificationToken']").val();
+    }
+
+    // SweetAlert helpers
+    function swalMsg(message, type){
+        if (window.SwalDefault?.fire) {
+            SwalDefault.fire(message || "", "", type || "info");
+        } else if (window.Swal?.fire) {
+            Swal.fire({ text: message || "", icon: type || "info" });
+        } else { alert(message || ""); }
+    }
+    function swalConfirm(opts){
+        if (window.SwalDelete?.fire) {
+            return window.SwalDelete.fire({
+                title: opts.title || "Confirmar?",
+                text:  opts.text  || "",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: opts.confirmText || "Sim",
+                cancelButtonText:  opts.cancelText  || "Cancelar"
+            });
+        } else if (window.Swal?.fire) {
+            return window.Swal.fire({
+                title: opts.title || "Confirmar?",
+                text:  opts.text  || "",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: opts.confirmText || "Sim",
+                cancelButtonText:  opts.cancelText  || "Cancelar"
+            });
+        } else {
+            return Promise.resolve({ isConfirmed: confirm(opts.text || "Confirmar?") });
+        }
+    }
+
+    function isTrue(v){
+        if (v === true) return true;
+        if (v === false) return false;
+        if (typeof v === 'number') return v !== 0;
+        if (typeof v === 'string') {
+            const s = v.trim().toLowerCase();
+            return s === 'true' || s === '1' || s === 'sim';
+        }
+        return false;
+    }
+
+    function mask(val){
+        if (!val) return '';
+        const t = String(val);
+        if (t.length <= 2) return '*'.repeat(t.length);
+        return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
+    }
+
+    // Linha com spans que guardam valor real (data-full) e mascarado (data-mask)
+    function linhaConta(c){
+        const vinculoId = c.vinculoId ?? c.VinculoId;
+        const banco     = c.banco ?? c.Banco ?? "";
+        const agencia   = c.agencia ?? c.Agencia ?? "";
+        const conta     = c.conta ?? c.Conta ?? "";
+        const pix       = c.chavePix ?? c.ChavePix ?? "";
+        const principal = isTrue(c.isPrincipal ?? c.IsPrincipal);
+
+        const agenciaMasked = mask(agencia);
+        const contaMasked   = mask(conta);
+        const pixMasked     = mask(pix);
+
+        const estrela = principal
+            ? `<button type="button" class="btn btn-link p-0" title="Conta principal" disabled>
+                   <i class="bx bxs-star" style="font-size:1.25rem; color:#f5c518;"></i>
+               </button>
+               <span class="chip-principal ms-1">Principal</span>`
+            : `<button type="button" class="btn btn-link p-0 btn-definir-principal"
+                       data-id="${vinculoId}" title="Definir como principal">
+                   <i class="bx bx-star" style="font-size:1.25rem;"></i>
+               </button>`;
+
+        const acoes = `
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-light border btn-olho" title="Mostrar/ocultar" data-id="${vinculoId}">
+                    <i class="bx bx-low-vision"></i>
+                </button>
+                <a href="${urlEditarTpl(vinculoId)}" class="btn btn-primary" title="Editar">
+                    <i class="bx bx-edit-alt"></i>
+                </a>
+                <button type="button" class="btn btn-outline-danger btn-excluir" data-id="${vinculoId}" title="Excluir vínculo">
+                    <i class="bx bx-trash"></i>
+                </button>
+            </div>
+        `;
+
+        return `
+            <tr data-id="${vinculoId}">
+                <td class="text-center">${estrela}</td>
+                <td><strong>${banco || "(Sem banco)"}</strong></td>
+                <td>
+                  <span class="secret" data-secret
+                        data-full="${agencia}"
+                        data-mask="${agenciaMasked}">${agenciaMasked}</span>
+                </td>
+                <td>
+                  <span class="secret" data-secret
+                        data-full="${conta}"
+                        data-mask="${contaMasked}">${contaMasked}</span>
+                </td>
+                <td>${
+                    pix
+                    ? `<span class="secret" data-secret data-full="${pix}" data-mask="${pixMasked}">${pixMasked}</span>`
+                    : `<span class="text-muted">—</span>`
+                }</td>
+                <td class="text-center">${acoes}</td>
+            </tr>
+        `;
+    }
+
+    function carregar(){
+        $tbody.html(`<tr><td colspan="6" class="text-muted">Carregando...</td></tr>`);
+
+        $.get(urlListar)
+         .done(function(resp){
+            if (typeof resp !== "object") {
+                $tbody.html(`<tr><td colspan="6" class="text-danger">Resposta inválida do servidor.</td></tr>`);
+                console.error("Listar Contas PF → resposta não-JSON:", resp);
+                swalMsg("Falha ao carregar contas.", "error");
+                return;
+            }
+            if (!resp.sucesso) {
+                $tbody.html(`<tr><td colspan="6" class="text-danger">Falha ao carregar contas.</td></tr>`);
+                swalMsg("Falha ao carregar contas.", "error");
+                return;
+            }
+
+            const contas = resp.contas || resp.itens || [];
+            if (!contas.length) {
+                $tbody.html(`<tr><td colspan="6" class="text-muted">Nenhuma conta cadastrada para esta pessoa física.</td></tr>`);
+                return;
+            }
+
+            let html = "";
+            for (const c of contas) html += linhaConta(c);
+            $tbody.html(html);
+         })
+         .fail(function(xhr){
+            $tbody.html(`<tr><td colspan="6" class="text-danger">Erro ao consultar o servidor.</td></tr>`);
+            console.error("Listar Contas PF → erro", xhr);
+            swalMsg(`Erro ao consultar o servidor. (${xhr.status})`, "error");
+         });
+    }
+
+    function definirPrincipal(vinculoId){
+        $.ajax({
+            type: "POST",
+            url: urlDefinirPrincipalTpl(vinculoId),
+            headers: { "RequestVerificationToken": token(), "X-Requested-With": "XMLHttpRequest" }
+        })
+        .done(function(resp){
+            if (resp?.sucesso) {
+                swalMsg(resp.mensagem || "Conta definida como principal!", "success");
+                carregar();
+                if (typeof window.atualizarCardContasFornecedor === "function") {
+                    window.atualizarCardContasFornecedor({ tipo:"PF", id:pessoaId });
+                }
+            } else {
+                swalMsg(resp?.mensagem || "Não foi possível definir a principal.", "error");
+            }
+        })
+        .fail(function(xhr){
+            const msg = xhr.responseJSON?.mensagem || `Falha ao definir a principal. (${xhr.status})`;
+            swalMsg(msg, "error");
+        });
+    }
+
+    function excluir(vinculoId){
+        swalConfirm({
+            title: "Excluir vínculo?",
+            text:  "A conta poderá ser removida se não estiver vinculada a mais ninguém.",
+            confirmText: "Sim, excluir",
+            cancelText: "Cancelar"
+        }).then(res => {
+            if (!res.isConfirmed) return;
+
+            $.ajax({
+                type: "POST",
+                url: urlRemoverTpl(vinculoId),
+                headers: { "RequestVerificationToken": token(), "X-Requested-With": "XMLHttpRequest" }
+            })
+            .done(function(resp){
+                if (resp?.sucesso) {
+                    swalMsg(resp.mensagem || "Vínculo excluído.", "success");
+                    carregar();
+                    if (typeof window.atualizarCardContasFornecedor === "function") {
+                        window.atualizarCardContasFornecedor({ tipo:"PF", id:pessoaId });
+                    }
+                } else {
+                    swalMsg(resp?.mensagem || "Não foi possível excluir.", "error");
+                }
+            })
+            .fail(function(xhr){
+                const msg = xhr.responseJSON?.mensagem || `Falha ao excluir. (${xhr.status})`;
+                swalMsg(msg, "error");
+            });
+        });
+    }
+
+    // Eventos
+    $(document).on("click", ".btn-definir-principal", function(){
+        definirPrincipal($(this).data("id"));
+    });
+
+    // Olhinho: alterna entre mascarado e valor real
+    $(document).on("click", ".btn-olho", function(){
+        const $tr = $(this).closest("tr");
+        const revealed = $tr.hasClass("revealed");
+        $tr.find("[data-secret]").each(function(){
+            const $s = $(this);
+            const full  = $s.data("full")  ?? "";
+            const mask  = $s.data("mask")  ?? "";
+            $s.text(revealed ? mask : full);
+        });
+        $tr.toggleClass("revealed", !revealed);
+
+        // (opcional) troca o ícone
+        const $i = $(this).find("i");
+        if ($i.length) $i.toggleClass("bx-low-vision bx-show-alt");
+    });
+
+    $(document).on("click", ".btn-excluir", function(){
+        excluir($(this).data("id"));
+    });
+
+    // Inicial
+    carregar();
+
+    // Toasts de TempData
+    const flags = document.getElementById("pageFlags");
+    if (flags) {
+        const ok = flags.dataset.success;
+        const info = flags.dataset.info;
+        if (ok)   swalMsg(ok, "success");
+        if (info) swalMsg(info, "info");
+    }
+})();
+</script>
+}

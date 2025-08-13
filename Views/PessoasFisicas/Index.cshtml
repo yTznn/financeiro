@@ -33,6 +33,16 @@
     .pf-card{ border-left:4px solid var(--primary); transition:transform .06s ease, box-shadow .06s ease; }
     .pf-card:hover{ transform:translateY(-1px); box-shadow:0 .25rem .75rem rgba(16,36,68,.08); }
     .num { font-variant-numeric: tabular-nums; letter-spacing:.2px; }
+
+    /* contas (apenas principal) */
+    .acc-item { border:1px solid #e9ecef; border-radius:.5rem; padding:.6rem .75rem; display:flex; align-items:start; gap:.5rem; }
+    .acc-main { flex:1; }
+    .acc-muted { color:#6c757d; font-size:.85rem; }
+    .acc-actions .btn { padding:.25rem .5rem; }
+    .acc-chip { font-size:.75rem; padding:.15rem .4rem; border-radius:999px; }
+    .chip-principal { background:#fff3cd; color:#8a6d3b; border:1px solid #ffe8a1; }
+    .secret { filter: blur(3px); transition: filter .15s ease; }
+    .secret.show { filter: none; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -41,6 +51,9 @@
         <i class="bx bx-user-plus me-1"></i> Nova Pessoa Física
     </a>
 </div>
+
+<!-- Antiforgery token para AJAX -->
+<form id="af-token-form" class="d-none">@Html.AntiForgeryToken()</form>
 
 <div class="row g-3">
 @foreach (var item in Model)
@@ -67,6 +80,35 @@
                     </div>
                 </div>
 
+                <!-- Conta bancária (somente principal) -->
+                <div class="mt-3">
+                    <div class="small text-muted mb-1">
+                        <i class="bx bx-bank me-1"></i> Conta bancária (principal)
+                    </div>
+
+                    <div id="acc-@pf.Id" class="small">
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Carregando…
+                    </div>
+
+                    <div class="mt-2 d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-success"
+                           asp-controller="ContasBancarias"
+                           asp-action="Novo"
+                           asp-route-pessoaId="@pf.Id"
+                           asp-route-pf="true">
+                            <i class='bx bx-plus-circle'></i> Nova conta
+                        </a>
+
+                        <a class="btn btn-sm btn-outline-secondary"
+                           asp-controller="ContasBancarias"
+                           asp-action="IndexPF"
+                           asp-route-pessoaId="@pf.Id">
+                            <i class='bx bx-list-ul'></i> Ver todas
+                        </a>
+                    </div>
+                </div>
+
                 <div class="mt-3 small">
                     <div><i class="bx bx-envelope me-1"></i>@pf.Email</div>
                     <div class="num"><i class="bx bx-phone me-1"></i>@FormatPhoneBr(pf.Telefone)</div>
@@ -79,27 +121,6 @@
                        asp-route-pessoaFisicaId="@pf.Id" title="Endereços">
                         <i class='bx bx-map'></i> Endereços
                     </a>
-
-                    @if (item.PossuiConta)
-                    {
-                        <a class="btn btn-sm btn-outline-success"
-                           asp-controller="ContasBancarias"
-                           asp-action="Editar"
-                           asp-route-pessoaId="@pf.Id"
-                           asp-route-pf="true">
-                            <i class='bx bx-bank'></i> Editar Conta
-                        </a>
-                    }
-                    else
-                    {
-                        <a class="btn btn-sm btn-outline-success"
-                           asp-controller="ContasBancarias"
-                           asp-action="Novo"
-                           asp-route-pessoaId="@pf.Id"
-                           asp-route-pf="true">
-                            <i class='bx bx-bank'></i> Preencher Conta
-                        </a>
-                    }
 
                     <a class="btn btn-sm btn-outline-primary"
                        asp-action="Editar"
@@ -118,6 +139,14 @@
 (function () {
     const base = '@Url.Content("~")'.replace(/\/?$/, '/');
 
+    // ====== antiforgery ======
+    function getRequestVerificationToken() {
+        const form = document.getElementById('af-token-form');
+        const inp = form ? form.querySelector('input[name="__RequestVerificationToken"]') : null;
+        return inp ? inp.value : null;
+    }
+
+    // ====== Endereço principal (já existia) ======
     function formatEndereco(e) {
         if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
         const log = e.logradouro ?? e.Logradouro ?? "";
@@ -134,21 +163,93 @@
         return [linha1, linha2, linha3].filter(Boolean).join("<br>");
     }
 
+    // ====== helpers de conta ======
+    function mask(val) {
+        if (!val) return '';
+        const t = String(val);
+        if (t.length <= 2) return '*'.repeat(t.length);
+        return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
+    }
+
+    function renderPrincipal(slot, acc, pessoaId){
+        if (!acc) {
+            slot.innerHTML = `<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>`;
+            return;
+        }
+
+        const banco     = acc.banco ?? acc.Banco ?? '';
+        const agencia   = acc.agencia ?? acc.Agencia ?? '';
+        const conta     = acc.conta ?? acc.Conta ?? '';
+        const pix       = acc.chavePix ?? acc.ChavePix ?? '';
+        const vinculoId = acc.vinculoId ?? acc.VinculoId;
+
+        slot.innerHTML = `
+          <div class="acc-item" data-vinculo="${vinculoId}">
+            <div class="acc-main">
+              <div><strong>${banco || '(Sem banco)'}</strong>
+                <span class="acc-chip chip-principal ms-2">
+                  <i class='bx bxs-star me-1'></i> Principal
+                </span>
+              </div>
+              <div class="acc-muted">
+                Agência: <span class="secret" data-secret>${mask(agencia)}</span> ·
+                Conta: <span class="secret" data-secret>${mask(conta)}</span>
+                ${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}
+              </div>
+            </div>
+            <div class="acc-actions d-flex gap-1">
+              <button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar">
+                <i class='bx bx-low-vision'></i>
+              </button>
+              <a class="btn btn-light border" href="${base}ContasBancarias/Editar?vinculoId=${vinculoId}" title="Editar">
+                <i class='bx bx-pencil'></i>
+              </a>
+              <a class="btn btn-light border" href="${base}ContasBancarias/IndexPF?pessoaId=${pessoaId}" title="Ver todas">
+                <i class='bx bx-list-ul'></i>
+              </a>
+            </div>
+          </div>`;
+
+        slot.querySelector('.toggle-visibility')?.addEventListener('click', function(e){
+            e.preventDefault();
+            slot.querySelectorAll('[data-secret]').forEach(s => s.classList.toggle('show'));
+        });
+    }
+
+    async function loadPrincipalAccountFor(pfId) {
+        const slot = document.getElementById(`acc-${pfId}`);
+        if (!slot) return;
+        slot.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…`;
+        try {
+            const url = `${base}ContasBancarias/PessoaFisica/${pfId}/Principal`;
+            const r = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const j = await r.json();
+            if (!j?.sucesso) { slot.classList.add("text-danger"); slot.textContent = "Falha ao carregar"; return; }
+            renderPrincipal(slot, j.possuiPrincipal ? j.conta : null, pfId);
+        } catch {
+            slot.classList.add("text-danger"); slot.textContent = "Erro";
+        }
+    }
+
+    // ====== carregar endereços + conta principal por cartão ======
     document.querySelectorAll("[data-id]").forEach(function (wrap) {
         const id = wrap.getAttribute("data-id");
-        const slot = document.getElementById(`addr-${id}`);
-        const url  = `${base}Enderecos/PessoaFisica/${id}/Principal`;
 
-        fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+        // Endereço principal
+        const slotAddr = document.getElementById(`addr-${id}`);
+        const urlAddr  = `${base}Enderecos/PessoaFisica/${id}/Principal`;
+        fetch(urlAddr, { headers: { "X-Requested-With": "XMLHttpRequest" } })
           .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
           .then(j => {
-              if(!j?.sucesso) {
-                  slot.classList.add("text-danger"); slot.textContent = "Falha ao carregar"; return;
-              }
-              slot.innerHTML = j.possuiPrincipal ? formatEndereco(j.endereco) :
-                               "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
+              if(!j?.sucesso) { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Falha ao carregar"; return; }
+              slotAddr.innerHTML = j.possuiPrincipal ? formatEndereco(j.endereco)
+                                   : "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
           })
-          .catch(() => { slot.classList.add("text-danger"); slot.textContent = "Erro"; });
+          .catch(() => { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Erro"; });
+
+        // Conta principal
+        loadPrincipalAccountFor(id);
     });
 })();
 </script>

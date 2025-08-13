@@ -3,6 +3,7 @@
 @{
     ViewBag.Title = "Dados Bancários";
     Layout = "_Layout";
+    var isNovo = Model?.Id == 0;
 }
 
 <div class="container py-4">
@@ -11,78 +12,265 @@
         <p class="text-muted">Informe os dados bancários para transferência ou depósito.</p>
     </div>
 
-    <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+    <!-- Summary de validação -->
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger d-none" role="alert"></div>
 
+    @* 
+      Observação:
+      - asp-route-id → usado em Atualizar(int id, ...)
+      - asp-route-pf → ajuda no redirect pós-submit
+    *@
     <form asp-controller="ContasBancarias"
-          asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+          asp-action="@(isNovo ? "Salvar" : "Atualizar")"
+          asp-route-id="@(Model.Id)"
           asp-route-pf="@(Model.PessoaFisicaId != null ? "true" : null)"
           method="post"
-          class="row g-4 bg-light p-4 rounded shadow-sm">
+          class="card shadow-sm border-0 overflow-hidden">
 
         @Html.AntiForgeryToken()
 
-        <!-- Ids ocultos -->
-        <input asp-for="Id" type="hidden" />
-        <input asp-for="PessoaJuridicaId" type="hidden" />
-        <input asp-for="PessoaFisicaId" type="hidden" />
-
-        <div class="col-md-4">
-            <label asp-for="Banco" class="form-label fw-semibold"></label>
-            <input asp-for="Banco"
-                   class="form-control"
-                   placeholder="Ex: Banco do Brasil" />
-            <span asp-validation-for="Banco" class="text-danger small"></span>
+        <!-- Cabeçalho estilizado -->
+        <div class="card-header bg-light d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bx bx-bank fs-4 text-primary"></i>
+                <div class="fw-semibold">@(isNovo ? "Nova conta bancária" : "Editar conta bancária")</div>
+                @if (Model.PessoaFisicaId != null)
+                {
+                    <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle">Pessoa Física</span>
+                }
+                else
+                {
+                    <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle">Pessoa Jurídica</span>
+                }
+            </div>
+            <div class="text-muted small">Campos com * são obrigatórios</div>
         </div>
 
-        <div class="col-md-2">
-            <label asp-for="Agencia" class="form-label fw-semibold"></label>
-            <input asp-for="Agencia"
-                   class="form-control"
-                   placeholder="1234-5" />
-            <span asp-validation-for="Agencia" class="text-danger small"></span>
+        <div class="card-body p-4">
+            <!-- Ids ocultos -->
+            <input asp-for="Id" type="hidden" />
+            <input asp-for="VinculoId" type="hidden" />
+            <input asp-for="PessoaJuridicaId" type="hidden" />
+            <input asp-for="PessoaFisicaId" type="hidden" />
+
+            <div class="row g-4">
+                <!-- Banco -->
+                <div class="col-md-6">
+                    <label asp-for="Banco" class="form-label fw-semibold">Banco *</label>
+                    <div class="input-group input-group-lg has-validation">
+                        <span class="input-group-text"><i class="bx bx-buildings"></i></span>
+                        <input asp-for="Banco" class="form-control" placeholder="Ex.: Santander, Banco do Brasil" />
+                    </div>
+                    <span asp-validation-for="Banco" class="text-danger small"></span>
+                </div>
+
+                <!-- Agência -->
+                <div class="col-md-3">
+                    <label asp-for="Agencia" class="form-label fw-semibold">Agência *</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text"><i class="bx bx-hash"></i></span>
+                        <input asp-for="Agencia"
+                               class="form-control"
+                               placeholder="1234-5"
+                               inputmode="numeric"
+                               pattern="[0-9\-]*"
+                               data-mask="agencia" />
+                    </div>
+                    <div class="form-text">Apenas números; o dígito vai após “-”.</div>
+                    <span asp-validation-for="Agencia" class="text-danger small"></span>
+                </div>
+
+                <!-- Conta -->
+                <div class="col-md-3">
+                    <label asp-for="Conta" class="form-label fw-semibold">Conta *</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text"><i class="bx bx-credit-card"></i></span>
+                        <input asp-for="Conta"
+                               class="form-control"
+                               placeholder="987654-0"
+                               inputmode="numeric"
+                               pattern="[0-9\-]*"
+                               data-mask="conta" />
+                    </div>
+                    <div class="form-text">Apenas números; o dígito vai após “-”.</div>
+                    <span asp-validation-for="Conta" class="text-danger small"></span>
+                </div>
+
+                <!-- Pix -->
+                <div class="col-md-6">
+                    <label asp-for="ChavePix" class="form-label fw-semibold">Chave Pix</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text"><i class="bx bx-qr-scan"></i></span>
+                        <input asp-for="ChavePix"
+                               class="form-control"
+                               placeholder="CPF/CNPJ, e-mail, telefone ou aleatória"
+                               data-mask="pix" />
+                    </div>
+                    <div class="form-text">Opcional. Detectamos CPF/CNPJ/telefone e formatamos automaticamente.</div>
+                    <span asp-validation-for="ChavePix" class="text-danger small"></span>
+                </div>
+
+                <!-- Principal -->
+                <div class="col-md-6">
+                    <div class="form-check form-switch mt-4 pt-2">
+                        <input class="form-check-input" asp-for="IsPrincipal" role="switch" id="switchPrincipal" />
+                        <label class="form-check-label fw-semibold" for="switchPrincipal">
+                            Definir como conta principal
+                        </label>
+                        <div class="small text-muted">Se marcada, desmarca as demais contas do mesmo dono.</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="col-md-3">
-            <label asp-for="Conta" class="form-label fw-semibold"></label>
-            <input asp-for="Conta"
-                   class="form-control"
-                   placeholder="987654-0" />
-            <span asp-validation-for="Conta" class="text-danger small"></span>
-        </div>
+        <!-- Rodapé com botões -->
+        <div class="card-footer bg-white d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <div class="small text-muted ms-1">
+                Revise os dados antes de salvar. <span class="d-none d-sm-inline">Você pode editar depois.</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success shadow-sm px-4" id="btnSubmit">
+                    <i class="bx bx-check-circle me-1"></i> @(isNovo ? "Salvar" : "Atualizar")
+                </button>
 
-        <div class="col-md-3">
-            <label asp-for="ChavePix" class="form-label fw-semibold"></label>
-            <input asp-for="ChavePix"
-                   class="form-control"
-                   placeholder="(opcional)" />
-            <span asp-validation-for="ChavePix" class="text-danger small"></span>
-        </div>
-
-        <div class="col-12 mt-3">
-            <button type="submit" class="btn btn-success me-2">
-                <i class="bi bi-check-circle"></i> @(Model.Id == 0 ? "Salvar" : "Atualizar")
-            </button>
-
-            @if (Model.PessoaFisicaId != null)
-            {
-                <a asp-controller="PessoasFisicas"
-                   asp-action="Index"
-                   class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left-circle"></i> Cancelar
-                </a>
-            }
-            else
-            {
-                <a asp-controller="PessoasJuridicas"
-                   asp-action="Index"
-                   class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left-circle"></i> Cancelar
-                </a>
-            }
+                @if (Model.PessoaFisicaId != null)
+                {
+                    <a asp-controller="PessoasFisicas" asp-action="Index" class="btn btn-outline-secondary px-4">
+                        <i class="bx bx-arrow-back me-1"></i> Cancelar
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="PessoasJuridicas" asp-action="Index" class="btn btn-outline-secondary px-4">
+                        <i class="bx bx-arrow-back me-1"></i> Cancelar
+                    </a>
+                }
+            </div>
         </div>
     </form>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+    (function () {
+        // ======= UX/hovers =======
+        document.querySelectorAll('.btn, .input-group-text, .form-control').forEach(el => {
+            el.addEventListener('mouseenter', () => el.classList.add('shadow-sm'));
+            el.addEventListener('mouseleave', () => el.classList.remove('shadow-sm'));
+        });
+
+        // ======= Helpers =======
+        const onlyDigits = s => (s || '').replace(/\D+/g, '');
+
+        // Agencia: ####-#
+        function formatAgencia(raw) {
+            const d = onlyDigits(raw).slice(0, 6); // 5-6 máx c/ dígito
+            if (d.length <= 4) return d;
+            return d.slice(0, 4) + '-' + d.slice(4);
+        }
+        // Conta: coloca '-' antes do último dígito
+        function formatConta(raw) {
+            const d = onlyDigits(raw).slice(0, 12); // limite razoável
+            if (d.length <= 1) return d;
+            return d.slice(0, -1) + '-' + d.slice(-1);
+        }
+        // PIX: detecta formato e aplica máscara se for CPF/CNPJ/telefone
+        function formatPix(raw) {
+            const txt = (raw || '').trim();
+            const d = onlyDigits(txt);
+
+            // CNPJ (14)
+            if (d.length === 14) {
+                return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+            }
+            // CPF (11)
+            if (d.length === 11) {
+                return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+            }
+            // Telefone BR (10/11)
+            if (d.length === 10) {
+                return d.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
+            }
+            if (d.length === 11) {
+                return d.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+            }
+            // e-mail/chave aleatória ficam como estão
+            return txt;
+        }
+
+        // ======= Máscaras em tempo real =======
+        function bindMask(input, formatter) {
+            if (!input) return;
+            input.addEventListener('input', () => {
+                const pos = input.selectionStart;
+                const before = input.value;
+                input.value = formatter(before);
+                // tenta manter o caret na direita
+                input.selectionStart = input.selectionEnd = Math.min(input.value.length, (pos || input.value.length));
+            });
+            // ao carregar, normaliza
+            input.value = formatter(input.value);
+        }
+
+        bindMask(document.querySelector('[data-mask="agencia"]'), formatAgencia);
+        bindMask(document.querySelector('[data-mask="conta"]'),   formatConta);
+        bindMask(document.querySelector('[data-mask="pix"]'),     formatPix);
+
+        // ======= Validação extra no front (além de DataAnnotations) =======
+        const form = document.querySelector('form');
+        const summary = document.querySelector('[asp-validation-summary]');
+        const bancoEl = document.getElementById('@Html.IdFor(m => m.Banco)');
+        const agEl    = document.getElementById('@Html.IdFor(m => m.Agencia)');
+        const ctEl    = document.getElementById('@Html.IdFor(m => m.Conta)');
+
+        function addError(el, msg) {
+            const span = el.closest('.col-md-3, .col-md-6, .col-md-12, .col-md-4, .col').querySelector('.text-danger.small');
+            if (span) span.textContent = msg || '';
+            el.classList.add('is-invalid');
+        }
+        function clearError(el) {
+            const span = el.closest('.col-md-3, .col-md-6, .col-md-12, .col-md-4, .col').querySelector('.text-danger.small');
+            if (span) span.textContent = '';
+            el.classList.remove('is-invalid');
+        }
+
+        function validate() {
+            let ok = true;
+            clearError(bancoEl); clearError(agEl); clearError(ctEl);
+
+            if (!bancoEl.value.trim()) { addError(bancoEl, 'Informe o banco.'); ok = false; }
+
+            const agDigits = onlyDigits(agEl.value);
+            if (agDigits.length < 4) { addError(agEl, 'Agência inválida.'); ok = false; }
+
+            const ctDigits = onlyDigits(ctEl.value);
+            if (ctDigits.length < 2) { addError(ctEl, 'Conta inválida.'); ok = false; }
+
+            // summary
+            summary?.classList.toggle('d-none', ok);
+            if (!ok) summary.textContent = 'Há erros de validação. Revise os campos destacados.';
+            return ok;
+        }
+
+        // Disparo no submit
+        form.addEventListener('submit', function (e) {
+            if (!validate()) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            // UX: evita duplo clique
+            const btn = document.getElementById('btnSubmit');
+            btn.disabled = true;
+            btn.classList.add('disabled');
+        });
+
+        // Valida ao sair de cada campo
+        [bancoEl, agEl, ctEl].forEach(el => {
+            el?.addEventListener('blur', validate);
+        });
+    })();
+    </script>
 }
