@@ -31,7 +31,7 @@
     <div class="card shadow-sm">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table align-middle" id="tbl-enderecos">
+                <table class="table align-middle" id="tbl-enderecos-pf">
                     <thead class="table-light">
                         <tr>
                             <th style="width:60px;">Principal</th>
@@ -45,7 +45,7 @@
                             <th style="width:180px;" class="text-center">Ações</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-enderecos">
+                    <tbody id="tbody-enderecos-pf">
                         <tr><td colspan="9" class="text-muted">Carregando...</td></tr>
                     </tbody>
                 </table>
@@ -54,29 +54,31 @@
     </div>
 </div>
 
-<!-- flags p/ toasts vindos de TempData (sucesso/infos após Salvar/Atualizar) -->
+<!-- Toasters vindos de TempData (Salvar/Atualizar) -->
 <div id="pageFlags"
      data-success="@TempData["toast:success"]"
      data-info="@TempData["toast:info"]"></div>
 
-<!-- Antiforgery para os POSTs AJAX -->
+<!-- Antiforgery para POST via AJAX -->
 <form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
 
 @section Scripts {
 <script>
 (function () {
-    const pessoaId = @pessoaFisicaId;
+    // ===== URLs geradas pelo servidor (ANTI virtual-dir quebrado)
+    const urlListar              = '@Url.Action("ListarPorPessoaFisica", "Enderecos", new { pessoaFisicaId = pessoaFisicaId })';
+    const urlPrincipal           = '@Url.Action("PrincipalPorPessoaFisica","Enderecos", new { pessoaFisicaId = pessoaFisicaId })';
+    const urlDefinirPrincipalTpl = '@Url.Action("DefinirPrincipalPessoaFisica","Enderecos", new { pessoaFisicaId = pessoaFisicaId, enderecoId="__ID__" })';
+    const urlEditarTpl           = '@Url.Action("EditarEnderecoPF","Enderecos", new { pessoaFisicaId = pessoaFisicaId, enderecoId="__ID__" })';
+    const urlExcluirTpl          = '@Url.Action("ExcluirPessoaFisica","Enderecos", new { pessoaFisicaId = pessoaFisicaId, enderecoId="__ID__" })';
 
-    // Rotas de atributo (iguais às do controller PF):
-    const urlListar              = `/Enderecos/PessoaFisica/${pessoaId}/Listar`;
-    const urlPrincipal           = `/Enderecos/PessoaFisica/${pessoaId}/Principal`;
-    const urlDefinirPrincipalTpl = `/Enderecos/PessoaFisica/${pessoaId}/DefinirPrincipal/__ID__`;
-    const urlEditarTpl           = `/Enderecos/PessoaFisica/${pessoaId}/Editar/__ID__`;
-    const urlExcluirTpl          = `/Enderecos/PessoaFisica/${pessoaId}/Excluir/__ID__`;
+    const $tbody = $("#tbody-enderecos-pf");
 
-    const $tbody = $("#tbody-enderecos");
+    function token() {
+        return $("#antiForgeryForm input[name='__RequestVerificationToken']").val();
+    }
 
-    // ===== SweetAlert helpers (mesmo padrão da tela de PJ)
+    // ===== SweetAlert helpers (mesmo padrão da PJ)
     function swalMsg(message, type){
         if (window.SwalDefault?.fire) {
             SwalDefault.fire(message || "", "", type || "info");
@@ -107,13 +109,24 @@
             return Promise.resolve({ isConfirmed: confirm(opts.text || "Confirmar?") });
         }
     }
-    function token() {
-        return $("#antiForgeryForm input[name='__RequestVerificationToken']").val();
+
+    // ===== Robustez para "principal"
+    function isTrue(v){
+        if (v === true) return true;
+        if (v === false) return false;
+        if (typeof v === 'number') return v !== 0;
+        if (typeof v === 'string') {
+            const s = v.trim().toLowerCase();
+            return s === 'true' || s === '1' || s === 'sim';
+        }
+        return false;
     }
 
-    // ===== UI row (estrela igual ao PJ)
+    // ===== Linha da tabela
     function linhaEndereco(e) {
-        const estrela = e.principal
+        const ehPrincipal = isTrue(e.principal ?? e.Principal);
+
+        const estrela = ehPrincipal
             ? `<button type="button" class="btn btn-link p-0" title="Endereço principal" disabled>
                    <i class="bx bxs-star" style="font-size:1.25rem; color:#f5c518;"></i>
                </button>`
@@ -122,7 +135,6 @@
                    <i class="bx bx-star" style="font-size:1.25rem;"></i>
                </button>`;
 
-        // Padrão de botões idêntico ao da Entidade/PJ
         const acoes = `
             <div class="btn-group" role="group">
                 <a href="${urlEditarTpl.replace("__ID__", e.id)}"
@@ -138,7 +150,7 @@
         `;
 
         return `
-            <tr>
+            <tr data-id="${e.id}">
                 <td class="text-center">${estrela}</td>
                 <td>${e.logradouro ?? ""}</td>
                 <td>${e.numero ?? ""}</td>
@@ -152,46 +164,76 @@
         `;
     }
 
-    // ===== Data loaders
+    // ===== Carregar lista
     function carregar() {
+        $tbody.html(`<tr><td colspan="9" class="text-muted">Carregando...</td></tr>`);
+
         $.get(urlListar)
          .done(function (resp) {
-            if (!resp || !resp.sucesso) {
+            // Segurança extra: se servidor devolveu HTML (ex: redirect), cai fora com erro visível
+            if (typeof resp !== "object") {
+                $tbody.html(`<tr><td colspan="9" class="text-danger">Resposta inválida do servidor.</td></tr>`);
+                console.error("Listar PF → resposta não-JSON:", resp);
+                swalMsg("Falha ao carregar endereços.", "error");
+                return;
+            }
+
+            if (!resp.sucesso) {
                 $tbody.html(`<tr><td colspan="9" class="text-danger">Falha ao carregar endereços.</td></tr>`);
                 swalMsg("Falha ao carregar endereços.", "error");
                 return;
             }
+
             const itens = resp.itens || [];
             if (!itens.length) {
                 $tbody.html(`<tr><td colspan="9" class="text-muted">Nenhum endereço cadastrado para esta pessoa física.</td></tr>`);
                 return;
             }
+
             let html = "";
             for (const e of itens) html += linhaEndereco(e);
             $tbody.html(html);
+
+            // Fallback: se nenhum veio sinalizado como principal, consulta /Principal e pinta
+            const temPrincipalNaLista = itens.some(x => isTrue(x.principal ?? x.Principal));
+            if (!temPrincipalNaLista) {
+                $.get(urlPrincipal).done(function (j) {
+                    if (j?.sucesso && j.possuiPrincipal && j.endereco?.id) {
+                        const id = j.endereco.id;
+                        const $tr = $tbody.find(`tr[data-id='${id}']`);
+                        if ($tr.length) {
+                            $tr.find('td').eq(0).html(`
+                                <button type="button" class="btn btn-link p-0" title="Endereço principal" disabled>
+                                    <i class="bx bxs-star" style="font-size:1.25rem; color:#f5c518;"></i>
+                                </button>
+                            `);
+                        }
+                    }
+                });
+            }
          })
          .fail(function (xhr) {
             $tbody.html(`<tr><td colspan="9" class="text-danger">Erro ao consultar o servidor.</td></tr>`);
-            swalMsg(\`Erro ao consultar o servidor. (\${xhr.status})\`, "error");
+            console.error("Listar PF → erro", xhr);
+            swalMsg(`Erro ao consultar o servidor. (${xhr.status})`, "error");
          });
     }
 
+    // ===== Atualiza cartões/resumos externos (se existir)
     function atualizarPrincipalEmOutrosContextos() {
-        $.get(urlPrincipal)
-         .done(function (resp) {
+        $.get(urlPrincipal).done(function (resp) {
             if (!resp?.sucesso || !resp.possuiPrincipal) return;
-            // Mesma convenção da PJ, só mudando o tipo para "PF"
             if (typeof window.atualizarCardEnderecoFornecedor === "function") {
                 window.atualizarCardEnderecoFornecedor({
                     tipo: "PF",
-                    id: pessoaId,
+                    id: @pessoaFisicaId,
                     endereco: resp.endereco
                 });
             }
-         });
+        });
     }
 
-    // ===== Actions
+    // ===== Ações
     function definirPrincipal(enderecoId) {
         const url = urlDefinirPrincipalTpl.replace("__ID__", enderecoId);
         $.ajax({
@@ -209,7 +251,7 @@
             }
         })
         .fail(function (xhr) {
-            const msg = xhr.responseJSON?.mensagem || \`Falha ao definir o principal. (\${xhr.status})\`;
+            const msg = xhr.responseJSON?.mensagem || `Falha ao definir o principal. (${xhr.status})`;
             swalMsg(msg, "error");
         });
     }
@@ -239,7 +281,7 @@
                 }
             })
             .fail(function (xhr) {
-                const msg = xhr.responseJSON?.mensagem || \`Falha ao excluir. (\${xhr.status})\`;
+                const msg = xhr.responseJSON?.mensagem || `Falha ao excluir. (${xhr.status})`;
                 swalMsg(msg, "error");
             });
         });
@@ -257,7 +299,7 @@
     carregar();
     atualizarPrincipalEmOutrosContextos();
 
-    // Toast pós-redirect (Salvar/Atualizar) — mesmo padrão da PJ
+    // Toasts vindos de TempData (Salvar/Atualizar)
     const flags = document.getElementById("pageFlags");
     if (flags) {
         const ok = flags.dataset.success;
