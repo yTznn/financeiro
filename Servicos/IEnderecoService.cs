@@ -6,27 +6,36 @@ using Financeiro.Models.ViewModels;
 namespace Financeiro.Servicos
 {
     /// <summary>
-    /// Orquestra operações de endereço para Pessoa Jurídica.
+    /// Orquestra operações de endereço para Pessoas Jurídicas e Físicas.
     /// Mantém regra de negócios no nível de serviço e delega persistência ao repositório.
     /// </summary>
     public interface IEnderecoService
     {
-        /// <summary>Retorna um endereço vinculado à pessoa jurídica (legado – único). Prefira os novos métodos.</summary>
+        /* ===================== LEGADO (único endereço PJ) ===================== */
         Task<Endereco?> ObterPorPessoaAsync(int pessoaJuridicaId);
-
-        /// <summary>Lista todos os endereços vinculados a uma Pessoa Jurídica (principal primeiro).</summary>
-        Task<IEnumerable<Endereco>> ListarPorPessoaJuridicaAsync(int pessoaJuridicaId);
-
-        /// <summary>Retorna o endereço principal da Pessoa Jurídica, se houver.</summary>
-        Task<Endereco?> ObterPrincipalPorPessoaJuridicaAsync(int pessoaJuridicaId);
-
-        /// <summary>Insere novo endereço e vincula à Pessoa Jurídica. Se não houver principal, marca este como principal.</summary>
         Task InserirAsync(EnderecoViewModel vm);
-
-        /// <summary>Atualiza dados do endereço existente.</summary>
         Task AtualizarAsync(int id, EnderecoViewModel vm);
 
-        /// <summary>Define um endereço como principal para a Pessoa Jurídica (troca atômica).</summary>
+        /* ===================== PJ (múltiplos endereços) ===================== */
+        Task<IEnumerable<Endereco>> ListarPorPessoaJuridicaAsync(int pessoaJuridicaId);
+        Task<Endereco?> ObterPrincipalPorPessoaJuridicaAsync(int pessoaJuridicaId);
         Task DefinirPrincipalPessoaJuridicaAsync(int pessoaJuridicaId, int enderecoId);
+        Task VincularPessoaJuridicaAsync(int pessoaJuridicaId, int enderecoId, bool ativo = true);
+        Task<bool> PossuiPrincipalPessoaJuridicaAsync(int pessoaJuridicaId);
+
+        /* ===================== PF (múltiplos endereços) ===================== */
+        Task<IEnumerable<Endereco>> ListarPorPessoaFisicaAsync(int pessoaFisicaId);
+        Task<Endereco?> ObterPrincipalPorPessoaFisicaAsync(int pessoaFisicaId);
+        Task DefinirPrincipalPessoaFisicaAsync(int pessoaFisicaId, int enderecoId);
+        Task VincularPessoaFisicaAsync(int pessoaFisicaId, int enderecoId, bool ativo = true);
+        Task<bool> PossuiPrincipalPessoaFisicaAsync(int pessoaFisicaId);
+
+        /* ===================== UTILIDADE (reuso geral) ===================== */
+        Task<int> InserirRetornandoIdAsync(Endereco endereco);
+
+        // NOVO
+        Task<Endereco?> ObterPorIdAsync(int enderecoId);
+        Task ExcluirEnderecoPessoaJuridicaAsync(int pessoaJuridicaId, int enderecoId);
+        Task ExcluirEnderecoPessoaFisicaAsync(int pessoaFisicaId, int enderecoId);
     }
 }

@@ -146,3 +146,15 @@ hr {
 a {
   text-decoration: none;
 }
+/* endereço principal no card da Entidade */
+.addr-grid .label{
+  font-size:.82rem;
+  text-transform:uppercase;
+  letter-spacing:.02em;
+  color:#6c757d;
+}
+.addr-grid .value{
+  font-size:1.12rem;   /* ↑ aumente/diminua aqui */
+  font-weight:600;
+  color:#102444;       /* seu dark */
+}

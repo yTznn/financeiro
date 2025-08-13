@@ -7,8 +7,8 @@ using Financeiro.Repositorios;
 namespace Financeiro.Servicos
 {
     /// <summary>
-    /// Implementação do serviço de endereços para Pessoa Jurídica.
-    /// Centraliza validações simples e chama o repositório.
+    /// Implementação do serviço de endereços para Pessoa Jurídica e Pessoa Física.
+    /// Centraliza validações simples e delega persistência ao repositório.
     /// </summary>
     public class EnderecoService : IEnderecoService
     {
@@ -19,44 +19,60 @@ namespace Financeiro.Servicos
             _repo = repo;
         }
 
-        /// <summary>
-        /// Retorna um endereço vinculado à pessoa jurídica (legado).
-        /// </summary>
+        /* ===================== LEGADO (único endereço PJ) ===================== */
         public Task<Endereco?> ObterPorPessoaAsync(int pessoaJuridicaId)
             => _repo.ObterPorPessoaAsync(pessoaJuridicaId);
 
-        /// <summary>
-        /// Lista todos os endereços de uma Pessoa Jurídica (principal primeiro).
-        /// </summary>
-        public Task<IEnumerable<Endereco>> ListarPorPessoaJuridicaAsync(int pessoaJuridicaId)
-            => _repo.ListarPorPessoaJuridicaAsync(pessoaJuridicaId);
-
-        /// <summary>
-        /// Retorna o endereço principal da Pessoa Jurídica (ou null).
-        /// </summary>
-        public Task<Endereco?> ObterPrincipalPorPessoaJuridicaAsync(int pessoaJuridicaId)
-            => _repo.ObterPrincipalPorPessoaJuridicaAsync(pessoaJuridicaId);
-
-        /// <summary>
-        /// Insere novo endereço e cria vínculo. Se não houver principal, este será marcado como principal.
-        /// </summary>
         public Task InserirAsync(EnderecoViewModel vm)
-        {
-            // Validações mínimas (poderíamos adicionar regras mais específicas aqui)
-            // Ex.: if (vm.PessoaJuridicaId <= 0) throw new ApplicationException("Pessoa Jurídica inválida.");
-            return _repo.InserirAsync(vm);
-        }
+            => _repo.InserirAsync(vm);
 
-        /// <summary>
-        /// Atualiza os dados do endereço existente.
-        /// </summary>
         public Task AtualizarAsync(int id, EnderecoViewModel vm)
             => _repo.AtualizarAsync(id, vm);
 
-        /// <summary>
-        /// Define o endereço como principal para a Pessoa Jurídica (troca atômica).
-        /// </summary>
+        /* ===================== PJ (múltiplos endereços) ===================== */
+        public Task<IEnumerable<Endereco>> ListarPorPessoaJuridicaAsync(int pessoaJuridicaId)
+            => _repo.ListarPorPessoaJuridicaAsync(pessoaJuridicaId);
+
+        public Task<Endereco?> ObterPrincipalPorPessoaJuridicaAsync(int pessoaJuridicaId)
+            => _repo.ObterPrincipalPorPessoaJuridicaAsync(pessoaJuridicaId);
+
         public Task DefinirPrincipalPessoaJuridicaAsync(int pessoaJuridicaId, int enderecoId)
             => _repo.DefinirPrincipalPessoaJuridicaAsync(pessoaJuridicaId, enderecoId);
+
+        public Task VincularPessoaJuridicaAsync(int pessoaJuridicaId, int enderecoId, bool ativo = true)
+            => _repo.VincularPessoaJuridicaAsync(pessoaJuridicaId, enderecoId, ativo);
+
+        public Task<bool> PossuiPrincipalPessoaJuridicaAsync(int pessoaJuridicaId)
+            => _repo.PossuiPrincipalPessoaJuridicaAsync(pessoaJuridicaId);
+
+        /* ===================== PF (múltiplos endereços) ===================== */
+        public Task<IEnumerable<Endereco>> ListarPorPessoaFisicaAsync(int pessoaFisicaId)
+            => _repo.ListarPorPessoaFisicaAsync(pessoaFisicaId);
+
+        public Task<Endereco?> ObterPrincipalPorPessoaFisicaAsync(int pessoaFisicaId)
+            => _repo.ObterPrincipalPorPessoaFisicaAsync(pessoaFisicaId);
+
+        public Task DefinirPrincipalPessoaFisicaAsync(int pessoaFisicaId, int enderecoId)
+            => _repo.DefinirPrincipalPessoaFisicaAsync(pessoaFisicaId, enderecoId);
+
+        public Task VincularPessoaFisicaAsync(int pessoaFisicaId, int enderecoId, bool ativo = true)
+            => _repo.VincularPessoaFisicaAsync(pessoaFisicaId, enderecoId, ativo);
+
+        public Task<bool> PossuiPrincipalPessoaFisicaAsync(int pessoaFisicaId)
+            => _repo.PossuiPrincipalPessoaFisicaAsync(pessoaFisicaId);
+
+        /* ===================== UTILIDADE (reuso geral) ===================== */
+        public Task<int> InserirRetornandoIdAsync(Endereco endereco)
+            => _repo.InserirRetornandoIdAsync(endereco);
+
+        // NOVO
+        public Task<Endereco?> ObterPorIdAsync(int enderecoId)
+            => _repo.ObterPorIdAsync(enderecoId);
+
+        public Task ExcluirEnderecoPessoaJuridicaAsync(int pessoaJuridicaId, int enderecoId)
+            => _repo.ExcluirEnderecoPessoaJuridicaAsync(pessoaJuridicaId, enderecoId);
+
+        public Task ExcluirEnderecoPessoaFisicaAsync(int pessoaFisicaId, int enderecoId)
+            => _repo.ExcluirEnderecoPessoaFisicaAsync(pessoaFisicaId, enderecoId);
     }
 }

@@ -1,8 +1,8 @@
 @model int
 @{
-    ViewBag.Title = "Endereços da Pessoa Jurídica";
+    ViewBag.Title = "Endereços da Pessoa Física";
     Layout = "_Layout";
-    var pessoaJuridicaId = Model;
+    var pessoaFisicaId = Model;
 }
 
 <div class="container py-4">
@@ -14,15 +14,15 @@
 
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary"
-               asp-controller="PessoasJuridicas"
+               asp-controller="PessoasFisicas"
                asp-action="Index">
                 <i class="bx bx-arrow-back me-1"></i> Voltar
             </a>
 
             <a class="btn btn-primary"
                asp-controller="Enderecos"
-               asp-action="Novo"
-               asp-route-pessoaId="@pessoaJuridicaId">
+               asp-action="NovoPF"
+               asp-route-pessoaId="@pessoaFisicaId">
                 <i class="bx bx-plus-circle me-1"></i> Novo Endereço
             </a>
         </div>
@@ -54,28 +54,29 @@
     </div>
 </div>
 
-<!-- flags p/ toasts vindos de TempData -->
+<!-- flags p/ toasts vindos de TempData (sucesso/infos após Salvar/Atualizar) -->
 <div id="pageFlags"
      data-success="@TempData["toast:success"]"
      data-info="@TempData["toast:info"]"></div>
 
+<!-- Antiforgery para os POSTs AJAX -->
 <form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
 
 @section Scripts {
 <script>
 (function () {
-    const pessoaId = @pessoaJuridicaId;
+    const pessoaId = @pessoaFisicaId;
 
-    // Rotas de atributo:
-    const urlListar              = `/Enderecos/PessoaJuridica/${pessoaId}/Listar`;
-    const urlPrincipal           = `/Enderecos/PessoaJuridica/${pessoaId}/Principal`;
-    const urlDefinirPrincipalTpl = `/Enderecos/PessoaJuridica/${pessoaId}/DefinirPrincipal/__ID__`;
-    const urlEditarTpl           = `/Enderecos/PessoaJuridica/${pessoaId}/Editar/__ID__`;
-    const urlExcluirTpl          = `/Enderecos/PessoaJuridica/${pessoaId}/Excluir/__ID__`;
+    // Rotas de atributo (iguais às do controller PF):
+    const urlListar              = `/Enderecos/PessoaFisica/${pessoaId}/Listar`;
+    const urlPrincipal           = `/Enderecos/PessoaFisica/${pessoaId}/Principal`;
+    const urlDefinirPrincipalTpl = `/Enderecos/PessoaFisica/${pessoaId}/DefinirPrincipal/__ID__`;
+    const urlEditarTpl           = `/Enderecos/PessoaFisica/${pessoaId}/Editar/__ID__`;
+    const urlExcluirTpl          = `/Enderecos/PessoaFisica/${pessoaId}/Excluir/__ID__`;
 
     const $tbody = $("#tbody-enderecos");
 
-    // ===== SweetAlert helpers (mesmo padrão da Entidade)
+    // ===== SweetAlert helpers (mesmo padrão da tela de PJ)
     function swalMsg(message, type){
         if (window.SwalDefault?.fire) {
             SwalDefault.fire(message || "", "", type || "info");
@@ -110,7 +111,7 @@
         return $("#antiForgeryForm input[name='__RequestVerificationToken']").val();
     }
 
-    // ===== UI row
+    // ===== UI row (estrela igual ao PJ)
     function linhaEndereco(e) {
         const estrela = e.principal
             ? `<button type="button" class="btn btn-link p-0" title="Endereço principal" disabled>
@@ -121,7 +122,7 @@
                    <i class="bx bx-star" style="font-size:1.25rem;"></i>
                </button>`;
 
-        // Padrão igual ao da Entidade: Editar (azul com texto) + Excluir (outline vermelho com ícone)
+        // Padrão de botões idêntico ao da Entidade/PJ
         const acoes = `
             <div class="btn-group" role="group">
                 <a href="${urlEditarTpl.replace("__ID__", e.id)}"
@@ -162,7 +163,7 @@
             }
             const itens = resp.itens || [];
             if (!itens.length) {
-                $tbody.html(`<tr><td colspan="9" class="text-muted">Nenhum endereço cadastrado para esta pessoa jurídica.</td></tr>`);
+                $tbody.html(`<tr><td colspan="9" class="text-muted">Nenhum endereço cadastrado para esta pessoa física.</td></tr>`);
                 return;
             }
             let html = "";
@@ -171,17 +172,18 @@
          })
          .fail(function (xhr) {
             $tbody.html(`<tr><td colspan="9" class="text-danger">Erro ao consultar o servidor.</td></tr>`);
-            swalMsg(`Erro ao consultar o servidor. (${xhr.status})`, "error");
+            swalMsg(\`Erro ao consultar o servidor. (\${xhr.status})\`, "error");
          });
     }
 
-    function atualizarCardPrincipal() {
+    function atualizarPrincipalEmOutrosContextos() {
         $.get(urlPrincipal)
          .done(function (resp) {
             if (!resp?.sucesso || !resp.possuiPrincipal) return;
+            // Mesma convenção da PJ, só mudando o tipo para "PF"
             if (typeof window.atualizarCardEnderecoFornecedor === "function") {
                 window.atualizarCardEnderecoFornecedor({
-                    tipo: "PJ",
+                    tipo: "PF",
                     id: pessoaId,
                     endereco: resp.endereco
                 });
@@ -201,13 +203,13 @@
             if (resp?.sucesso) {
                 swalMsg(resp.mensagem || "Endereço definido como principal!", "success");
                 carregar();
-                atualizarCardPrincipal();
+                atualizarPrincipalEmOutrosContextos();
             } else {
                 swalMsg(resp?.mensagem || "Não foi possível definir o principal.", "error");
             }
         })
         .fail(function (xhr) {
-            const msg = xhr.responseJSON?.mensagem || `Falha ao definir o principal. (${xhr.status})`;
+            const msg = xhr.responseJSON?.mensagem || \`Falha ao definir o principal. (\${xhr.status})\`;
             swalMsg(msg, "error");
         });
     }
@@ -231,13 +233,13 @@
                 if (resp?.sucesso) {
                     swalMsg(resp.mensagem || "Endereço excluído.", "success");
                     carregar();
-                    atualizarCardPrincipal();
+                    atualizarPrincipalEmOutrosContextos();
                 } else {
                     swalMsg(resp?.mensagem || "Não foi possível excluir.", "error");
                 }
             })
             .fail(function (xhr) {
-                const msg = xhr.responseJSON?.mensagem || `Falha ao excluir. (${xhr.status})`;
+                const msg = xhr.responseJSON?.mensagem || \`Falha ao excluir. (\${xhr.status})\`;
                 swalMsg(msg, "error");
             });
         });
@@ -253,9 +255,9 @@
 
     // ===== Inicial
     carregar();
-    atualizarCardPrincipal();
+    atualizarPrincipalEmOutrosContextos();
 
-    // toast de sucesso pós-redirect (Salvar/Atualizar)
+    // Toast pós-redirect (Salvar/Atualizar) — mesmo padrão da PJ
     const flags = document.getElementById("pageFlags");
     if (flags) {
         const ok = flags.dataset.success;

@@ -1,106 +1,220 @@
 @model IEnumerable<Financeiro.Models.ViewModels.PessoaJuridicaListaViewModel>
+@using System.Linq
 
 @{
-    ViewBag.Title = "Pessoas Jurídicas";
+    ViewData["Title"] = "Pessoas Jurídicas";
     Layout = "_Layout";
 }
 
-<h2 class="mb-4 fw-bold">
-    <i class="bi bi-buildings me-2 text-primary"></i> Gerencie seus fornecedores PJ
-</h2>
+@functions {
+    // 00.000.000/0000-00
+    string FormatCnpj(string? cnpj)
+    {
+        if (string.IsNullOrWhiteSpace(cnpj)) return "";
+        var d = new string(cnpj.Where(char.IsDigit).ToArray());
+        if (d.Length != 14) return cnpj ?? "";
+        return $"{d[..2]}.{d.Substring(2,3)}.{d.Substring(5,3)}/{d.Substring(8,4)}-{d.Substring(12,2)}";
+    }
+}
 
-<a asp-action="Novo" class="btn btn-primary mb-4">
-    <i class="bi bi-plus-circle me-1"></i> Nova Pessoa Jurídica
-</a>
+<style>
+    .pj-card{ border-left:4px solid var(--blue); transition:transform .06s ease, box-shadow .06s ease; }
+    .pj-card:hover{ transform:translateY(-1px); box-shadow:0 .25rem .75rem rgba(16,36,68,.08); }
 
-<div class="table-responsive">
-    <table class="table table-striped align-middle table-hover">
-        <thead class="table-light">
-            <tr>
-                <th>Razão Social</th>
-                <th>Nome Fantasia</th>
-                <th>CNPJ</th>
-                <th>E-mail</th>
-                <th>Telefone</th>
-                <th>Situação</th>
-                <th style="width:300px">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model)
-            {
-                <tr>
-                    <td>@item.Pessoa.RazaoSocial</td>
-                    <td>@item.Pessoa.NomeFantasia</td>
-                    <td>@item.Pessoa.NumeroInscricao</td>
-                    <td>@item.Pessoa.Email</td>
-                    <td>@item.Pessoa.Telefone</td>
-                    <td>
-                        <span class="badge bg-@(item.Pessoa.SituacaoAtiva ? "primary" : "secondary")">
-                            @(item.Pessoa.SituacaoAtiva ? "Ativo" : "Inativo")
-                        </span>
-                    </td>
-                    <td>
-                        <div class="d-flex flex-wrap gap-2">
-                            <!-- Gerenciar Endereços (lista completa, definir principal, etc.) -->
-                            <a class="btn btn-sm btn-outline-secondary"
-                               asp-controller="Enderecos"
-                               asp-action="GerenciarPessoaJuridica"
-                               asp-route-pessoaJuridicaId="@item.Pessoa.Id"
-                               title="Ver todos os endereços da PJ">
-                                <i class="bi bi-geo"></i> Endereços
-                            </a>
+    .cnpj { font-variant-numeric: tabular-nums; letter-spacing:.2px; }
 
-                            <!-- Editar fornecedor -->
-                            <a class="btn btn-sm btn-outline-primary"
-                               asp-action="Editar"
-                               asp-route-id="@item.Pessoa.Id">
-                                <i class="bi bi-pencil-square me-1"></i> Editar
-                            </a>
+    .addr-grid .label{
+        color:#6c757d; font-size:.82rem; text-transform:uppercase; letter-spacing:.02em;
+    }
+    .addr-grid .value{
+        color:var(--dark); font-weight:600; font-size:1.05rem; line-height:1.3;
+    }
+</style>
 
-                            <!-- Endereço (fluxo rápido de cadastro/edição legado) -->
-                            @if (item.PossuiEndereco)
-                            {
-                                <a class="btn btn-sm btn-outline-info"
-                                   asp-controller="Enderecos"
-                                   asp-action="Editar"
-                                   asp-route-pessoaId="@item.Pessoa.Id">
-                                    <i class="bi bi-geo-alt-fill me-1"></i> Editar Endereço
-                                </a>
-                            }
-                            else
-                            {
-                                <a class="btn btn-sm btn-outline-info"
-                                   asp-controller="Enderecos"
-                                   asp-action="Novo"
-                                   asp-route-pessoaId="@item.Pessoa.Id">
-                                    <i class="bi bi-geo-alt me-1"></i> Preencher Endereço
-                                </a>
-                            }
-
-                            <!-- Conta Bancária -->
-                            @if (item.PossuiConta)
-                            {
-                                <a class="btn btn-sm btn-outline-success"
-                                   asp-controller="ContasBancarias"
-                                   asp-action="Editar"
-                                   asp-route-pessoaId="@item.Pessoa.Id">
-                                    <i class="bi bi-bank me-1"></i> Editar Conta
-                                </a>
-                            }
-                            else
-                            {
-                                <a class="btn btn-sm btn-outline-success"
-                                   asp-controller="ContasBancarias"
-                                   asp-action="Novo"
-                                   asp-route-pessoaId="@item.Pessoa.Id">
-                                    <i class="bi bi-bank2 me-1"></i> Preencher Conta
-                                </a>
-                            }
-                        </div>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0 fw-bold" style="color:var(--dark);">
+        <i class="bx bx-buildings me-2"></i> Gerencie seus fornecedores PJ
+    </h2>
+    <a asp-action="Novo" class="btn btn-primary">
+        <i class='bx bx-plus-circle'></i> Nova Pessoa Jurídica
+    </a>
 </div>
+
+<div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
+@foreach (var item in Model)
+{
+    var pj = item.Pessoa;
+    <div class="col">
+        <div class="card h-100 shadow-sm border-0 pj-card" data-id="@pj.Id">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="fw-semibold" style="color:var(--dark);">@pj.RazaoSocial</div>
+                        <div class="small text-muted">@pj.NomeFantasia</div>
+                    </div>
+                    <span class="badge bg-@(pj.SituacaoAtiva ? "primary" : "secondary")">
+                        @(pj.SituacaoAtiva ? "Ativa" : "Inativa")
+                    </span>
+                </div>
+
+                <div class="small text-muted mb-2">
+                    <i class='bx bx-id-card me-1'></i>
+                    <span class="cnpj">@FormatCnpj(pj.NumeroInscricao)</span>
+                </div>
+
+                <!-- Endereço principal -->
+                <div class="mt-2">
+                    <div class="small text-muted mb-1">
+                        <i class="bx bx-map me-1"></i> Endereço principal
+                    </div>
+                    <div id="addr-@pj.Id" class="text-muted">
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Carregando…
+                    </div>
+                </div>
+
+                <!-- Conta bancária -->
+                <div class="mt-3">
+                    <div class="small text-muted mb-1">
+                        <i class="bx bx-bank me-1"></i> Conta bancária
+                    </div>
+                    @if (item.PossuiConta)
+                    {
+                        <div class="text-success fw-semibold">Cadastrada</div>
+                    }
+                    else
+                    {
+                        <div class="text-muted">Nenhuma cadastrada</div>
+                    }
+                </div>
+
+                <div class="mt-auto"></div>
+            </div>
+
+            <div class="card-footer bg-transparent border-0 pt-0">
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-sm btn-outline-secondary"
+                       asp-controller="Enderecos"
+                       asp-action="GerenciarPessoaJuridica"
+                       asp-route-pessoaJuridicaId="@pj.Id" title="Endereços">
+                        <i class='bx bx-map'></i> Endereços
+                    </a>
+
+                    @* Conta bancária *@
+                    @if (item.PossuiConta)
+                    {
+                        <a class="btn btn-sm btn-outline-success"
+                           asp-controller="ContasBancarias"
+                           asp-action="Editar"
+                           asp-route-pessoaId="@pj.Id">
+                            <i class='bx bx-bank'></i> Editar Conta
+                        </a>
+                    }
+                    else
+                    {
+                        <a class="btn btn-sm btn-outline-success"
+                           asp-controller="ContasBancarias"
+                           asp-action="Novo"
+                           asp-route-pessoaId="@pj.Id">
+                            <i class='bx bx-bank'></i> Preencher Conta
+                        </a>
+                    }
+
+                    <a class="btn btn-sm btn-outline-primary"
+                       asp-action="Editar" asp-route-id="@pj.Id" title="Editar">
+                        <i class='bx bx-pencil'></i> Editar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    // base do app (suporta app em subpasta; termina com '/')
+    const base = '@Url.Content("~")';
+
+    // helper CEP
+    function formatCep(cep){
+        if(!cep) return '';
+        const d = (''+cep).replace(/\D/g,'');
+        return d.replace(/^(\d{5})(\d{3})$/,'$1-$2');
+    }
+
+    // ROTA DE ATRIBUTO — igual ao controller:
+    // [HttpGet("Enderecos/PessoaJuridica/{pessoaJuridicaId:int}/Principal")]
+    const urlPrincipal = (id) => `${base}Enderecos/PessoaJuridica/${id}/Principal`;
+
+    document.querySelectorAll(".pj-card").forEach(function(card){
+        const id   = card.getAttribute("data-id");
+        const slot = document.getElementById(`addr-${id}`);
+        const url  = urlPrincipal(id);
+
+        fetch(url)
+          .then(r => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+          })
+          .then(j => {
+              if(!j || j.sucesso !== true){
+                  slot.classList.add("text-danger");
+                  slot.textContent = "Falha ao carregar";
+                  return;
+              }
+              if(!j.possuiPrincipal){
+                  slot.innerHTML = `<span class="badge bg-secondary">
+                      <i class="bx bx-minus me-1"></i> Sem principal
+                  </span>`;
+                  return;
+              }
+
+              // suporta PascalCase ou camelCase no objeto 'endereco'
+              const e = j.endereco || {};
+              const _ = (a,b) => a ?? b ?? '';
+
+              slot.innerHTML = `
+                <div class="addr-grid">
+                    <div class="row gx-2 gy-1">
+                        <div class="col-12">
+                            <div class="label">Logradouro</div>
+                            <div class="value">${_(e.Logradouro, e.logradouro)}</div>
+                        </div>
+                        <div class="col-4 col-sm-3">
+                            <div class="label">Número</div>
+                            <div class="value">${_(e.Numero, e.numero)}</div>
+                        </div>
+                        <div class="col-8 col-sm-9">
+                            <div class="label">Complemento</div>
+                            <div class="value">${_(e.Complemento, e.complemento)}</div>
+                        </div>
+                        <div class="col-4 col-sm-3">
+                            <div class="label">CEP</div>
+                            <div class="value">${formatCep(_(e.Cep, e.cep))}</div>
+                        </div>
+                        <div class="col-8 col-sm-3">
+                            <div class="label">Bairro</div>
+                            <div class="value">${_(e.Bairro, e.bairro)}</div>
+                        </div>
+                        <div class="col-8 col-sm-4">
+                            <div class="label">Município</div>
+                            <div class="value">${_(e.Municipio, e.municipio)}</div>
+                        </div>
+                        <div class="col-4 col-sm-2">
+                            <div class="label">UF</div>
+                            <div class="value">${_(e.Uf, e.uf)}</div>
+                        </div>
+                    </div>
+                </div>`;
+          })
+          .catch(err => {
+              console.error('PrincipalPorPessoaJuridica FAIL:', err);
+              slot.classList.add("text-danger");
+              slot.textContent = "Erro";
+          });
+    });
+})();
+</script>
+}

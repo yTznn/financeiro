@@ -23,29 +23,39 @@
                 <th>E-mail</th>
                 <th>Telefone</th>
                 <th>Situação</th>
-                <th style="width:220px">Ações</th>
+                <th>Endereço principal</th>
+                <th style="width:320px">Ações</th>
             </tr>
         </thead>
         <tbody>
             @foreach (var item in Model)
             {
-                <tr>
-                    <td>@item.Pessoa.Nome</td>
-                    <td>@item.Pessoa.Sobrenome</td>
-                    <td>@item.Pessoa.Cpf</td>
-                    <td>@item.Pessoa.Email</td>
-                    <td>@item.Pessoa.Telefone</td>
+                var pf = item.Pessoa;
+                <tr data-id="@pf.Id">
+                    <td>@pf.Nome</td>
+                    <td>@pf.Sobrenome</td>
+                    <td>@pf.Cpf</td>
+                    <td>@pf.Email</td>
+                    <td>@pf.Telefone</td>
                     <td>
-                        <span class="badge @(item.Pessoa.SituacaoAtiva ? "bg-success" : "bg-secondary")">
-                            @(item.Pessoa.SituacaoAtiva ? "Ativo" : "Inativo")
+                        <span class="badge @(pf.SituacaoAtiva ? "bg-success" : "bg-secondary")">
+                            @(pf.SituacaoAtiva ? "Ativo" : "Inativo")
                         </span>
                     </td>
+
+                    <!-- Slot do endereço principal (preenche via AJAX) -->
+                    <td id="addr-@pf.Id" class="text-muted">
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Carregando…
+                    </td>
+
                     <td class="d-flex flex-wrap gap-1">
-                        <!-- Editar Pessoa Física -->
-                        <a class="btn btn-sm btn-outline-primary"
-                           asp-action="Editar"
-                           asp-route-id="@item.Pessoa.Id">
-                            Editar
+                        <!-- Endereços (PF) -->
+                        <a class="btn btn-sm btn-outline-secondary"
+                           asp-controller="Enderecos"
+                           asp-action="GerenciarPessoaFisica"
+                           asp-route-pessoaFisicaId="@pf.Id" title="Endereços">
+                            <i class='bx bx-map'></i> Endereços
                         </a>
 
                         <!-- Conta Bancária -->
@@ -54,9 +64,9 @@
                             <a class="btn btn-sm btn-outline-success"
                                asp-controller="ContasBancarias"
                                asp-action="Editar"
-                               asp-route-pessoaId="@item.Pessoa.Id"
+                               asp-route-pessoaId="@pf.Id"
                                asp-route-pf="true">
-                                Editar Conta
+                                <i class='bx bx-bank'></i> Editar Conta
                             </a>
                         }
                         else
@@ -64,14 +74,73 @@
                             <a class="btn btn-sm btn-outline-success"
                                asp-controller="ContasBancarias"
                                asp-action="Novo"
-                               asp-route-pessoaId="@item.Pessoa.Id"
+                               asp-route-pessoaId="@pf.Id"
                                asp-route-pf="true">
-                                Preencher Conta
+                                <i class='bx bx-bank'></i> Preencher Conta
                             </a>
                         }
+
+                        <!-- Editar PF -->
+                        <a class="btn btn-sm btn-outline-primary"
+                           asp-action="Editar"
+                           asp-route-id="@pf.Id">
+                            <i class='bx bx-pencil'></i> Editar
+                        </a>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
 </div>
+
+@section Scripts {
+<script>
+(function () {
+    function buildLinha(e) {
+        if (!e) return "<span class='text-muted'>Sem principal</span>";
+        const log = e.logradouro ?? e.Logradouro ?? "";
+        const num = e.numero ?? e.Numero ?? "";
+        const bai = e.bairro ?? e.Bairro ?? "";
+        const mun = e.municipio ?? e.Municipio ?? "";
+        const uf  = e.uf ?? e.Uf ?? "";
+        const cep = e.cep ?? e.Cep ?? "";
+
+        const pedacos = [
+            [log, num].filter(Boolean).join(", "),
+            [bai, mun].filter(Boolean).join(" - "),
+            [uf, cep].filter(Boolean).join(" • ")
+        ].filter(Boolean).join(" | ");
+
+        return pedacos || "<span class='text-muted'>Sem principal</span>";
+    }
+
+    const base = '@Url.Content("~")'.replace(/\/?$/, '/');
+
+    document.querySelectorAll("tr[data-id]").forEach(function(row){
+        const id   = row.getAttribute("data-id");
+        const slot = document.getElementById(`addr-${id}`);
+        const url  = `${base}Enderecos/PessoaFisica/${id}/Principal`;
+
+        fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(j => {
+              if(!j?.sucesso){
+                  slot.classList.add("text-danger");
+                  slot.textContent = "Falha ao carregar";
+                  return;
+              }
+              if(!j.possuiPrincipal){
+                  slot.innerHTML = "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
+                  return;
+              }
+              slot.innerHTML = buildLinha(j.endereco);
+          })
+          .catch((err) => {
+              console.error("Falha ao buscar principal PF:", err);
+              slot.classList.add("text-danger");
+              slot.textContent = "Erro";
+          });
+    });
+})();
+</script>
+}

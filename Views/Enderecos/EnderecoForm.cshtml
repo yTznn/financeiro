@@ -1,18 +1,20 @@
 @model Financeiro.Models.ViewModels.EnderecoViewModel
 @{
+    var isNovo  = Model?.Id == 0;
+    var titulo  = isNovo ? "Novo Endereço" : "Editar Endereço";
     ViewBag.Title = "Cadastro de Endereço";
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
+<h2 class="mb-4">@titulo</h2>
 
-<!-- Mostra erros de validação -->
+<!-- Erros de validação -->
 <div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
 
 <div class="card shadow-sm border-0">
     <div class="card-body">
         <form asp-controller="Enderecos"
-              asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+              asp-action="@(isNovo ? "Salvar" : "Atualizar")"
               method="post"
               class="row g-3">
 
@@ -20,37 +22,48 @@
 
             <!-- chaves ocultas -->
             <input asp-for="Id" type="hidden" />
+            <!-- garante que o parâmetro simples 'id' do action Atualizar receba o valor -->
+            @if (!isNovo)
+            {
+                <input type="hidden" name="id" value="@Model.Id" />
+            }
             <input asp-for="PessoaJuridicaId" type="hidden" />
+            <input asp-for="PessoaFisicaId" type="hidden" />
 
             <div class="col-md-6">
                 <label asp-for="Logradouro" class="form-label fw-semibold"></label>
                 <input asp-for="Logradouro"
+                       class="form-control"
                        placeholder="Rua / Avenida / Travessa"
-                       class="form-control" />
+                       autocomplete="address-line1"
+                       autofocus />
                 <span asp-validation-for="Logradouro" class="text-danger small"></span>
             </div>
 
             <div class="col-md-2">
                 <label asp-for="Numero" class="form-label fw-semibold"></label>
                 <input asp-for="Numero"
+                       class="form-control"
                        placeholder="123 ou SN"
-                       class="form-control" />
+                       autocomplete="address-line2" />
                 <span asp-validation-for="Numero" class="text-danger small"></span>
             </div>
 
             <div class="col-md-4">
                 <label asp-for="Complemento" class="form-label fw-semibold"></label>
                 <input asp-for="Complemento"
-                       placeholder="Quadra, lote, etc."
-                       class="form-control" />
+                       class="form-control"
+                       placeholder="Quadra, lote, etc." />
                 <span asp-validation-for="Complemento" class="text-danger small"></span>
             </div>
 
             <div class="col-md-3">
                 <label asp-for="Cep" class="form-label fw-semibold"></label>
                 <input asp-for="Cep"
+                       class="form-control"
                        placeholder="75920000"
-                       class="form-control" />
+                       inputmode="numeric"
+                       maxlength="8" />
                 <span asp-validation-for="Cep" class="text-danger small"></span>
             </div>
 
@@ -69,21 +82,71 @@
             <div class="col-md-2">
                 <label asp-for="Uf" class="form-label fw-semibold"></label>
                 <input asp-for="Uf"
-                       placeholder="GO"
                        class="form-control text-uppercase"
+                       placeholder="GO"
                        maxlength="2" />
                 <span asp-validation-for="Uf" class="text-danger small"></span>
             </div>
 
+            @if (isNovo)
+            {
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" asp-for="DefinirPrincipal" />
+                        <label class="form-check-label" asp-for="DefinirPrincipal">
+                            Definir como endereço principal
+                        </label>
+                    </div>
+                    <div class="form-text">
+                        Se não houver principal ainda, este será marcado automaticamente.
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="col-12">
+                    @if (Model.EhPrincipal)
+                    {
+                        <span class="badge bg-success"><i class="bi bi-star-fill me-1"></i> Endereço principal</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary"><i class="bi bi-star me-1"></i> Endereço secundário</span>
+                    }
+                </div>
+            }
+
             <div class="col-12 mt-3">
                 <button type="submit" class="btn btn-success px-4">
-                    @(Model.Id == 0 ? "Salvar" : "Atualizar")
+                    <i class="bi bi-save2 me-1"></i> @(isNovo ? "Salvar" : "Atualizar")
                 </button>
-                <a asp-controller="PessoasJuridicas"
-                   asp-action="Index"
-                   class="btn btn-outline-secondary ms-2 px-4">
-                    Cancelar
-                </a>
+
+                @if (Model.PessoaJuridicaId > 0)
+                {
+                    <a asp-controller="Enderecos"
+                       asp-action="GerenciarPessoaJuridica"
+                       asp-route-pessoaJuridicaId="@Model.PessoaJuridicaId"
+                       class="btn btn-outline-secondary ms-2 px-4">
+                        Cancelar
+                    </a>
+                }
+                else if (Model.PessoaFisicaId.HasValue && Model.PessoaFisicaId.Value > 0)
+                {
+                    <a asp-controller="Enderecos"
+                       asp-action="GerenciarPessoaFisica"
+                       asp-route-pessoaFisicaId="@Model.PessoaFisicaId.Value"
+                       class="btn btn-outline-secondary ms-2 px-4">
+                        Cancelar
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="PessoasJuridicas"
+                       asp-action="Index"
+                       class="btn btn-outline-secondary ms-2 px-4">
+                        Cancelar
+                    </a>
+                }
             </div>
         </form>
     </div>
@@ -91,4 +154,30 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const cep = document.getElementById("Cep");
+            if (cep) {
+                cep.addEventListener("input", function () {
+                    this.value = (this.value || "").replace(/\D/g, "").slice(0, 8);
+                }, { passive: true });
+            }
+
+            const uf = document.getElementById("Uf");
+            if (uf) {
+                uf.addEventListener("input", function () {
+                    this.value = (this.value || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
+                }, { passive: true });
+            }
+
+            const form = document.querySelector("form");
+            if (form) {
+                form.addEventListener("submit", function () {
+                    form.querySelectorAll("input[type='text']").forEach(function (el) {
+                        if (el.value) el.value = el.value.trim();
+                    });
+                });
+            }
+        })();
+    </script>
 }
