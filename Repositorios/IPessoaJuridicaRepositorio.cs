@@ -12,6 +12,7 @@ namespace Financeiro.Repositorios
         Task<IEnumerable<PessoaJuridica>> ListarAsync();
         Task<PessoaJuridica?> ObterPorIdAsync(int id);
         Task AtualizarAsync(int id, PessoaJuridicaViewModel vm);
+        Task ExcluirAsync(int id);
         Task<PessoaJuridica?> ObterPorCnpjAsync(string cnpj);
         Task<(IEnumerable<PessoaJuridica> Lista, int TotalRegistros)> ListarPaginadoAsync(int paginaAtual, int itensPorPagina);
 
