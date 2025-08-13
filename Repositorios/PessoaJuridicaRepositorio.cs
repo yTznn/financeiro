@@ -75,5 +75,23 @@ namespace Financeiro.Repositorios
             return await conn.QuerySingleOrDefaultAsync<PessoaJuridica>(sql, new { Cnpj = cnpj });
         }
 
+        public async Task<(IEnumerable<PessoaJuridica> Lista, int TotalRegistros)> ListarPaginadoAsync(int paginaAtual, int itensPorPagina)
+        {
+            const string sqlLista = @"
+                SELECT * FROM PessoaJuridica
+                ORDER BY Id DESC
+                OFFSET @Offset ROWS FETCH NEXT @Limite ROWS ONLY;";
+
+            const string sqlTotal = "SELECT COUNT(*) FROM PessoaJuridica;";
+
+            using var conn = _factory.CreateConnection();
+
+            var offset = (paginaAtual - 1) * itensPorPagina;
+
+            var lista = await conn.QueryAsync<PessoaJuridica>(sqlLista, new { Offset = offset, Limite = itensPorPagina });
+            var total = await conn.ExecuteScalarAsync<int>(sqlTotal);
+
+            return (lista, total);
+        }
     }
 }

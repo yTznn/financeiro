@@ -7,7 +7,6 @@
 }
 
 @functions {
-    // 00.000.000/0000-00
     string FormatCnpj(string? cnpj)
     {
         if (string.IsNullOrWhiteSpace(cnpj)) return "";
@@ -20,7 +19,6 @@
 <style>
     .pj-card{ border-left:4px solid var(--blue); transition:transform .06s ease, box-shadow .06s ease; }
     .pj-card:hover{ transform:translateY(-1px); box-shadow:0 .25rem .75rem rgba(16,36,68,.08); }
-
     .cnpj { font-variant-numeric: tabular-nums; letter-spacing:.2px; }
 
     .addr-grid .label{
@@ -30,7 +28,6 @@
         color:var(--dark); font-weight:600; font-size:1.05rem; line-height:1.3;
     }
 
-    /* conta principal */
     .acc-item { border:1px solid #e9ecef; border-radius:.5rem; padding:.6rem .75rem; display:flex; align-items:start; gap:.5rem; }
     .acc-main { flex:1; }
     .acc-muted { color:#6c757d; font-size:.85rem; }
@@ -50,7 +47,6 @@
     </a>
 </div>
 
-<!-- Antiforgery token para AJAX -->
 <form id="af-token-form" class="d-none">@Html.AntiForgeryToken()</form>
 
 <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
@@ -75,7 +71,6 @@
                     <span class="cnpj">@FormatCnpj(pj.NumeroInscricao)</span>
                 </div>
 
-                <!-- Endereço principal -->
                 <div class="mt-2">
                     <div class="small text-muted mb-1">
                         <i class="bx bx-map me-1"></i> Endereço principal
@@ -86,7 +81,6 @@
                     </div>
                 </div>
 
-                <!-- Conta bancária (somente principal) -->
                 <div class="mt-3">
                     <div class="small text-muted mb-1">
                         <i class="bx bx-bank me-1"></i> Conta bancária (principal)
@@ -122,12 +116,13 @@
                     <a class="btn btn-sm btn-outline-secondary"
                        asp-controller="Enderecos"
                        asp-action="GerenciarPessoaJuridica"
-                       asp-route-pessoaJuridicaId="@pj.Id" title="Endereços">
+                       asp-route-pessoaJuridicaId="@pj.Id">
                         <i class='bx bx-map'></i> Endereços
                     </a>
 
                     <a class="btn btn-sm btn-outline-primary"
-                       asp-action="Editar" asp-route-id="@pj.Id" title="Editar">
+                       asp-action="Editar"
+                       asp-route-id="@pj.Id">
                         <i class='bx bx-pencil'></i> Editar
                     </a>
                 </div>
@@ -137,27 +132,38 @@
 }
 </div>
 
+<!-- Paginação -->
+@if ((int?)ViewBag.TotalPaginas > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            @for (int i = 1; i <= (int)ViewBag.TotalPaginas; i++)
+            {
+                <li class="page-item @(i == (int)ViewBag.PaginaAtual ? "active" : "")">
+                    <a class="page-link" asp-action="Index" asp-route-pagina="@i">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
+
 @section Scripts {
 <script>
 (function () {
-    // base do app (suporta app em subpasta; termina com '/')
     const base = '@Url.Content("~")'.replace(/\/?$/, '/');
 
-    // ====== antiforgery ======
     function getRequestVerificationToken() {
         const form = document.getElementById('af-token-form');
         const inp = form ? form.querySelector('input[name="__RequestVerificationToken"]') : null;
         return inp ? inp.value : null;
     }
 
-    // helper CEP
     function formatCep(cep){
         if(!cep) return '';
         const d = (''+cep).replace(/\D/g,'');
         return d.replace(/^(\d{5})(\d{3})$/,'$1-$2');
     }
 
-    // ====== Endereço principal PJ ======
     document.querySelectorAll(".pj-card").forEach(function(card){
         const id   = card.getAttribute("data-id");
         const slot = document.getElementById(`addr-${id}`);
@@ -181,48 +187,25 @@
                   return;
               }
 
-              // suporta PascalCase ou camelCase no objeto 'endereco'
               const e = j.endereco || {};
               const _ = (a,b) => a ?? b ?? '';
 
               slot.innerHTML = `
                 <div class="addr-grid">
                     <div class="row gx-2 gy-1">
-                        <div class="col-12">
-                            <div class="label">Logradouro</div>
-                            <div class="value">${_(e.Logradouro, e.logradouro)}</div>
-                        </div>
-                        <div class="col-4 col-sm-3">
-                            <div class="label">Número</div>
-                            <div class="value">${_(e.Numero, e.numero)}</div>
-                        </div>
-                        <div class="col-8 col-sm-9">
-                            <div class="label">Complemento</div>
-                            <div class="value">${_(e.Complemento, e.complemento)}</div>
-                        </div>
-                        <div class="col-4 col-sm-3">
-                            <div class="label">CEP</div>
-                            <div class="value">${formatCep(_(e.Cep, e.cep))}</div>
-                        </div>
-                        <div class="col-8 col-sm-3">
-                            <div class="label">Bairro</div>
-                            <div class="value">${_(e.Bairro, e.bairro)}</div>
-                        </div>
-                        <div class="col-8 col-sm-4">
-                            <div class="label">Município</div>
-                            <div class="value">${_(e.Municipio, e.municipio)}</div>
-                        </div>
-                        <div class="col-4 col-sm-2">
-                            <div class="label">UF</div>
-                            <div class="value">${_(e.Uf, e.uf)}</div>
-                        </div>
+                        <div class="col-12"><div class="label">Logradouro</div><div class="value">${_(e.Logradouro, e.logradouro)}</div></div>
+                        <div class="col-4 col-sm-3"><div class="label">Número</div><div class="value">${_(e.Numero, e.numero)}</div></div>
+                        <div class="col-8 col-sm-9"><div class="label">Complemento</div><div class="value">${_(e.Complemento, e.complemento)}</div></div>
+                        <div class="col-4 col-sm-3"><div class="label">CEP</div><div class="value">${formatCep(_(e.Cep, e.cep))}</div></div>
+                        <div class="col-8 col-sm-3"><div class="label">Bairro</div><div class="value">${_(e.Bairro, e.bairro)}</div></div>
+                        <div class="col-8 col-sm-4"><div class="label">Município</div><div class="value">${_(e.Municipio, e.municipio)}</div></div>
+                        <div class="col-4 col-sm-2"><div class="label">UF</div><div class="value">${_(e.Uf, e.uf)}</div></div>
                     </div>
                 </div>`;
           })
           .catch(() => { slot.classList.add("text-danger"); slot.textContent = "Erro"; });
     });
 
-    // ====== Conta bancária principal (UI) ======
     function mask(val) {
         if (!val) return '';
         const t = String(val);
@@ -289,11 +272,8 @@
         }
     }
 
-    // carregar endereço + conta principal por cartão
     document.querySelectorAll(".pj-card").forEach(function(card){
         const id = card.getAttribute("data-id");
-
-        // já carregamos o endereço acima; agora a conta principal
         loadPrincipalAccountFor(id);
     });
 })();
