@@ -1,47 +1,76 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Validacoes;
+using Financeiro.Servicos;
 
 namespace Financeiro.Controllers
 {
     public class PessoasFisicasController : Controller
     {
         private readonly IPessoaFisicaRepositorio _repo;
-        private readonly IContaBancariaRepositorio _contaRepo;       // NOVO
+        private readonly IContaBancariaRepositorio _contaRepo;
         private readonly PessoaFisicaValidacoes _validador;
+        private readonly ILogService _logService;
 
-        public PessoasFisicasController(IPessoaFisicaRepositorio repo,
-                                        PessoaFisicaValidacoes validador,
-                                        IContaBancariaRepositorio contaRepo)   // NOVO
+        public PessoasFisicasController(
+            IPessoaFisicaRepositorio repo,
+            PessoaFisicaValidacoes validador,
+            IContaBancariaRepositorio contaRepo,
+            ILogService logService)
         {
-            _repo       = repo;
-            _validador  = validador;
-            _contaRepo  = contaRepo;                                 // salva
+            _repo      = repo;
+            _validador = validador;
+            _contaRepo = contaRepo;
+            _logService = logService;
         }
 
-        /* ======================= NOVO ======================= */
         [HttpGet]
         public IActionResult Novo()
             => View("PessoaForm", new PessoaFisicaViewModel());
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(PessoaFisicaViewModel vm)
         {
             var res = _validador.Validar(vm);
             if (!res.EhValido)
             {
                 foreach (var e in res.Erros) ModelState.AddModelError(string.Empty, e);
+                TempData["Erro"] = "Corrija os erros do formulário.";
                 return View("PessoaForm", vm);
             }
 
-            await _repo.InserirAsync(vm);
-            return RedirectToAction("Index");
+            try
+            {
+                await _repo.InserirAsync(vm);
+
+                var pfApos = await _repo.ObterPorCpfAsync(vm.Cpf);
+
+                await _logService.RegistrarCriacaoAsync(
+                    "PessoaFisica",
+                    (object)pfApos ?? (object)vm,
+                    pfApos?.Id ?? 0
+                );
+
+                TempData["Sucesso"] = "Pessoa Física criada com sucesso!";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("IX_PessoaFisica_CPF"))
+                    TempData["Erro"] = "Já existe uma pessoa física cadastrada com este CPF.";
+                else
+                    TempData["Erro"] = $"Não foi possível salvar: {ex.Message}";
+
+                // >>> aqui mudamos para REDIRECT no próprio form (Novo)
+                return RedirectToAction("Novo");
+            }
         }
 
-        /* ======================= EDITAR ======================= */
         [HttpGet]
         public async Task<IActionResult> Editar(int id)
         {
@@ -64,6 +93,7 @@ namespace Financeiro.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(int id, PessoaFisicaViewModel vm)
         {
             if (id != vm.Id) return BadRequest();
@@ -72,19 +102,41 @@ namespace Financeiro.Controllers
             if (!res.EhValido)
             {
                 foreach (var e in res.Erros) ModelState.AddModelError(string.Empty, e);
+                TempData["Erro"] = "Corrija os erros do formulário.";
                 return View("PessoaForm", vm);
             }
 
-            await _repo.AtualizarAsync(id, vm);
-            return RedirectToAction("Index");
+            try
+            {
+                var antes = await _repo.ObterPorIdAsync(id);
+                if (antes is null) return NotFound();
+
+                await _repo.AtualizarAsync(id, vm);
+
+                var depois = await _repo.ObterPorIdAsync(id);
+
+                await _logService.RegistrarEdicaoAsync(
+                    "PessoaFisica",
+                    antes,
+                    (object)depois ?? (object)vm,
+                    id
+                );
+
+                TempData["Sucesso"] = "Pessoa Física atualizada com sucesso!";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Não foi possível atualizar: {ex.Message}";
+                return View("PessoaForm", vm);
+            }
         }
 
-        /* ======================= LISTAGEM ======================= */
         [HttpGet]
         public async Task<IActionResult> Index()
         {
             var pessoas = await _repo.ListarAsync();
-            var lista   = new List<PessoaFisicaListaViewModel>();
+            var lista = new List<PessoaFisicaListaViewModel>();
 
             foreach (var p in pessoas)
             {
@@ -98,6 +150,41 @@ namespace Financeiro.Controllers
             }
 
             return View(lista);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Excluir(int id)
+        {
+            try
+            {
+                // Verifica se existe contrato vinculado
+                var possuiContrato = await _repo.ExisteContratoPorPessoaFisicaAsync(id);
+                if (possuiContrato)
+                {
+                    TempData["Erro"] = "Não é possível excluir: existem contratos vinculados a esta Pessoa.";
+                    return RedirectToAction("Index");
+                }
+
+                var pfAntes = await _repo.ObterPorIdAsync(id);
+                if (pfAntes is null) return NotFound();
+
+                await _repo.ExcluirAsync(id);
+
+                await _logService.RegistrarExclusaoAsync(
+                    "PessoaFisica",
+                    pfAntes,
+                    id
+                );
+
+                TempData["Sucesso"] = "Pessoa Física excluída com sucesso!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Não foi possível excluir: {ex.Message}";
+            }
+
+            return RedirectToAction("Index");
         }
     }
 }

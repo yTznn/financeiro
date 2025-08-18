@@ -4,6 +4,11 @@
     Layout = "_Layout";
 }
 
+<!-- FLAGS (para SweetAlert) -->
+<div id="pageFlags"
+     data-success="@TempData["Sucesso"]"
+     data-error="@TempData["Erro"]"></div>
+
 <div class="container-md mt-4" style="max-width: 700px;">
     <h2 class="mb-4 fw-bold">
         <i class="bi bi-person-vcard-fill me-2"></i>@ViewBag.Title
@@ -85,19 +90,25 @@
     <script src="~/lib/jquery-mask/jquery.mask.min.js"></script>
 
     <script>
-        $(document).ready(function () {
-            // CNPJ
+        $(function () {
+
+            // ========== Máscaras
             $('#NumeroInscricao').mask('00.000.000/0000-00');
 
-            // Telefone com máscara dinâmica (fixo e celular)
-            var options = {
-                onKeyPress: function(phone, e, field, options) {
-                    var masks = ['(00) 0000-00009', '(00) 00000-0000'];
-                    var mask = (phone.replace(/\D/g, '').length > 10) ? masks[1] : masks[0];
-                    $('#Telefone').mask(mask, options);
-                }
-            };
-            $('#Telefone').mask('(00) 0000-00009', options);
+            $('#Telefone').mask('(00) 0000-00009').on('keyup', function(){
+                var val  = $(this).val().replace(/\D/g,'');
+                var mask = (val.length > 10) ? '(00) 00000-0000' : '(00) 0000-00009';
+                $(this).mask(mask);
+            });
+
+            // ========== SweetAlert com TempData ==========
+            const flags = document.getElementById("pageFlags");
+            if (flags) {
+                const ok   = (flags.dataset.success || "").trim();
+                const erro = (flags.dataset.error   || "").trim();
+                if (ok)   Swal.fire({ text: ok,   icon: "success" });
+                if (erro) Swal.fire({ text: erro, icon: "error"   });
+            }
         });
     </script>
 }

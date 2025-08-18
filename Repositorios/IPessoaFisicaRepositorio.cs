@@ -11,5 +11,8 @@ namespace Financeiro.Repositorios
         Task<IEnumerable<PessoaFisica>> ListarAsync();
         Task<PessoaFisica?> ObterPorIdAsync(int id);
         Task AtualizarAsync(int id, PessoaFisicaViewModel vm);
+        Task<PessoaFisica?> ObterPorCpfAsync(string cpf);
+        Task<bool> ExisteContratoPorPessoaFisicaAsync(int pessoaFisicaId);
+        Task ExcluirAsync(int id);
     }
 }

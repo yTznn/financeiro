@@ -4,9 +4,14 @@
     Layout = "_Layout";
 }
 
+<!-- FLAGS (TempData) -->
+<div id="pageFlags"
+     data-success="@TempData["Sucesso"]"
+     data-error="@TempData["Erro"]"></div>
+
 <div class="container-md mt-4" style="max-width: 700px;">
     <h2 class="mb-4 fw-bold">
-        <i class="bi bi-person-lines-fill me-2"></i>@ViewBag.Title
+        <i class="bi bi-person-lines-fill me-2"></i> @ViewBag.Title
     </h2>
 
     <form asp-controller="PessoasFisicas"
@@ -16,6 +21,11 @@
 
         @Html.AntiForgeryToken()
         <input asp-for="Id" type="hidden" />
+
+        <!-- ALERTA DE VALIDAÇÃO (Summary) -->
+        <div class="col-12">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        </div>
 
         <div class="col-12">
             <label asp-for="Nome" class="form-label fw-semibold">
@@ -75,7 +85,6 @@
         </div>
 
         <div class="col-12 mt-3">
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
             <button type="submit" class="btn btn-success">
                 <i class="bi bi-save2-fill me-1"></i>
                 @(Model.Id == 0 ? "Salvar" : "Atualizar")
@@ -93,19 +102,23 @@
     <script src="~/lib/jquery-mask/jquery.mask.min.js"></script>
 
     <script>
-        $(document).ready(function () {
-            // CPF
+        // Máscaras
+        $(function(){
             $('#Cpf').mask('000.000.000-00');
+            $('#Telefone').mask('(00) 0000-00009').on('keyup', function(){
+                var val  = $(this).val().replace(/\D/g,'');
+                var mask = (val.length > 10) ? '(00) 00000-0000' : '(00) 0000-00009';
+                $(this).mask(mask);
+            });
 
-            // Telefone com máscara dinâmica (fixo e celular)
-            var options = {
-                onKeyPress: function(phone, e, field, options) {
-                    var masks = ['(00) 0000-00009', '(00) 00000-0000'];
-                    var mask = (phone.replace(/\D/g, '').length > 10) ? masks[1] : masks[0];
-                    $('#Telefone').mask(mask, options);
-                }
-            };
-            $('#Telefone').mask('(00) 0000-00009', options);
+            // SweetAlert com TempData
+            const flags = document.getElementById("pageFlags");
+            if (flags){
+                const ok   = (flags.dataset.success || "").trim();
+                const err  = (flags.dataset.error   || "").trim();
+                if(ok)  Swal.fire({ text: ok,  icon:"success" });
+                if(err) Swal.fire({ text: err, icon:"error"   });
+            }
         });
     </script>
 }

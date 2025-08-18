@@ -58,7 +58,7 @@ namespace Financeiro.Controllers
 
                 await _logService.RegistrarCriacaoAsync(
                     "PessoaJuridica",
-                    ((object)pjAposCriacao) ?? (object)vm,   // <<<< cast para object nos dois lados
+                    ((object)pjAposCriacao) ?? (object)vm,
                     pjAposCriacao?.Id ?? 0
                 );
 
@@ -68,7 +68,7 @@ namespace Financeiro.Controllers
             catch (Exception ex)
             {
                 TempData["Erro"] = $"Não foi possível salvar: {ex.Message}";
-                return View("PessoaForm", vm);
+                return RedirectToAction("Novo");   // <<-- esse é o ponto que muda
             }
         }
 
@@ -118,7 +118,7 @@ namespace Financeiro.Controllers
                 await _logService.RegistrarEdicaoAsync(
                     "PessoaJuridica",
                     antes,
-                    ((object)depois) ?? (object)vm, // <<<< cast para object nos dois lados
+                    ((object)depois) ?? (object)vm,
                     id
                 );
 
@@ -165,6 +165,14 @@ namespace Financeiro.Controllers
         {
             try
             {
+                // Verifica se existe contrato vinculado
+                var possuiContrato = await _repo.ExisteContratoPorPessoaJuridicaAsync(id);
+                if (possuiContrato)
+                {
+                    TempData["Erro"] = "Não é possível excluir: existem contratos vinculados a esta Pessoa.";
+                    return RedirectToAction("Index");
+                }
+
                 var pjAntes = await _repo.ObterPorIdAsync(id);
                 if (pjAntes is null) return NotFound();
 

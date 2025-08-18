@@ -15,6 +15,7 @@ namespace Financeiro.Repositorios
         Task ExcluirAsync(int id);
         Task<PessoaJuridica?> ObterPorCnpjAsync(string cnpj);
         Task<(IEnumerable<PessoaJuridica> Lista, int TotalRegistros)> ListarPaginadoAsync(int paginaAtual, int itensPorPagina);
+        Task<bool> ExisteContratoPorPessoaJuridicaAsync(int pessoaJuridicaId); // <--
 
     }
 }

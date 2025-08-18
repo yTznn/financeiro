@@ -133,7 +133,7 @@ namespace Financeiro.Repositorios
                 throw;
             }
         }
-        
+
         public async Task<PessoaJuridica?> ObterPorCnpjAsync(string cnpj)
         {
             const string sql = @"
@@ -162,6 +162,15 @@ namespace Financeiro.Repositorios
             var total = await conn.ExecuteScalarAsync<int>(sqlTotal);
 
             return (lista, total);
+        }
+        // Adicione este método no final da classe PessoaJuridicaRepositorio:
+
+        public async Task<bool> ExisteContratoPorPessoaJuridicaAsync(int pessoaJuridicaId)
+        {
+            const string sql = "SELECT 1 FROM Contrato WHERE PessoaJuridicaId = @pessoaJuridicaId";
+            using var conn = _factory.CreateConnection();
+            var result = await conn.QueryFirstOrDefaultAsync<int?>(sql, new { pessoaJuridicaId });
+            return result.HasValue;
         }
     }
 }

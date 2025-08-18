@@ -2,12 +2,11 @@
 @using System.Linq
 
 @{
-    ViewBag.Title = "Pessoas Físicas";
+    ViewData["Title"] = "Pessoas Físicas";
     Layout = "_Layout";
 }
 
 @functions {
-    // 000.000.000-00
     string FormatCpf(string? cpf)
     {
         if (string.IsNullOrWhiteSpace(cpf)) return "";
@@ -16,43 +15,30 @@
         return $"{d[..3]}.{d.Substring(3,3)}.{d.Substring(6,3)}-{d.Substring(9,2)}";
     }
 
-    // (00) 0000-0000 ou (00) 00000-0000
     string FormatPhoneBr(string? phone)
     {
         if (string.IsNullOrWhiteSpace(phone)) return "";
         var d = new string(phone.Where(char.IsDigit).ToArray());
-        if (d.Length == 10) // fixo
+        if (d.Length == 10)
             return $"({d[..2]}) {d.Substring(2,4)}-{d.Substring(6,4)}";
-        if (d.Length == 11) // celular
+        if (d.Length == 11)
             return $"({d[..2]}) {d.Substring(2,5)}-{d.Substring(7,4)}";
-        return phone; // mantém como veio se não encaixar
+        return phone;
     }
 }
 
-<style>
-    .pf-card{ border-left:4px solid var(--primary); transition:transform .06s ease, box-shadow .06s ease; }
-    .pf-card:hover{ transform:translateY(-1px); box-shadow:0 .25rem .75rem rgba(16,36,68,.08); }
-    .num { font-variant-numeric: tabular-nums; letter-spacing:.2px; }
-
-    /* contas (apenas principal) */
-    .acc-item { border:1px solid #e9ecef; border-radius:.5rem; padding:.6rem .75rem; display:flex; align-items:start; gap:.5rem; }
-    .acc-main { flex:1; }
-    .acc-muted { color:#6c757d; font-size:.85rem; }
-    .acc-actions .btn { padding:.25rem .5rem; }
-    .acc-chip { font-size:.75rem; padding:.15rem .4rem; border-radius:999px; }
-    .chip-principal { background:#fff3cd; color:#8a6d3b; border:1px solid #ffe8a1; }
-    .secret { filter: blur(3px); transition: filter .15s ease; }
-    .secret.show { filter: none; }
-</style>
+<!-- Flags para toasts -->
+<div id="pageFlags"
+     data-success="@TempData["Sucesso"]"
+     data-error="@TempData["Erro"]"></div>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="fw-bold text-primary mb-0">@ViewBag.Title</h2>
+    <h2 class="fw-bold text-primary mb-0">@ViewData["Title"]</h2>
     <a asp-action="Novo" class="btn btn-primary">
         <i class="bx bx-user-plus me-1"></i> Nova Pessoa Física
     </a>
 </div>
 
-<!-- Antiforgery token para AJAX -->
 <form id="af-token-form" class="d-none">@Html.AntiForgeryToken()</form>
 
 <div class="row g-3">
@@ -72,23 +58,21 @@
                     </span>
                 </div>
 
+                <!-- Endereço principal -->
                 <div class="mt-3">
                     <div class="small text-muted mb-1">Endereço principal</div>
                     <div id="addr-@pf.Id" class="small">
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        Carregando…
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…
                     </div>
                 </div>
 
-                <!-- Conta bancária (somente principal) -->
+                <!-- Conta principal -->
                 <div class="mt-3">
                     <div class="small text-muted mb-1">
                         <i class="bx bx-bank me-1"></i> Conta bancária (principal)
                     </div>
-
                     <div id="acc-@pf.Id" class="small">
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        Carregando…
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…
                     </div>
 
                     <div class="mt-2 d-flex gap-2">
@@ -118,7 +102,7 @@
                     <a class="btn btn-sm btn-outline-secondary"
                        asp-controller="Enderecos"
                        asp-action="GerenciarPessoaFisica"
-                       asp-route-pessoaFisicaId="@pf.Id" title="Endereços">
+                       asp-route-pessoaFisicaId="@pf.Id">
                         <i class='bx bx-map'></i> Endereços
                     </a>
 
@@ -127,6 +111,17 @@
                        asp-route-id="@pf.Id">
                         <i class='bx bx-pencil'></i> Editar
                     </a>
+
+                    <form asp-action="Excluir"
+                          asp-route-id="@pf.Id"
+                          method="post"
+                          class="d-inline js-delete-pf"
+                          data-nome="@pf.Nome @pf.Sobrenome">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class='bx bx-trash'></i> Excluir
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -139,117 +134,98 @@
 (function () {
     const base = '@Url.Content("~")'.replace(/\/?$/, '/');
 
-    // ====== antiforgery ======
-    function getRequestVerificationToken() {
-        const form = document.getElementById('af-token-form');
-        const inp = form ? form.querySelector('input[name="__RequestVerificationToken"]') : null;
-        return inp ? inp.value : null;
-    }
+    // Toasts (TempData)
+    (function () {
+        const flags = document.getElementById("pageFlags");
+        if (!flags) return;
+        const ok   = (flags.dataset.success || "").trim();
+        const err  = (flags.dataset.error   || "").trim();
+        if (ok)  Swal.fire({ text: ok,  icon:"success" });
+        if (err) Swal.fire({ text: err, icon:"error"   });
+    })();
 
-    // ====== Endereço principal (já existia) ======
+    // Endereço principal
     function formatEndereco(e) {
         if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
-        const log = e.logradouro ?? e.Logradouro ?? "";
-        const num = e.numero ?? e.Numero ?? "";
-        const bai = e.bairro ?? e.Bairro ?? "";
-        const mun = e.municipio ?? e.Municipio ?? "";
-        const uf  = e.uf ?? e.Uf ?? "";
-        const cep = e.cep ?? e.Cep ?? "";
-
-        const linha1 = [log, num].filter(Boolean).join(", ");
-        const linha2 = [bai, mun].filter(Boolean).join(" - ");
-        const linha3 = [uf, cep].filter(Boolean).join(" • ");
-
-        return [linha1, linha2, linha3].filter(Boolean).join("<br>");
+        const l1 = [e.logradouro ?? e.Logradouro, e.numero  ?? e.Numero ].filter(Boolean).join(', ');
+        const l2 = [e.bairro     ?? e.Bairro,     e.municipio??e.Municipio].filter(Boolean).join(' - ');
+        const l3 = [e.uf         ?? e.Uf,         e.cep      ?? e.Cep     ].filter(Boolean).join(' • ');
+        return [l1,l2,l3].filter(Boolean).join("<br>");
     }
 
-    // ====== helpers de conta ======
     function mask(val) {
         if (!val) return '';
-        const t = String(val);
-        if (t.length <= 2) return '*'.repeat(t.length);
-        return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
+        const s = String(val);
+        if (s.length <= 2) return '*'.repeat(s.length);
+        return s[0] + '*'.repeat(s.length-2) + s[s.length-1];
     }
 
-    function renderPrincipal(slot, acc, pessoaId){
+    function renderPrincipal(slot, acc, pfId) {
         if (!acc) {
             slot.innerHTML = `<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>`;
             return;
         }
-
-        const banco     = acc.banco ?? acc.Banco ?? '';
-        const agencia   = acc.agencia ?? acc.Agencia ?? '';
-        const conta     = acc.conta ?? acc.Conta ?? '';
-        const pix       = acc.chavePix ?? acc.ChavePix ?? '';
-        const vinculoId = acc.vinculoId ?? acc.VinculoId;
-
+        const banco = acc.banco ?? acc.Banco ?? '';
+        const agencia = acc.agencia ?? acc.Agencia ?? '';
+        const conta = acc.conta ?? acc.Conta ?? '';
+        const pix = acc.chavePix ?? acc.ChavePix ?? '';
+        const vinc = acc.vinculoId ?? acc.VinculoId;
         slot.innerHTML = `
-          <div class="acc-item" data-vinculo="${vinculoId}">
+          <div class="acc-item">
             <div class="acc-main">
-              <div><strong>${banco || '(Sem banco)'}</strong>
-                <span class="acc-chip chip-principal ms-2">
-                  <i class='bx bxs-star me-1'></i> Principal
-                </span>
+              <div><strong>${banco}</strong>
+                <span class="acc-chip chip-principal ms-2"><i class='bx bxs-star me-1'></i> Principal</span>
               </div>
               <div class="acc-muted">
                 Agência: <span class="secret" data-secret>${mask(agencia)}</span> ·
                 Conta: <span class="secret" data-secret>${mask(conta)}</span>
-                ${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}
+                ${pix?` · Pix: <span class="secret" data-secret>${mask(pix)}</span>`:''}
               </div>
             </div>
-            <div class="acc-actions d-flex gap-1">
-              <button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar">
-                <i class='bx bx-low-vision'></i>
-              </button>
-              <a class="btn btn-light border" href="${base}ContasBancarias/Editar?vinculoId=${vinculoId}" title="Editar">
-                <i class='bx bx-pencil'></i>
-              </a>
-              <a class="btn btn-light border" href="${base}ContasBancarias/IndexPF?pessoaId=${pessoaId}" title="Ver todas">
-                <i class='bx bx-list-ul'></i>
-              </a>
-            </div>
           </div>`;
-
-        slot.querySelector('.toggle-visibility')?.addEventListener('click', function(e){
-            e.preventDefault();
-            slot.querySelectorAll('[data-secret]').forEach(s => s.classList.toggle('show'));
-        });
     }
 
-    async function loadPrincipalAccountFor(pfId) {
-        const slot = document.getElementById(`acc-${pfId}`);
+    async function loadPrincipalAccountFor(id) {
+        const slot = document.getElementById(`acc-${id}`);
         if (!slot) return;
         slot.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…`;
-        try {
-            const url = `${base}ContasBancarias/PessoaFisica/${pfId}/Principal`;
-            const r = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        try{
+            const r = await fetch(`${base}ContasBancarias/PessoaFisica/${id}/Principal`);
             const j = await r.json();
-            if (!j?.sucesso) { slot.classList.add("text-danger"); slot.textContent = "Falha ao carregar"; return; }
-            renderPrincipal(slot, j.possuiPrincipal ? j.conta : null, pfId);
-        } catch {
-            slot.classList.add("text-danger"); slot.textContent = "Erro";
-        }
+            renderPrincipal(slot, j.possuiPrincipal? j.conta : null, id);
+        }catch{ slot.textContent = "Erro"; }
     }
 
-    // ====== carregar endereços + conta principal por cartão ======
-    document.querySelectorAll("[data-id]").forEach(function (wrap) {
-        const id = wrap.getAttribute("data-id");
+    // Carregar dados de cada cartão
+    document.querySelectorAll('[data-id]').forEach(function(card){
+        const id = card.getAttribute('data-id');
 
         // Endereço principal
         const slotAddr = document.getElementById(`addr-${id}`);
-        const urlAddr  = `${base}Enderecos/PessoaFisica/${id}/Principal`;
-        fetch(urlAddr, { headers: { "X-Requested-With": "XMLHttpRequest" } })
-          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-          .then(j => {
-              if(!j?.sucesso) { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Falha ao carregar"; return; }
-              slotAddr.innerHTML = j.possuiPrincipal ? formatEndereco(j.endereco)
-                                   : "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
-          })
-          .catch(() => { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Erro"; });
+        fetch(`${base}Enderecos/PessoaFisica/${id}/Principal`)
+          .then(r=>r.json())
+          .then(j=>{ slotAddr.innerHTML = j.possuiPrincipal ? formatEndereco(j.endereco) : "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>"; })
+          .catch(()=>{ slotAddr.textContent = "Erro"; });
 
         // Conta principal
         loadPrincipalAccountFor(id);
+    });
+
+    // Confirmação de exclusão
+    document.addEventListener("submit", function(e){
+        const form = e.target;
+        if(!form.matches(".js-delete-pf")) return;
+
+        e.preventDefault();
+        const nome = form.getAttribute("data-nome") || "";
+        Swal.fire({
+            title: "Excluir pessoa física?",
+            text:  `Tem certeza que deseja excluir "${nome}"? Essa ação é irreversível.`,
+            icon:  "warning",
+            showCancelButton: true,
+            confirmButtonText: "Sim, excluir",
+            cancelButtonText:  "Cancelar"
+        }).then(r => { if (r.isConfirmed) form.submit(); });
     });
 })();
 </script>

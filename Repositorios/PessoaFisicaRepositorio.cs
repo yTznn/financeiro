@@ -37,6 +37,13 @@ VALUES(@Nome, @Sobrenome, @Cpf, @DataNascimento, @Email, @Telefone, @SituacaoAti
             return await conn.QuerySingleOrDefaultAsync<PessoaFisica>(sql, new { Id = id });
         }
 
+        public async Task<PessoaFisica?> ObterPorCpfAsync(string cpf)
+        {
+            const string sql = "SELECT * FROM PessoaFisica WHERE Cpf = @cpf;";
+            using var conn = _factory.CreateConnection();
+            return await conn.QuerySingleOrDefaultAsync<PessoaFisica>(sql, new { cpf });
+        }
+
         public async Task AtualizarAsync(int id, PessoaFisicaViewModel vm)
         {
             const string sql = @"
@@ -62,6 +69,43 @@ WHERE Id = @Id;";
                 vm.Telefone,
                 vm.SituacaoAtiva
             });
+        }
+
+        public async Task<bool> ExisteContratoPorPessoaFisicaAsync(int pessoaFisicaId)
+        {
+            const string sql = "SELECT 1 FROM Contrato WHERE PessoaFisicaId = @pessoaFisicaId";
+            using var conn = _factory.CreateConnection();
+            var r = await conn.QueryFirstOrDefaultAsync<int?>(sql, new { pessoaFisicaId });
+            return r.HasValue;
+        }
+
+        public async Task ExcluirAsync(int id)
+        {
+            using var conn = _factory.CreateConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            try
+            {
+                // ===== 1) PessoaEndereco
+                const string delEnd = @"DELETE FROM PessoaEndereco WHERE PessoaFisicaId = @Id;";
+                await conn.ExecuteAsync(delEnd, new { Id = id }, tx);
+
+                // ===== 2) PessoaConta
+                const string delConta = @"DELETE FROM PessoaConta WHERE PessoaFisicaId = @Id;";
+                await conn.ExecuteAsync(delConta, new { Id = id }, tx);
+
+                // ===== 3) PessoaFisica
+                const string delPF = @"DELETE FROM PessoaFisica WHERE Id = @Id;";
+                await conn.ExecuteAsync(delPF, new { Id = id }, tx);
+
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
     }
 }
