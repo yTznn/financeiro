@@ -85,14 +85,17 @@ builder.Services.AddScoped<IUsuarioEntidadeRepositorio, UsuarioEntidadeRepositor
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 #endregion
 
-#region 🚀 Novos – Serviços de Endereço e Logs
-// Serviços de Endereço (adicionados agora)
+#region 🚀 Novos – Serviços de Endereço, Logs e Justificativas
+// Serviços de Endereço
 builder.Services.AddScoped<IEntidadeEnderecoService, EntidadeEnderecoService>();
 builder.Services.AddScoped<IEnderecoService, EnderecoService>();
 
-// Serviços de Logs
+// Logs
 builder.Services.AddScoped<ILogService, LogService>();
 builder.Services.AddHttpContextAccessor(); // necessário para obter dados do usuário logado
+
+// 💬 Justificativas
+builder.Services.AddScoped<IJustificativaService, JustificativaService>();
 #endregion
 
 var app = builder.Build();
