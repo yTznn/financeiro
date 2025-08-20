@@ -1,31 +1,34 @@
 @model Financeiro.Models.ViewModels.ContratoViewModel
 @using Financeiro.Models
+
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
-    var naturezas = ViewBag.Naturezas as IEnumerable<Natureza> ?? Enumerable.Empty<Natureza>();
+    var naturezas       = ViewBag.Naturezas as IEnumerable<Natureza> ?? Enumerable.Empty<Natureza>();
     var fornecedorAtual = ViewBag.FornecedorAtual as VwFornecedor;
 }
 
-@if (TempData["MensagemSucesso"] != null)
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        @TempData["MensagemSucesso"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+<div id="pageFlags"
+     data-success="@TempData["Sucesso"]"
+     data-error="@TempData["Erro"]"></div>
 
-<h3 class="fw-bold mb-4">
-    <i class="bi bi-file-earmark-text-fill me-2"></i>@ViewData["Title"]
-</h3>
+<h3 class="fw-bold mb-4"><i class="bi bi-file-earmark-text-fill me-2"></i>@ViewData["Title"]</h3>
 <hr />
 
-<form asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post" class="container px-3">
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-    <input type="hidden" asp-for="Id" />
+<form id="form-contrato"
+      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
+      method="post"
+      class="row g-3">
 
-    <div class="mb-3">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" name="justificativa" id="justificativa-hidden" />
+
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger col-12"></div>
+
+    <!-- Fornecedor -->
+    <div class="col-12">
         <label asp-for="FornecedorIdCompleto" class="form-label fw-semibold"></label>
-        <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-select">
+        <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-select w-100">
             @if (fornecedorAtual != null)
             {
                 <option value="@Model.FornecedorIdCompleto" selected>
@@ -33,86 +36,82 @@
                 </option>
             }
         </select>
-        <span asp-validation-for="FornecedorIdCompleto" class="text-danger"></span>
     </div>
 
-    <div class="mb-3">
+    <!-- Ano / Número -->
+    <div class="col-12 col-md-6">
         <label asp-for="AnoContrato" class="form-label fw-semibold"></label>
-        <input asp-for="AnoContrato" class="form-control" type="number" />
-        <span asp-validation-for="AnoContrato" class="text-danger"></span>
+        <input asp-for="AnoContrato" type="number" class="form-control" />
     </div>
-
-    <div class="mb-3">
+    <div class="col-12 col-md-6">
         <label asp-for="NumeroContrato" class="form-label fw-semibold"></label>
-        <input asp-for="NumeroContrato" class="form-control" type="number" />
-        <span asp-validation-for="NumeroContrato" class="text-danger"></span>
+        <input asp-for="NumeroContrato" type="number" class="form-control" />
     </div>
 
-    <div class="mb-3">
+    <!-- Objeto -->
+    <div class="col-12">
         <label asp-for="ObjetoContrato" class="form-label fw-semibold"></label>
         <textarea asp-for="ObjetoContrato" class="form-control" rows="3"></textarea>
-        <span asp-validation-for="ObjetoContrato" class="text-danger"></span>
     </div>
 
-    <div class="row mb-3">
-        <div class="col-md-4">
-            <label asp-for="DataInicio" class="form-label fw-semibold"></label>
-            <input asp-for="DataInicio" class="form-control" type="date" />
-            <span asp-validation-for="DataInicio" class="text-danger"></span>
-        </div>
-        <div class="col-md-4">
-            <label asp-for="DataFim" class="form-label fw-semibold"></label>
-            <input asp-for="DataFim" class="form-control" type="date" />
-            <span asp-validation-for="DataFim" class="text-danger"></span>
-        </div>
-        <div class="col-md-4">
-            <label asp-for="DataAssinatura" class="form-label fw-semibold"></label>
-            <input asp-for="DataAssinatura" class="form-control" type="date" />
-            <span asp-validation-for="DataAssinatura" class="text-danger"></span>
-        </div>
+    <!-- Datas -->
+    <div class="col-12 col-md-4">
+        <label asp-for="DataInicio" class="form-label fw-semibold"></label>
+        <input asp-for="DataInicio" type="date" class="form-control" />
+    </div>
+    <div class="col-12 col-md-4">
+        <label asp-for="DataFim" class="form-label fw-semibold"></label>
+        <input asp-for="DataFim" type="date" class="form-control" />
+    </div>
+    <div class="col-12 col-md-4">
+        <label asp-for="DataAssinatura" class="form-label fw-semibold"></label>
+        <input asp-for="DataAssinatura" type="date" class="form-control" />
     </div>
 
-    <div class="mb-3">
+    <!-- Valor -->
+    <div class="col-12 col-md-4">
         <label asp-for="ValorContrato" class="form-label fw-semibold"></label>
-        <input asp-for="ValorContrato" class="form-control" type="number" step="0.01" />
-        <span asp-validation-for="ValorContrato" class="text-danger"></span>
+        <input asp-for="ValorContrato" type="number" step="0.01" class="form-control" />
     </div>
 
-    <div class="mb-3">
+    <!-- Naturezas -->
+    <div class="col-12">
         <label asp-for="NaturezasIds" class="form-label fw-semibold"></label>
-        <select asp-for="NaturezasIds" class="form-select" id="naturezas-select" multiple>
-            @foreach(var natureza in naturezas)
-            {
-                <option value="@natureza.Id">@natureza.Nome</option>
-            }
+        <select asp-for="NaturezasIds" id="naturezas-select" multiple class="form-select w-100">
+            @foreach (var n in naturezas) { <option value="@n.Id">@n.Nome</option> }
         </select>
-        <span asp-validation-for="NaturezasIds" class="text-danger"></span>
     </div>
 
-    <div class="mb-3">
+    <!-- Observação -->
+    <div class="col-12">
         <label asp-for="Observacao" class="form-label fw-semibold"></label>
         <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
     </div>
 
-    <div class="form-check mb-4">
-        <input class="form-check-input" type="checkbox" asp-for="Ativo">
-        <label class="form-check-label fw-semibold" asp-for="Ativo"></label>
+    <!-- Ativo -->
+    <div class="col-12">
+        <div class="form-check">
+            <input asp-for="Ativo" class="form-check-input" type="checkbox" />
+            <label asp-for="Ativo" class="form-check-label fw-semibold"></label>
+        </div>
     </div>
 
-    <div>
+    <!-- Botões -->
+    <div class="col-12">
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-check-circle me-1"></i> Salvar Alterações
         </button>
-        <a asp-action="Index" class="btn btn-secondary ms-2">
-            <i class="bi bi-x-circle me-1"></i> Cancelar
-        </a>
 
         @if (Model.Id > 0)
         {
-            <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-info float-end">
+            <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-info">
                 <i class="bi bi-plus-circle me-1"></i> Aditivar Contrato
             </a>
         }
+
+        <a asp-action="Index" class="btn btn-secondary">
+            <i class="bi bi-x-circle me-1"></i> Cancelar
+        </a>
     </div>
 </form>
 
@@ -120,62 +119,67 @@
 {
     <hr class="my-4" />
     <h4 class="fw-bold">Histórico de Aditivos</h4>
-    <div id="historico-container">
-        <p>Carregando histórico...</p>
-    </div>
+    <div id="historico-container"><p>Carregando histórico...</p></div>
 }
 
 @section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
 
     <script>
-        $(document).ready(function () {
-            $('#fornecedor-select').select2({
-                theme: 'bootstrap-5',
-                placeholder: 'Digite para buscar um fornecedor',
-                minimumInputLength: 1,
-                ajax: {
-                    url: '@Url.Action("BuscarFornecedores", "Contratos")',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) {
-                        return {
-                            term: params.term,
-                            page: params.page || 1
-                        };
-                    },
-                    processResults: function (data, params) {
-                        params.page = params.page || 1;
-                        return {
-                            results: data.results,
-                            pagination: {
-                                more: data.pagination.more
-                            }
-                        };
-                    },
-                    cache: true
-                }
-            });
+        // SweetAlert
+        const flags = document.getElementById("pageFlags");
+        if (flags) {
+            const ok  = (flags.dataset.success || "").trim();
+            const err = (flags.dataset.error   || "").trim();
+            if (ok)  Swal.fire({ icon:"success", text: ok });
+            if (err) Swal.fire({ icon:"error",   text: err });
+        }
 
-            $('#naturezas-select').select2({
-                theme: 'bootstrap-5',
-                placeholder: 'Selecione uma ou mais naturezas'
-            });
+        $('#fornecedor-select').select2({ theme:'bootstrap-5', width:'100%', minimumInputLength:1, ajax:{url:'@Url.Action("BuscarFornecedores","Contratos")',dataType:'json',delay:250,data:p=>({term:p.term,page:p.page||1}),processResults:(d,p)=>({results:d.results,pagination:{more:d.pagination.more}})}});
 
-            $('#AnoContrato').on('change', function () {
-                var ano = $(this).val();
-                if (ano && @Model.Id == 0) {
-                    $.get('@Url.Action("SugerirNumero", "Contratos")', { ano: ano }, function (data) {
-                        $('#NumeroContrato').val(data.proximoNumero);
-                    });
-                }
-            }).trigger('change');
+        $('#naturezas-select').select2({ theme:'bootstrap-5', width:'100%' });
 
-            if (@Model.Id > 0) {
-                $('#historico-container').load('@Url.Action("Historico", "Contratos", new { id = Model.Id })');
+        $('#AnoContrato').on('change', function () {
+            var ano = $(this).val();
+            if (ano && @Model.Id == 0) {
+                $.get('@Url.Action("SugerirNumero","Contratos")', { ano: ano }, function (d) { $('#NumeroContrato').val(d.proximoNumero); });
+            }
+        }).trigger('change');
+
+        @if (Model.Id > 0)
+        {
+            <text>$('#historico-container').load('@Url.Action("Historico","Contratos", new { id = Model.Id })');</text>
+        }
+
+        $('#form-contrato').on('submit', async function (e) {
+            const ids = $('#naturezas-select').val() || [];
+            if (ids.length > 1) {
+                e.preventDefault();
+                const result = await Swal.fire({title:"Justificativa necessária",text:"Foi selecionado mais de uma Natureza. Informe a justificativa:",input:"textarea",showCancelButton:true});
+                if (!result.isConfirmed || !result.value) { return false; }
+                $('#justificativa-hidden').val(result.value);
+                $(this).off('submit').submit();
             }
         });
     </script>
+}
+
+@{
+<text>
+<style>
+    @@media (max-width: 767.98px) {
+        .col-12 > .btn {
+            display:block;
+            width:100%;
+            float:none !important;
+            margin-bottom:8px;
+            margin-left:0 !important;
+            margin-right:0 !important;
+        }
+        .col-12 > .btn-primary   { order:1; }
+        .col-12 > .btn-info      { order:2; }
+        .col-12 > .btn-secondary { order:3; }
+    }
+</style>
+</text>
 }

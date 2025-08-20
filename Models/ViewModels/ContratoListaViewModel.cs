@@ -12,5 +12,7 @@ namespace Financeiro.Models.ViewModels
 
         // Contém apenas o nome do fornecedor para exibição
         public string FornecedorNome { get; set; } = string.Empty;
+
+        public int QuantidadeAditivos { get; set; }
     }
 }

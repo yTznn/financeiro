@@ -18,7 +18,6 @@ namespace Financeiro.Repositorios
 
         public async Task InserirAsync(ContratoVersao versao)
         {
-            // ✅ CORREÇÃO: Adicionado o campo DataInicioAditivo ao comando SQL
             const string sql = @"
                 INSERT INTO ContratoVersao 
                     (ContratoId, Versao, ObjetoContrato, DataInicio, DataFim, ValorContrato, TipoAditivo, Observacao, DataRegistro, DataInicioAditivo)
@@ -29,7 +28,6 @@ namespace Financeiro.Repositorios
             await conn.ExecuteAsync(sql, versao);
         }
 
-        // O resto dos métodos (ObterVersaoAtualAsync, ListarPaginadoAsync, etc.) permanecem os mesmos...
         public async Task<ContratoVersao?> ObterVersaoAtualAsync(int contratoId)
         {
             const string sql = @"
@@ -65,17 +63,53 @@ namespace Financeiro.Repositorios
                 WHERE ContratoId = @contratoId;";
 
             using var conn = _factory.CreateConnection();
-            var itens = await conn.QueryAsync<ContratoVersao>(sqlItens, new 
-            { 
-                contratoId, 
-                Offset = (pagina - 1) * tamanhoPagina, 
-                TamanhoPagina = tamanhoPagina 
+            var itens = await conn.QueryAsync<ContratoVersao>(sqlItens, new
+            {
+                contratoId,
+                Offset = (pagina - 1) * tamanhoPagina,
+                TamanhoPagina = tamanhoPagina
             });
 
-            var totalItens = await conn.ExecuteScalarAsync<int>(sqlCount, new { contratoId });
+            var totalItens   = await conn.ExecuteScalarAsync<int>(sqlCount, new { contratoId });
             var totalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
 
             return (itens, totalPaginas);
+        }
+
+        // ✅ Quantidade total de aditivos de um contrato
+        public async Task<int> ContarPorContratoAsync(int contratoId)
+        {
+            const string sql = "SELECT COUNT(*) FROM ContratoVersao WHERE ContratoId = @contratoId;";
+            using var conn = _factory.CreateConnection();
+            return await conn.ExecuteScalarAsync<int>(sql, new { contratoId });
+        }
+
+        // ✅ Exclui a versão (aditivo)
+        public async Task ExcluirAsync(int versaoId)
+        {
+            const string sql = "DELETE FROM ContratoVersao WHERE Id = @versaoId;";
+            using var conn = _factory.CreateConnection();
+            await conn.ExecuteAsync(sql, new { versaoId });
+        }
+
+        // ✅ Restaura os campos do contrato com base na versão anterior
+        public async Task RestaurarContratoAPartirDaVersaoAsync(ContratoVersao versaoAnterior)
+        {
+            const string sql = @"
+                UPDATE Contrato
+                SET  ValorContrato  = @ValorContrato,
+                     DataFim        = @DataFim,
+                     ObjetoContrato = @ObjetoContrato
+                WHERE Id = @ContratoId;";
+
+            using var conn = _factory.CreateConnection();
+            await conn.ExecuteAsync(sql, new
+            {
+                versaoAnterior.ValorContrato,
+                versaoAnterior.DataFim,
+                versaoAnterior.ObjetoContrato,
+                versaoAnterior.ContratoId
+            });
         }
     }
 }

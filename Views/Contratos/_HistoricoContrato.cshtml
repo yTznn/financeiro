@@ -1,73 +1,142 @@
 @model IEnumerable<Financeiro.Models.ContratoVersao>
 @using System.Globalization
+
 @{
     var culturaBrasileira = new CultureInfo("pt-BR");
-    int totalPaginas = ViewBag.TotalPaginas;
-    int paginaAtual = ViewBag.PaginaAtual;
-    int contratoId = ViewBag.ContratoId;
+    int totalPaginas  = ViewBag.TotalPaginas;
+    int paginaAtual   = ViewBag.PaginaAtual;
+    int contratoId    = ViewBag.ContratoId;
+    var ultimaVersao  = Model?.FirstOrDefault();
 }
 
-<table class="table table-sm table-hover table-bordered align-middle">
+<!-- ======= TABLE (desktop) ======= -->
+<table class="table table-sm table-hover table-bordered align-middle d-none d-md-table">
     <thead class="table-light">
         <tr>
-            <th style="width: 70px;">Versão</th>
-            <th style="width: 160px;">Tipo de Aditivo</th>
-            <th style="width: 150px;">Início do Aditivo</th>
-            <th style="width: 120px;">Valor</th>
+            <th style="width:70px;">Versão</th>
+            <th style="width:160px;">Tipo de Aditivo</th>
+            <th style="width:150px;">Início do Aditivo</th>
+            <th style="width:120px;">Valor</th>
             <th>Vigência</th>
-            <th style="width: 170px;">Data do Registro</th>
+            <th style="width:170px;">Data/Hora do Registro</th>
+            <th style="width:80px;"></th>
         </tr>
     </thead>
     <tbody>
-        @foreach (var versao in Model)
+        @foreach (var v in Model)
         {
+            var ehUltima = (ultimaVersao != null && v.Versao == ultimaVersao.Versao);
             <tr>
-                <td>@versao.Versao</td>
-                <td>@(versao.TipoAditivo?.ToString() ?? "Original")</td>
-                <td>@(versao.DataInicioAditivo?.ToString("dd/MM/yyyy") ?? "---")</td>
-                <td>@versao.ValorContrato.ToString("C", culturaBrasileira)</td>
-                <td>@versao.DataInicio.ToString("dd/MM/yyyy") a @versao.DataFim.ToString("dd/MM/yyyy")</td>
-                <td>@versao.DataRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                <td>@v.Versao</td>
+                <td>@(v.TipoAditivo?.ToString() ?? "Original")</td>
+                <td>@(v.DataInicioAditivo?.ToString("dd/MM/yyyy") ?? "---")</td>
+                <td>@v.ValorContrato.ToString("C", culturaBrasileira)</td>
+                <td>@v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</td>
+                <td>@v.DataRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                <td class="text-center">
+                    @if (ehUltima && v.TipoAditivo != null)
+                    {
+                        <button class="btn btn-sm btn-outline-danger js-cancelar-aditivo"
+                                data-versao="@v.Versao"
+                                data-contrato-id="@contratoId">Cancelar</button>
+                    }
+                </td>
             </tr>
         }
     </tbody>
 </table>
 
+<!-- ======= ACCORDION (mobile) ======= -->
+<div class="accordion d-md-none" id="historicoAccordion">
+    @foreach (var v in Model)
+    {
+        var ehUltima = (ultimaVersao != null && v.Versao == ultimaVersao.Versao);
+        var collapseId = $"collapse-{v.Versao}";
+
+        <div class="accordion-item mb-2">
+            <h2 class="accordion-header" id="h@collapseId">
+                <button class="accordion-button collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#@collapseId">
+                    Versão @v.Versao
+                </button>
+            </h2>
+            <div id="@collapseId"
+                 class="accordion-collapse collapse"
+                 data-bs-parent="#historicoAccordion">
+                <div class="accordion-body small">
+                    <p><strong>Tipo:</strong> @(v.TipoAditivo?.ToString() ?? "Original")</p>
+                    <p><strong>Início do Aditivo:</strong> @(v.DataInicioAditivo?.ToString("dd/MM/yyyy") ?? "---")</p>
+                    <p><strong>Valor:</strong> @v.ValorContrato.ToString("C", culturaBrasileira)</p>
+                    <p><strong>Vigência:</strong> @v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</p>
+                    <p><strong>Data/Hora Registro:</strong> @v.DataRegistro.ToString("dd/MM/yyyy HH:mm")</p>
+
+                    @if (ehUltima && v.TipoAditivo != null)
+                    {
+                        <button class="btn btn-sm btn-outline-danger js-cancelar-aditivo"
+                                data-versao="@v.Versao"
+                                data-contrato-id="@contratoId">
+                            Cancelar Aditivo
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
 @if (totalPaginas > 1)
 {
-    <nav>
-        <ul class="pagination pagination-sm justify-content-center mt-2">
+    <nav class="mt-2">
+        <ul class="pagination pagination-sm justify-content-center">
             @for (var i = 1; i <= totalPaginas; i++)
             {
                 <li class="page-item @(i == paginaAtual ? "active" : "")">
                     <a class="page-link historico-page-link"
                        href="#"
                        data-page="@i"
-                       data-contrato-id="@contratoId">
-                        @i
-                    </a>
+                       data-contrato-id="@contratoId">@i</a>
                 </li>
             }
+        }
         </ul>
     </nav>
 }
 
 <script>
-    $(document).ready(function () {
-        $('.historico-page-link').on('click', function (e) {
-            e.preventDefault();
+    $(document).on('click', '.historico-page-link', function (e) {
+        e.preventDefault();
+        const page       = $(this).data('page');
+        const contratoId = $(this).data('contrato-id');
+        window.location.href = '@Url.Action("Editar","Contratos")' + '?id=' + contratoId + '&pagina=' + page;
+    });
 
-            const page = $(this).data('page');
-            const contratoId = $(this).data('contrato-id');
-            const url = '@Url.Action("Historico", "Contratos")' + '?id=' + contratoId + '&pag=' + page;
+    $(document).on('click', '.js-cancelar-aditivo', async function(){
+        const contratoId = $(this).data('contrato-id');
+        const versao     = $(this).data('versao');
 
-            $('#historico-container').html(
-                `<div class="text-center p-3">
-                    <div class="spinner-border text-primary"></div>
-                </div>`
-            );
-
-            $('#historico-container').load(url);
+        const result = await Swal.fire({
+            title: "Cancelar aditivo (v" + versao + ")?",
+            text : "Informe a justificativa:",
+            input: "textarea",
+            showCancelButton: true,
+            confirmButtonText: "Confirmar"
         });
+
+        if (!result.isConfirmed || !result.value) return;
+
+        const r = await fetch('@Url.Action("CancelarAditivo","Aditivos")',{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ contratoId, versao, justificativa: result.value })
+        });
+
+        if(r.ok){
+            await Swal.fire({ icon:"success", text:"Aditivo cancelado com sucesso." });
+            window.location.reload();
+        } else {
+            Swal.fire({ icon:"error", text:"Não foi possível cancelar o aditivo." });
+        }
     });
 </script>

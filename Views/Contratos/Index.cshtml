@@ -1,80 +1,95 @@
 @model IEnumerable<Financeiro.Models.ViewModels.ContratoListaViewModel>
 @using System.Globalization
+
 @{
     ViewData["Title"] = "Contratos";
     var culturaBrasileira = new CultureInfo("pt-BR");
     int totalPaginas = ViewBag.TotalPaginas;
-    int paginaAtual = ViewBag.PaginaAtual;
+    int paginaAtual  = ViewBag.PaginaAtual;
 }
 
-@if (TempData["MensagemSucesso"] != null)
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        @TempData["MensagemSucesso"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+<div id="pageFlags"
+     data-success="@TempData["Sucesso"]"
+     data-error="@TempData["Erro"]"></div>
+
+<!-- form oculto para submissão de exclusão -->
+<form id="deleteForm" method="post" asp-action="Excluir" class="d-none">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="delete-id" />
+</form>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3>@ViewData["Title"]</h3>
     <a asp-action="Novo" class="btn btn-primary">Novo Contrato</a>
 </div>
 
-<table class="table table-striped table-hover">
-    <thead class="table-dark">
-        <tr>
-            <th>Número</th>
-            <th>Fornecedor</th>
-            <th>Objeto</th>
-            <th>Valor</th>
-            <th>Vigência</th>
-            <th>Status</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (Model != null && Model.Any())
+@if (Model != null && Model.Any())
+{
+    <div class="row g-3">
+        @foreach (var item in Model)
         {
-            @foreach (var item in Model)
-            {
-                <tr>
-                    <td>@item.Contrato.NumeroContrato.ToString("D2")-@item.Contrato.AnoContrato</td>
-                    <td>@item.FornecedorNome</td>
-                    <td>@item.Contrato.ObjetoContrato</td>
-                    <td>@item.Contrato.ValorContrato.ToString("C", culturaBrasileira)</td>
-                    <td>@item.Contrato.DataInicio.ToShortDateString() a @item.Contrato.DataFim.ToShortDateString()</td>
-                    <td>
-                        @if (item.Contrato.Ativo)
-                        {
-                            <span class="badge bg-success">Ativo</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-danger">Inativo</span>
-                        }
-                    </td>
-                    <td class="text-end">
-                        <a asp-action="Editar" asp-route-id="@item.Contrato.Id" class="btn btn-sm btn-outline-primary">Editar</a>
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExclusao" data-contrato-id="@item.Contrato.Id">
+            <div class="col-12 col-md-3">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-1">
+                            Contrato @item.Contrato.NumeroContrato.ToString("D2")-@item.Contrato.AnoContrato
+                        </h5>
+                        <div class="small text-muted mb2">@item.FornecedorNome</div>
+
+                        <div><strong>Objeto:</strong> @item.Contrato.ObjetoContrato</div>
+
+                        <div class="mt-1">
+                            <i class="bi bi-calendar-event me-1"></i>
+                            @item.Contrato.DataInicio.ToShortDateString() a @item.Contrato.DataFim.ToShortDateString()
+                        </div>
+
+                        <div>
+                            <i class="bi bi-currency-dollar me-1"></i>
+                            @item.Contrato.ValorContrato.ToString("C", culturaBrasileira)
+                        </div>
+
+                        <div class="mt-1">
+                            @if (item.Contrato.Ativo)
+                            {
+                                <span class="badge bg-success">Ativo</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">Inativo</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        <a asp-action="Editar"
+                           asp-route-id="@item.Contrato.Id"
+                           class="btn btn-sm btn-outline-primary">Editar</a>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-info"
+                                data-ver-aditivos="@item.Contrato.Id"
+                                data-count="@item.QuantidadeAditivos">
+                            Ver Aditivos (@item.QuantidadeAditivos)
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger"
+                                data-contrato-id="@item.Contrato.Id">
                             Excluir
                         </button>
-                    </td>
-                </tr>
-            }
+                    </div>
+                </div>
+            </div>
         }
-        else
-        {
-            <tr>
-                <td colspan="7" class="text-center">Nenhum contrato cadastrado.</td>
-            </tr>
-        }
-    </tbody>
-</table>
+    </div>
+}
+else
+{
+    <div class="alert alert-info">Nenhum contrato cadastrado.</div>
+}
 
-<!-- Paginação -->
 @if (totalPaginas > 1)
 {
-    <nav>
+    <nav class="mt-3">
         <ul class="pagination justify-content-center">
             @for (var i = 1; i <= totalPaginas; i++)
             {
@@ -82,43 +97,86 @@
                     <a class="page-link" asp-action="Index" asp-route-pagina="@i">@i</a>
                 </li>
             }
+        }
         </ul>
     </nav>
 }
 
-<!-- Modal de Exclusão -->
-<div class="modal fade" id="modalExclusao" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Confirmar Exclusão</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Tem certeza que deseja excluir este contrato? Esta ação não pode ser desfeita.</p>
-            </div>
-            <div class="modal-footer">
-                <form asp-action="Excluir" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" id="contratoIdExcluir" />
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger">Confirmar Exclusão</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
 @section Scripts {
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            var modalExclusao = document.getElementById('modalExclusao');
-            modalExclusao.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
-                var contratoId = button.getAttribute('data-contrato-id');
-                var inputId = modalExclusao.querySelector('#contratoIdExcluir');
-                inputId.value = contratoId;
+<style>
+    /* evita quebra no título do swal */
+    .swal-title-no-wrap { white-space: nowrap; }
+
+    /* container para tabela de aditivos */
+    .swal-aditivos table {
+        width:100%;
+        font-size:14px;
+    }
+    .swal-aditivos th{
+        background:#eef6ff;
+        font-weight:bold;
+        white-space:nowrap;
+    }
+</style>
+
+<script>
+    // SweetAlert (TempData)
+    (function(){
+        const flags = document.getElementById("pageFlags");
+        if (!flags) return;
+        const ok   = (flags.dataset.success || "").trim();
+        const err  = (flags.dataset.error   || "").trim();
+        if (ok)  Swal.fire({ text: ok,  icon:"success" });
+        if (err) Swal.fire({ text: err, icon:"error"   });
+    })();
+
+    // Excluir contrato
+    document.addEventListener("click", function(e){
+        const delBtn = e.target.closest("button[data-contrato-id]");
+        if (delBtn){
+            e.preventDefault();
+            const id = delBtn.getAttribute("data-contrato-id");
+            Swal.fire({
+                title:"Excluir contrato?",
+                text:"Tem certeza que deseja excluir este contrato?",
+                icon:"warning",
+                showCancelButton: true,
+                confirmButtonText:"Sim, excluir",
+                cancelButtonText:"Cancelar"
+            }).then(r=>{
+                if(r.isConfirmed){
+                    document.getElementById("delete-id").value = id;
+                    document.getElementById("deleteForm").submit();
+                }
             });
+        }
+    });
+
+    // Ver aditivos (via AJAX + SweetAlert)
+    document.addEventListener("click", async function(e){
+        const btn = e.target.closest("button[data-ver-aditivos]");
+        if (!btn) return;
+
+        const contratoId = btn.getAttribute("data-ver-aditivos");
+        const qtd        = btn.getAttribute("data-count");
+
+        if(qtd === "0"){
+            Swal.fire({ icon:"info", text:"Este contrato não possui aditivos." });
+            return;
+        }
+
+        const url    = '@Url.Action("Historico", "Contratos")' + '?id=' + contratoId;
+        const result = await fetch(url);
+        const html   = await result.text();
+
+        Swal.fire({
+            title:"Aditivos do contrato",
+            html: `<div class="swal-aditivos">${html}</div>`,
+            width: 850,
+            customClass: { title: 'swal-title-no-wrap' },
+            showCloseButton:true,
+            showConfirmButton:false
         });
-    </script>
+    });
+</script>
 }

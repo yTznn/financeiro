@@ -1,20 +1,35 @@
 using System.Threading.Tasks;
 using Dapper;
 using Financeiro.Infraestrutura;
-using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Financeiro.Servicos
 {
     public class JustificativaService : IJustificativaService
     {
         private readonly IDbConnectionFactory _connectionFactory;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public JustificativaService(IDbConnectionFactory connectionFactory)
+        public JustificativaService(IDbConnectionFactory connectionFactory, IHttpContextAccessor httpContextAccessor)
         {
             _connectionFactory = connectionFactory;
+            _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task RegistrarAsync(int usuarioId, int entidadeId, string tabela, string acao, int registroId, string texto)
+        private int ObterUsuarioId()
+        {
+            var idClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(idClaim, out var id) ? id : 0;
+        }
+
+        private int ObterEntidadeId()
+        {
+            var idClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("EntidadeId")?.Value;
+            return int.TryParse(idClaim, out var id) ? id : 0;
+        }
+
+        public async Task RegistrarAsync(string tabela, string acao, int registroId, string texto)
         {
             using var connection = _connectionFactory.CreateConnection();
 
@@ -24,12 +39,12 @@ namespace Financeiro.Servicos
 
             await connection.ExecuteAsync(sql, new
             {
-                UsuarioId = usuarioId,
-                EntidadeId = entidadeId,
-                Tabela = tabela,
-                Acao = acao,
+                UsuarioId  = ObterUsuarioId(),
+                EntidadeId = ObterEntidadeId(),
+                Tabela     = tabela,
+                Acao       = acao,
                 RegistroId = registroId,
-                Texto = texto
+                Texto      = texto
             });
         }
     }

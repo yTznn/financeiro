@@ -19,7 +19,7 @@ namespace Financeiro.Controllers
         public async Task<IActionResult> Index()
         {
             var lista = await _repo.ListarAsync();
-            return View(lista);            // view virá no passo 4
+            return View(lista);           
         }
 
         /* ---------- NOVO ---------- */
