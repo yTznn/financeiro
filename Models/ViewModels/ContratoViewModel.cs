@@ -42,9 +42,14 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Fim da Vigência")]
         public DateTime DataFim { get; set; } = DateTime.Today.AddYears(1);
 
-        [Required(ErrorMessage = "O valor do contrato é obrigatório.")]
+        // ✅ NOVO CAMPO PARA O FORMULÁRIO
+        [Required(ErrorMessage = "O valor mensal é obrigatório.")]
         [Range(0.01, double.MaxValue, ErrorMessage = "O valor deve ser maior que zero.")]
-        [Display(Name = "Valor do Contrato")]
+        [Display(Name = "Valor Mensal")]
+        public decimal ValorMensal { get; set; }
+
+        // Este campo agora será calculado e não mais digitado pelo usuário.
+        [Display(Name = "Valor Total do Contrato")]
         public decimal ValorContrato { get; set; }
 
         [Display(Name = "Observação")]

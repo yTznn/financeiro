@@ -122,7 +122,7 @@ namespace Financeiro.Repositorios
             const string sqlNaturezas = "SELECT NaturezaId FROM ContratoNatureza WHERE ContratoId = @id;";
             var naturezasIds = await conn.QueryAsync<int>(sqlNaturezas, new { id });
 
-            return new ContratoViewModel
+            var vm = new ContratoViewModel
             {
                 Id = contrato.Id,
                 FornecedorIdCompleto = contrato.PessoaFisicaId.HasValue ? $"PF-{contrato.PessoaFisicaId}" : $"PJ-{contrato.PessoaJuridicaId}",
@@ -137,6 +137,20 @@ namespace Financeiro.Repositorios
                 Ativo = contrato.Ativo,
                 NaturezasIds = naturezasIds.ToList()
             };
+
+            // ✅ ALTERAÇÃO AQUI:
+            // Adicionamos a lógica para calcular o valor mensal com base no valor total salvo,
+            // garantindo que o formulário de edição seja preenchido corretamente.
+            if (vm.DataFim >= vm.DataInicio)
+            {
+                int numeroDeMeses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
+                if (numeroDeMeses > 0 && vm.ValorContrato > 0)
+                {
+                    vm.ValorMensal = Math.Round(vm.ValorContrato / numeroDeMeses, 2);
+                }
+            }
+
+            return vm;
         }
 
         public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int pagina, int tamanhoPagina = 10)
