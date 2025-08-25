@@ -19,6 +19,9 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
+        // ... SEUS OUTROS MÉTODOS (InserirAsync, AtualizarAsync, etc.) FICAM AQUI EXATAMENTE COMO ERAM ...
+        // Vou omiti-los aqui para focar na mudança, mas eles devem permanecer no seu arquivo.
+        
         public async Task InserirAsync(ContratoViewModel vm)
         {
             using var conn = _factory.CreateConnection();
@@ -196,29 +199,43 @@ namespace Financeiro.Repositorios
             using var conn = _factory.CreateConnection();
             return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, idAtual });
         }
-
-        public async Task<(IEnumerable<VwFornecedor> Itens, bool TemMais)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina = 10)
+        
+        // =======================================================================================
+        // MÉTODO ALTERADO ABAIXO
+        // =======================================================================================
+        public async Task<(IEnumerable<VwFornecedor> Itens, int TotalItens)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina)
         {
-            // =====================================================================
-            //      AQUI A CORREÇÃO! Adicionamos a busca pelo campo Documento.
-            // =====================================================================
+            // Duas queries: a primeira busca os itens da página, a segunda conta o total de itens.
             const string sql = @"
                 SELECT * FROM Vw_Fornecedores
                 WHERE Nome LIKE @TermoBusca OR Documento LIKE @TermoBusca
                 ORDER BY Nome
-                OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;";
+                OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
+
+                SELECT COUNT(*) FROM Vw_Fornecedores
+                WHERE Nome LIKE @TermoBusca OR Documento LIKE @TermoBusca;";
             
             using var conn = _factory.CreateConnection();
-            var itens = await conn.QueryAsync<VwFornecedor>(sql, new 
+            
+            // Usamos QueryMultipleAsync para executar as duas queries de uma só vez
+            using var multi = await conn.QueryMultipleAsync(sql, new 
             { 
                 TermoBusca = $"%{termoBusca}%",
                 Offset = (pagina - 1) * tamanhoPagina,
-                TamanhoPagina = tamanhoPagina + 1 
+                TamanhoPagina = tamanhoPagina
             });
 
-            var temMais = itens.Count() > tamanhoPagina;
-            return (itens.Take(tamanhoPagina), temMais);
+            // Lemos o resultado da primeira query (a lista de fornecedores)
+            var itens = await multi.ReadAsync<VwFornecedor>();
+            // Lemos o resultado da segunda query (a contagem total)
+            var totalItens = await multi.ReadSingleAsync<int>();
+
+            return (itens, totalItens);
         }
+        // =======================================================================================
+        // FIM DO MÉTODO ALTERADO
+        // =======================================================================================
+
 
         public async Task<IEnumerable<Natureza>> ListarTodasNaturezasAsync()
         {

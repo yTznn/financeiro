@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Repositorios; // Precisaremos do repositório de contrato que busca na View
 using System.Threading.Tasks;
+using System; // Necessário para Math.Ceiling
 
 namespace Financeiro.Controllers
 {
     public class FornecedoresController : Controller
     {
-        private readonly IContratoRepositorio _contratoRepo; // Usamos este repo pois ele já tem o método de busca na View
+        private readonly IContratoRepositorio _contratoRepo;
 
         public FornecedoresController(IContratoRepositorio contratoRepo)
         {
@@ -17,13 +18,18 @@ namespace Financeiro.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(string busca = "", int pagina = 1)
         {
-            // Usamos o método que já existe para a busca de fornecedores
-            var (itens, temMais) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(busca, pagina);
+            // Definimos o tamanho da página aqui. Agora você pode mudar facilmente quando quiser.
+            const int tamanhoPagina = 3;
 
+            // Chamamos o novo método do repositório, passando o tamanho da página
+            var (itens, totalItens) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(busca, pagina, tamanhoPagina);
+
+            // Enviamos para a View todas as informações que ela precisa para a busca e paginação numerada
             ViewBag.BuscaAtual = busca;
             ViewBag.PaginaAtual = pagina;
-            ViewBag.TemPaginaAnterior = pagina > 1;
-            ViewBag.TemPaginaSeguinte = temMais;
+            
+            // Calculamos o número total de páginas
+            ViewBag.TotalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
 
             return View(itens);
         }

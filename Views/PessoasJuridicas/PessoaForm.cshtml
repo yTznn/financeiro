@@ -4,7 +4,6 @@
     Layout = "_Layout";
 }
 
-<!-- FLAGS (para SweetAlert) -->
 <div id="pageFlags"
      data-success="@TempData["Sucesso"]"
      data-error="@TempData["Erro"]"></div>
@@ -77,7 +76,8 @@
                 <i class="bi bi-save2-fill me-1"></i>
                 @(Model.Id == 0 ? "Salvar" : "Atualizar")
             </button>
-            <a asp-action="Index" class="btn btn-secondary ms-2">
+            
+            <a asp-controller="Fornecedores" asp-action="Index" class="btn btn-secondary ms-2">
                 <i class="bi bi-arrow-left-circle me-1"></i> Cancelar
             </a>
         </div>
@@ -91,10 +91,8 @@
 
     <script>
         $(function () {
-
             // ========== Máscaras
             $('#NumeroInscricao').mask('00.000.000/0000-00');
-
             $('#Telefone').mask('(00) 0000-00009').on('keyup', function(){
                 var val  = $(this).val().replace(/\D/g,'');
                 var mask = (val.length > 10) ? '(00) 00000-0000' : '(00) 0000-00009';

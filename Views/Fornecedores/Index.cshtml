@@ -1,92 +1,331 @@
 @model IEnumerable<Financeiro.Models.VwFornecedor>
+@using System.Linq
+
 @{
     ViewData["Title"] = "Fornecedores";
+    Layout = "_Layout";
+    
     string buscaAtual = ViewBag.BuscaAtual;
     int paginaAtual = ViewBag.PaginaAtual;
-    bool temPaginaAnterior = ViewBag.TemPaginaAnterior;
-    bool temPaginaSeguinte = ViewBag.TemPaginaSeguinte;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>@ViewData["Title"]</h3>
-    @* No futuro, este botão pode levar a um formulário de cadastro unificado *@
-    <a asp-controller="Escolhas" asp-action="Index" class="btn btn-primary">Novo Fornecedor</a>
+@functions {
+    string FormatCnpj(string? cnpj)
+    {
+        if (string.IsNullOrWhiteSpace(cnpj)) return "";
+        var d = new string(cnpj.Where(char.IsDigit).ToArray());
+        if (d.Length != 14) return cnpj ?? "";
+        return $"{d[..2]}.{d.Substring(2, 3)}.{d.Substring(5, 3)}/{d.Substring(8, 4)}-{d.Substring(12, 2)}";
+    }
+
+    string FormatCpf(string? cpf)
+    {
+        if (string.IsNullOrWhiteSpace(cpf)) return "";
+        var d = new string(cpf.Where(char.IsDigit).ToArray());
+        if (d.Length != 11) return cpf ?? "";
+        return $"{d[..3]}.{d.Substring(3, 3)}.{d.Substring(6, 3)}-{d.Substring(9, 2)}";
+    }
+    
+    string FormatPhoneBr(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return "";
+        var d = new string(phone.Where(char.IsDigit).ToArray());
+        if (d.Length == 10) return $"({d[..2]}) {d.Substring(2, 4)}-{d.Substring(6, 4)}";
+        if (d.Length == 11) return $"({d[..2]}) {d.Substring(2, 5)}-{d.Substring(7, 4)}";
+        return phone;
+    }
+}
+
+<style>
+    .fornecedor-card { transition: transform .06s ease, box-shadow .06s ease; }
+    .fornecedor-card:hover { transform: translateY(-1px); box-shadow: 0 .25rem .75rem rgba(16, 36, 68, .08); }
+    .pj-card { border-left: 4px solid var(--blue); }
+    .pf-card { border-left: 4px solid var(--cyan); }
+    .doc-number { font-variant-numeric: tabular-nums; letter-spacing: .2px; }
+    .addr-grid .label { color: #6c757d; font-size: .82rem; text-transform: uppercase; letter-spacing: .02em; }
+    .addr-grid .value { color: var(--dark); font-weight: 600; font-size: 1.05rem; line-height: 1.3; }
+    .acc-item { border: 1px solid #e9ecef; border-radius: .5rem; padding: .6rem .75rem; display: flex; align-items: start; gap: .5rem; }
+    .acc-main { flex: 1; }
+    .acc-muted { color: #6c757d; font-size: .85rem; }
+    .acc-actions .btn { padding: .25rem .5rem; }
+    .acc-chip { font-size: .75rem; padding: .15rem .4rem; border-radius: 999px; }
+    .chip-principal { background: #fff3cd; color: #8a6d3b; border: 1px solid #ffe8a1; }
+    .secret { filter: blur(3px); transition: filter .15s ease; }
+    .secret.show { filter: none; }
+</style>
+
+<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0 fw-bold" style="color:var(--dark);">
+        <i class="bx bx-briefcase-alt-2 me-2"></i> Gerencie seus Fornecedores
+    </h2>
+    <a asp-controller="Escolhas" asp-action="Index" class="btn btn-primary">
+        <i class='bx bx-plus-circle'></i> Novo Fornecedor
+    </a>
 </div>
 
-<!-- Formulário de Busca -->
 <form asp-action="Index" method="get" class="mb-4">
     <div class="input-group">
-        <input type="text" name="busca" class="form-control" placeholder="Buscar por nome..." value="@buscaAtual" />
-        <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+        <input type="text" name="busca" class="form-control" placeholder="Buscar por nome ou documento..." value="@buscaAtual" />
+        <button class="btn btn-outline-secondary" type="submit"><i class='bx bx-search'></i> Buscar</button>
     </div>
 </form>
 
-<table class="table table-striped table-hover">
-    <thead class="table-dark">
-        <tr>
-            <th>Nome</th>
-            <th>Documento</th>
-            <th>Tipo</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in Model)
-        {
-            <tr>
-                <td>@item.Nome</td>
-                <td>@item.Documento</td>
-                <td>
-                    @if (item.Tipo == "PJ")
-                    {
-                        <span class="badge bg-primary">Pessoa Jurídica</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-info text-dark">Pessoa Física</span>
-                    }
-                </td>
-                <td class="text-end">
-                    @{
-                        // Lógica para direcionar para o controller de edição correto
-                        var controller = item.Tipo == "PJ" ? "PessoasJuridicas" : "PessoasFisicas";
-                    }
-                    <a asp-controller="@controller" asp-action="Editar" asp-route-id="@item.FornecedorId" class="btn btn-sm btn-outline-primary">
-                        Editar
-                    </a>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+<form id="af-token-form" class="d-none">@Html.AntiForgeryToken()</form>
 
-<!-- Paginação -->
-<nav>
-    <ul class="pagination">
-        @if (temPaginaAnterior)
-        {
-            <li class="page-item">
-                <a class="page-link" asp-action="Index" asp-route-pagina="@(paginaAtual - 1)" asp-route-busca="@buscaAtual">Anterior</a>
-            </li>
-        }
-        else
-        {
-            <li class="page-item disabled">
-                <a class="page-link" href="#">Anterior</a>
-            </li>
-        }
+<div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
+    @foreach (var item in Model)
+    {
+        var controller = item.Tipo == "PJ" ? "PessoasJuridicas" : "PessoasFisicas";
+        var documentoFormatado = item.Tipo == "PJ" ? FormatCnpj(item.Documento) : FormatCpf(item.Documento);
+        var cardClass = item.Tipo == "PJ" ? "pj-card" : "pf-card";
 
-        @if (temPaginaSeguinte)
-        {
-            <li class="page-item">
-                <a class="page-link" asp-action="Index" asp-route-pagina="@(paginaAtual + 1)" asp-route-busca="@buscaAtual">Próxima</a>
-            </li>
+        <div class="col">
+            <div class="card h-100 shadow-sm border-0 fornecedor-card @cardClass" data-id="@item.FornecedorId" data-tipo="@item.Tipo">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            @if (item.Tipo == "PJ")
+                            {
+                                <div class="fw-semibold" style="color:var(--dark);">@item.Nome</div>
+                                <div class="small text-muted">@item.NomeFantasia</div>
+                            }
+                            else
+                            {
+                                <h5 class="card-title mb-1">@item.Nome</h5>
+                            }
+                        </div>
+                        <span class="badge bg-@(item.SituacaoAtiva ? (item.Tipo == "PJ" ? "primary" : "success") : "secondary")">
+                            @(item.SituacaoAtiva ? (item.Tipo == "PJ" ? "Ativa" : "Ativo") : "Inativo")
+                        </span>
+                    </div>
+
+                    <div class="small text-muted mb-2 doc-number"><i class='bx bx-id-card me-1'></i> @documentoFormatado</div>
+                    
+                    @if (item.Tipo == "PF")
+                    {
+                        <div class="mt-2 small">
+                            @if (!string.IsNullOrEmpty(item.Email)) { <div><i class="bx bx-envelope me-1"></i>@item.Email</div> }
+                            @if (!string.IsNullOrEmpty(item.Telefone)) { <div class="doc-number"><i class="bx bx-phone me-1"></i>@FormatPhoneBr(item.Telefone)</div> }
+                        </div>
+                    }
+
+                    <div class="mt-3">
+                        <div class="small text-muted mb-1"><i class="bx bx-map me-1"></i> Endereço principal</div>
+                        <div id="addr-@item.FornecedorId" class="text-muted"><span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…</div>
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="small text-muted mb-1"><i class="bx bx-bank me-1"></i> Conta bancária (principal)</div>
+                        <div id="acc-@item.FornecedorId" class="small"><span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…</div>
+                        
+                        <div class="mt-2 d-flex gap-2">
+                             <a class="btn btn-sm btn-outline-success" asp-controller="ContasBancarias" asp-action="Novo" asp-route-pessoaId="@item.FornecedorId" asp-route-pf="@(item.Tipo == "PF" ? "true" : "false")">
+                                <i class='bx bx-plus-circle'></i> Nova conta
+                            </a>
+                             <a class="btn btn-sm btn-outline-secondary" asp-controller="ContasBancarias" asp-action="@(item.Tipo == "PJ" ? "IndexPJ" : "IndexPF")" asp-route-pessoaId="@item.FornecedorId">
+                                <i class='bx bx-list-ul'></i> Ver todas
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="mt-auto"></div>
+                </div>
+
+                <div class="card-footer bg-transparent border-0 pt-3 pb-3">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-sm btn-outline-secondary" asp-controller="Enderecos" asp-action="@(item.Tipo == "PJ" ? "GerenciarPessoaJuridica" : "GerenciarPessoaFisica")" asp-route-pessoaJuridicaId="@(item.Tipo == "PJ" ? item.FornecedorId : null)" asp-route-pessoaFisicaId="@(item.Tipo == "PF" ? item.FornecedorId : null)">
+                            <i class='bx bx-map'></i> Endereços
+                        </a>
+                        <a class="btn btn-sm btn-outline-primary" asp-controller="@controller" asp-action="Editar" asp-route-id="@item.FornecedorId">
+                            <i class='bx bx-pencil'></i> Editar
+                        </a>
+                        <form asp-controller="@controller" asp-action="Excluir" asp-route-id="@item.FornecedorId" method="post" class="d-inline js-delete-form" data-nome="@item.Nome" data-tipo="@item.Tipo">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class='bx bx-trash'></i> Excluir</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+
+@if (totalPaginas > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            @for (int i = 1; i <= totalPaginas; i++)
+            {
+                <li class="page-item @(i == paginaAtual ? "active" : "")">
+                    <a class="page-link" asp-action="Index" asp-route-pagina="@i" asp-route-busca="@buscaAtual">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+}
+
+@section Scripts {
+<script>
+(function () {
+    const base = '@Url.Content("~")'.replace(/\/?$/, '/');
+
+    function swalMsg(message, type) {
+        if (window.Swal?.fire) {
+            Swal.fire({ text: message || "", icon: type || "info", toast: true, position: 'top-end', showConfirmButton: false, timer: 3500 });
+        } else { alert(message || ""); }
+    }
+
+    function swalConfirm(opts) {
+        if (window.Swal?.fire) {
+            return Swal.fire({
+                title: opts.title || "Confirmar?", text: opts.text || "", icon: "warning",
+                showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: opts.confirmText || "Sim",
+                cancelButtonText: opts.cancelText || "Cancelar"
+            });
         }
-        else
-        {
-            <li class="page-item disabled">
-                <a class="page-link" href="#">Próxima</a>
-            </li>
+        return Promise.resolve({ isConfirmed: confirm(opts.text || "Confirmar?") });
+    }
+
+    (function fireToastsFromTempData() {
+        const flags = document.getElementById("pageFlags");
+        if (!flags) return;
+        const ok = (flags.dataset.success || "").trim();
+        const erro = (flags.dataset.error || "").trim();
+        if (ok) swalMsg(ok, "success");
+        if (erro) swalMsg(erro, "error");
+    })();
+
+    function formatCep(cep) {
+        if (!cep) return '';
+        const d = ('' + cep).replace(/\D/g, '');
+        return d.replace(/^(\d{5})(\d{3})$/, '$1-$2');
+    }
+    
+    function formatEnderecoPf(e) {
+        if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
+        const l1 = [e.logradouro, e.numero].filter(Boolean).join(', ');
+        const l2 = [e.bairro, e.municipio].filter(Boolean).join(' - ');
+        const l3 = [e.uf, formatCep(e.cep)].filter(Boolean).join(' • ');
+        return [l1,l2,l3].filter(Boolean).join("<br>");
+    }
+
+    function renderEnderecoPj(slot, endereco) {
+        const e = endereco || {};
+        const _ = (a,b) => a ?? b ?? '';
+        slot.innerHTML = `
+            <div class="addr-grid">
+                <div class="row gx-2 gy-1">
+                    <div class="col-12"><div class="label">Logradouro</div><div class="value">${_(e.Logradouro, e.logradouro)}</div></div>
+                    <div class="col-4 col-sm-3"><div class="label">Número</div><div class="value">${_(e.Numero, e.numero)}</div></div>
+                    <div class="col-8 col-sm-9"><div class="label">Complemento</div><div class="value">${_(e.Complemento, e.complemento)}</div></div>
+                    <div class="col-4 col-sm-3"><div class="label">CEP</div><div class="value">${formatCep(_(e.Cep, e.cep))}</div></div>
+                    <div class="col-8 col-sm-3"><div class="label">Bairro</div><div class="value">${_(e.Bairro, e.bairro)}</div></div>
+                    <div class="col-8 col-sm-4"><div class="label">Município</div><div class="value">${_(e.Municipio, e.municipio)}</div></div>
+                    <div class="col-4 col-sm-2"><div class="label">UF</div><div class="value">${_(e.Uf, e.uf)}</div></div>
+                </div>
+            </div>`;
+    }
+
+    function mask(val) {
+        if (!val) return '';
+        const t = String(val);
+        if (t.length <= 2) return '*'.repeat(t.length);
+        return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
+    }
+    
+    // ===== Renderização de Conta Principal (UNIFICADO E COMPLETO) =====
+    function renderPrincipalAccount(slot, acc, pessoaId, tipo) {
+        if (!acc) {
+            slot.innerHTML = `<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>`;
+            return;
         }
-    </ul>
-</nav>
+        const banco = acc.banco ?? acc.Banco ?? '';
+        const agencia = acc.agencia ?? acc.Agencia ?? '';
+        const conta = acc.conta ?? acc.Conta ?? '';
+        const pix = acc.chavePix ?? acc.ChavePix ?? '';
+        const vinculoId = acc.vinculoId ?? acc.VinculoId;
+
+        const urlEditar = `${base}ContasBancarias/Editar?vinculoId=${vinculoId}`;
+        const urlVerTodas = `${base}ContasBancarias/${tipo === 'PJ' ? 'IndexPJ' : 'IndexPF'}?pessoaId=${pessoaId}`;
+        
+        slot.innerHTML = `
+            <div class="acc-item">
+                <div class="acc-main">
+                    <div><strong>${banco || '(Sem banco)'}</strong>
+                        <span class="acc-chip chip-principal ms-2"><i class='bx bxs-star me-1'></i> Principal</span>
+                    </div>
+                    <div class="acc-muted">
+                        Agência: <span class="secret" data-secret>${mask(agencia)}</span> ·
+                        Conta: <span class="secret" data-secret>${mask(conta)}</span>
+                        ${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}
+                    </div>
+                </div>
+                <div class="acc-actions d-flex gap-1">
+                    <button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar"><i class='bx bx-low-vision'></i></button>
+                    <a class="btn btn-light border" href="${urlEditar}" title="Editar"><i class='bx bx-pencil'></i></a>
+                    <a class="btn btn-light border" href="${urlVerTodas}" title="Ver todas"><i class='bx bx-list-ul'></i></a>
+                </div>
+            </div>`;
+
+        slot.querySelector('.toggle-visibility')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            slot.querySelectorAll('[data-secret]').forEach(s => s.classList.toggle('show'));
+        });
+    }
+
+    document.querySelectorAll(".fornecedor-card").forEach(function (card) {
+        const id = card.dataset.id;
+        const tipo = card.dataset.tipo;
+        if (!id || !tipo) return;
+        
+        const slotAddr = document.getElementById(`addr-${id}`);
+        const addrUrl = `${base}Enderecos/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
+
+        fetch(addrUrl)
+            .then(r => r.ok ? r.json() : Promise.reject(r))
+            .then(j => {
+                if (!j || !j.sucesso || !j.possuiPrincipal) {
+                    slotAddr.innerHTML = `<span class="badge bg-secondary"><i class='bx bx-minus me-1'></i> Sem principal</span>`;
+                    return;
+                }
+                if (tipo === 'PJ') {
+                    renderEnderecoPj(slotAddr, j.endereco);
+                } else {
+                    slotAddr.innerHTML = formatEnderecoPf(j.endereco);
+                }
+            })
+            .catch(() => { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Erro ao carregar"; });
+
+        const slotAcc = document.getElementById(`acc-${id}`);
+        const accUrl = `${base}ContasBancarias/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
+            
+        fetch(accUrl)
+            .then(r => r.ok ? r.json() : Promise.reject(r))
+            .then(j => {
+                if (!j || !j.sucesso) throw new Error("API response not successful");
+                renderPrincipalAccount(slotAcc, j.possuiPrincipal ? j.conta : null, id, tipo);
+            })
+            .catch(() => { slotAcc.classList.add("text-danger"); slotAcc.textContent = "Erro ao carregar"; });
+    });
+
+    document.addEventListener("submit", function (e) {
+        const form = e.target;
+        if (!form.matches(".js-delete-form")) return;
+
+        e.preventDefault();
+        const nome = form.dataset.nome || "este item";
+        const tipo = form.dataset.tipo;
+        
+        const title = tipo === 'PJ' ? "Excluir fornecedor PJ?" : "Excluir pessoa física?";
+        const text = `Tem certeza que deseja excluir "${nome}"? Essa ação é irreversível.`;
+        
+        swalConfirm({ title: title, text: text, confirmText: "Sim, excluir" })
+            .then(res => { if (res?.isConfirmed) { form.submit(); } });
+    });
+})();
+</script>
+}

@@ -31,9 +31,6 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(ContratoViewModel vm, string justificativa = null)
         {
-            // A linha abaixo foi removida para confiar no cálculo feito pelo front-end.
-            // RecalcularValorTotalContrato(vm);
-
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato))
             {
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número para o ano selecionado.");
@@ -42,7 +39,7 @@ namespace Financeiro.Controllers
             if (!ModelState.IsValid)
             {
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
-                                                  .Select(e => e.ErrorMessage);
+                                                      .Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
 
                 await PrepararViewBagParaFormulario(vm);
@@ -69,9 +66,6 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(ContratoViewModel vm, string justificativa = null)
         {
-            // A linha abaixo foi removida para confiar no cálculo feito pelo front-end.
-            // RecalcularValorTotalContrato(vm);
-            
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato, vm.Id))
             {
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número para o ano selecionado.");
@@ -80,7 +74,7 @@ namespace Financeiro.Controllers
             if (!ModelState.IsValid)
             {
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
-                                                  .Select(e => e.ErrorMessage);
+                                                      .Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
 
                 await PrepararViewBagParaFormulario(vm);
@@ -157,18 +151,33 @@ namespace Financeiro.Controllers
             return Json(new { proximoNumero = numero });
         }
 
+        // ===========================================================================
+        // MÉTODO CORRIGIDO ABAIXO
+        // ===========================================================================
         [HttpGet]
         public async Task<IActionResult> BuscarFornecedores(string term = "", int page = 1)
         {
-            var (itens, temMais) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(term, page);
+            // 1. Definimos um tamanho de página para a busca AJAX.
+            const int tamanhoPagina = 10;
+
+            // 2. Chamamos a nova assinatura do método, passando o tamanho da página
+            //    e recebendo 'totalItens' em vez de 'temMais'.
+            var (itens, totalItens) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(term, page, tamanhoPagina);
+
+            // 3. Calculamos se existem mais resultados a serem carregados.
+            bool temMaisPaginas = (page * tamanhoPagina) < totalItens;
 
             var resultado = new
             {
                 results = itens.Select(f => new { id = $"{f.Tipo}-{f.FornecedorId}", text = $"{f.Nome} ({f.Documento})" }),
-                pagination = new { more = temMais }
+                pagination = new { more = temMaisPaginas } // Usamos nossa nova variável
             };
             return Json(resultado);
         }
+        // ===========================================================================
+        // FIM DO MÉTODO CORRIGIDO
+        // ===========================================================================
+
 
         [HttpGet]
         public async Task<IActionResult> Historico(int id, int pag = 1)

@@ -6,8 +6,12 @@ namespace Financeiro.Models
     public class VwFornecedor
     {
         public int FornecedorId { get; set; }
-        public string Tipo { get; set; } = string.Empty; // "PJ" ou "PF"
-        public string Nome { get; set; } = string.Empty;
-        public string Documento { get; set; } = string.Empty;
+        public string Nome { get; set; }
+        public string? NomeFantasia { get; set; }
+        public string Documento { get; set; }
+        public string Tipo { get; set; }
+        public bool SituacaoAtiva { get; set; }
+        public string? Email { get; set; }
+        public string? Telefone { get; set; }
     }
 }
