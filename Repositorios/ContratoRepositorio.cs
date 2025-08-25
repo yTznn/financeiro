@@ -138,9 +138,6 @@ namespace Financeiro.Repositorios
                 NaturezasIds = naturezasIds.ToList()
             };
 
-            // ✅ ALTERAÇÃO AQUI:
-            // Adicionamos a lógica para calcular o valor mensal com base no valor total salvo,
-            // garantindo que o formulário de edição seja preenchido corretamente.
             if (vm.DataFim >= vm.DataInicio)
             {
                 int numeroDeMeses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
@@ -202,9 +199,12 @@ namespace Financeiro.Repositorios
 
         public async Task<(IEnumerable<VwFornecedor> Itens, bool TemMais)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina = 10)
         {
+            // =====================================================================
+            //      AQUI A CORREÇÃO! Adicionamos a busca pelo campo Documento.
+            // =====================================================================
             const string sql = @"
                 SELECT * FROM Vw_Fornecedores
-                WHERE Nome LIKE @TermoBusca
+                WHERE Nome LIKE @TermoBusca OR Documento LIKE @TermoBusca
                 ORDER BY Nome
                 OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;";
             

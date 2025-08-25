@@ -10,13 +10,29 @@ namespace Financeiro.Controllers
 {
     public class ContratosController : Controller
     {
-        // ... (construtor e outros métodos se mantêm iguais)
+        private readonly IContratoRepositorio _contratoRepo;
+        private readonly IContratoVersaoRepositorio _versaoRepo;
+        private readonly ILogService _logService;
+        private readonly IJustificativaService _justificativaService;
+
+        public ContratosController(
+            IContratoRepositorio contratoRepo,
+            IContratoVersaoRepositorio versaoRepo,
+            ILogService logService,
+            IJustificativaService justificativaService)
+        {
+            _contratoRepo = contratoRepo;
+            _versaoRepo = versaoRepo;
+            _logService = logService;
+            _justificativaService = justificativaService;
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(ContratoViewModel vm, string justificativa = null)
         {
-            RecalcularValorTotalContrato(vm);
+            // A linha abaixo foi removida para confiar no cálculo feito pelo front-end.
+            // RecalcularValorTotalContrato(vm);
 
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato))
             {
@@ -25,7 +41,6 @@ namespace Financeiro.Controllers
 
             if (!ModelState.IsValid)
             {
-                // ✅ ALTERAÇÃO AQUI: Coletar todos os erros e passá-los para a TempData.
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
                                                   .Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
@@ -33,8 +48,6 @@ namespace Financeiro.Controllers
                 await PrepararViewBagParaFormulario(vm);
                 return View("ContratoForm", vm);
             }
-
-            // ... (resto do método Salvar se mantém igual)
             
             await _contratoRepo.InserirAsync(vm);
             await _logService.RegistrarCriacaoAsync("Contrato", vm, vm.Id);
@@ -56,7 +69,8 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(ContratoViewModel vm, string justificativa = null)
         {
-            RecalcularValorTotalContrato(vm);
+            // A linha abaixo foi removida para confiar no cálculo feito pelo front-end.
+            // RecalcularValorTotalContrato(vm);
             
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato, vm.Id))
             {
@@ -65,7 +79,6 @@ namespace Financeiro.Controllers
 
             if (!ModelState.IsValid)
             {
-                // ✅ ALTERAÇÃO AQUI: Coletar todos os erros e passá-los para a TempData.
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
                                                   .Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
@@ -73,8 +86,6 @@ namespace Financeiro.Controllers
                 await PrepararViewBagParaFormulario(vm);
                 return View("ContratoForm", vm);
             }
-            
-            // ... (resto do método Atualizar se mantém igual)
             
             await _contratoRepo.AtualizarAsync(vm);
             await _logService.RegistrarEdicaoAsync("Contrato", null, vm, vm.Id);
@@ -92,31 +103,11 @@ namespace Financeiro.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // ... (resto do controller se mantém igual)
-        
-        private readonly IContratoRepositorio _contratoRepo;
-        private readonly IContratoVersaoRepositorio _versaoRepo;
-        private readonly ILogService _logService;
-        private readonly IJustificativaService _justificativaService;
-
-        public ContratosController(
-            IContratoRepositorio contratoRepo,
-            IContratoVersaoRepositorio versaoRepo,
-            ILogService logService,
-            IJustificativaService justificativaService)
-        {
-            _contratoRepo = contratoRepo;
-            _versaoRepo = versaoRepo;
-            _logService = logService;
-            _justificativaService = justificativaService;
-        }
-
         [HttpGet]
         public async Task<IActionResult> Index(int pagina = 1)
         {
             var (itens, totalPaginas) = await _contratoRepo.ListarPaginadoAsync(pagina);
 
-            // Preenche a quantidade de aditivos de cada contrato
             foreach (var item in itens)
             {
                 item.QuantidadeAditivos = await _versaoRepo.ContarPorContratoAsync(item.Contrato.Id);
@@ -198,24 +189,6 @@ namespace Financeiro.Controllers
             {
                 ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
             }
-        }
-        
-        private void RecalcularValorTotalContrato(ContratoViewModel vm)
-        {
-            if (vm.DataInicio > vm.DataFim)
-            {
-                vm.ValorContrato = vm.ValorMensal;
-                return;
-            }
-
-            int numeroDeMeses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
-            
-            if (numeroDeMeses <= 0)
-            {
-                numeroDeMeses = 1;
-            }
-
-            vm.ValorContrato = vm.ValorMensal * numeroDeMeses;
         }
     }
 }

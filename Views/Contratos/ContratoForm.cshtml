@@ -22,7 +22,6 @@
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
     <input type="hidden" name="justificativa" id="justificativa-hidden" />
-    <input type="hidden" asp-for="ValorContrato" />
 
     <div class="col-12">
         <label asp-for="FornecedorIdCompleto" class="form-label fw-semibold"></label>
@@ -73,16 +72,18 @@
         <label asp-for="ValorMensal" class="form-label fw-semibold"></label>
         <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input asp-for="ValorMensal" type="number" step="0.01" class="form-control" />
+            <input asp-for="ValorMensal" type="text" class="form-control money"/>
         </div>
         <span asp-validation-for="ValorMensal" class="text-danger"></span>
     </div>
 
-    <div class="col-12 col-md-8 d-flex align-items-end">
-        <div>
-            <label asp-for="ValorContrato" class="form-label fw-semibold"></label>
-            <p id="valor-total-display" class="form-control-plaintext fs-5 fw-bold text-primary">R$ 0,00</p>
+    <div class="col-12 col-md-4">
+        <label asp-for="ValorContrato" class="form-label fw-semibold"></label>
+        <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input asp-for="ValorContrato" type="text" class="form-control money"/>
         </div>
+        <span asp-validation-for="ValorContrato" class="text-danger"></span>
     </div>
 
     <div class="col-12">
@@ -139,56 +140,90 @@
     }
 
     <script>
+        // AQUI A CORREÇÃO: Configura o validador para um comportamento mais amigável
+        $.validator.setDefaults({
+            onkeyup: false,
+            onfocusout: function(element) {
+                $(element).valid();
+            }
+        });
+
+        // AQUI A CORREÇÃO PARA O PROBLEMA DE VALIDAÇÃO DE NÚMEROS COM VÍRGULA
+        $.validator.methods.number = function (value, element) {
+            const parsedValue = parseCurrency(value);
+            return this.optional(element) || !isNaN(parsedValue);
+        };
+
         $(document).ready(function () {
-            
-            // --- INÍCIO DO SCRIPT DE CÁLCULO AUTOMÁTICO ---
+            // --- INÍCIO DO SCRIPT DE CÁLCULO BIDIRECIONAL ---
             const dataInicioInput = $('#DataInicio');
             const dataFimInput = $('#DataFim');
             const valorMensalInput = $('#ValorMensal');
-            const valorTotalHiddenInput = $('#ValorContrato');
-            const valorTotalDisplay = $('#valor-total-display');
+            const valorTotalInput = $('#ValorContrato');
+            
+            let lastChanged = null; 
 
-            function calcularValorTotal() {
+            function parseCurrency(value) {
+                if (!value) return 0;
+                return parseFloat(String(value).replace(/\./g, '').replace(',', '.'));
+            }
+
+            function formatCurrency(value) {
+                if (isNaN(value)) value = 0;
+                return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            
+            function calcularValores() {
                 const dataInicioStr = dataInicioInput.val();
                 const dataFimStr = dataFimInput.val();
-                const valorMensal = parseFloat(valorMensalInput.val().replace(',', '.')) || 0;
-
-                if (!dataInicioStr || !dataFimStr || valorMensal <= 0) {
-                    valorTotalHiddenInput.val(0);
-                    valorTotalDisplay.text('R$ 0,00');
-                    return;
-                }
+                
+                if (!dataInicioStr || !dataFimStr) return;
                 
                 const dataInicio = new Date(dataInicioStr + 'T00:00:00');
                 const dataFim = new Date(dataFimStr + 'T00:00:00');
-
-                if (dataFim < dataInicio) {
-                     valorTotalHiddenInput.val(0);
-                     valorTotalDisplay.text('Data Final deve ser maior que a Inicial');
-                     valorTotalDisplay.addClass('text-danger').removeClass('text-primary');
-                     return;
-                }
-
-                valorTotalDisplay.removeClass('text-danger').addClass('text-primary');
+                
+                if (dataFim < dataInicio) return; 
 
                 const meses = (dataFim.getFullYear() - dataInicio.getFullYear()) * 12 + (dataFim.getMonth() - dataInicio.getMonth()) + 1;
-                
-                const valorTotal = valorMensal * (meses > 0 ? meses : 1);
-                
-                valorTotalHiddenInput.val(valorTotal.toFixed(2));
-                
-                valorTotalDisplay.text(valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+                const numeroDeMeses = meses > 0 ? meses : 1;
+
+                if (lastChanged === 'mensal') {
+                    const valorMensal = parseCurrency(valorMensalInput.val());
+                    const valorTotalCalculado = valorMensal * numeroDeMeses;
+                    valorTotalInput.val(formatCurrency(valorTotalCalculado));
+                } else if (lastChanged === 'total') {
+                    const valorTotal = parseCurrency(valorTotalInput.val());
+                    const valorMensalCalculado = valorTotal / numeroDeMeses;
+                    valorMensalInput.val(formatCurrency(valorMensalCalculado));
+                }
             }
 
-            dataInicioInput.on('change', calcularValorTotal);
-            dataFimInput.on('change', calcularValorTotal);
-            valorMensalInput.on('input change', calcularValorTotal);
+            valorMensalInput.on('input', function() {
+                lastChanged = 'mensal';
+                calcularValores();
+            });
 
-            calcularValorTotal();
-            // --- FIM DO SCRIPT DE CÁLCULO AUTOMÁTICO ---
+            valorTotalInput.on('input', function() {
+                lastChanged = 'total';
+                calcularValores();
+            });
+            
+            dataInicioInput.on('change', function() {
+                 lastChanged = 'mensal'; 
+                 calcularValores();
+            });
+            dataFimInput.on('change', function() {
+                 lastChanged = 'mensal';
+                 calcularValores();
+            });
+            
+            valorMensalInput.val(formatCurrency(parseCurrency(valorMensalInput.val())));
+            valorTotalInput.val(formatCurrency(parseCurrency(valorTotalInput.val())));
+            
+            // --- FIM DO SCRIPT DE CÁLCULO ---
 
 
-            // --- INÍCIO SCRIPT DE ALERTAS (SweetAlert) ---
+            // --- SCRIPT DE ALERTAS (SweetAlert) ---
             const flags = document.getElementById("pageFlags");
             if (flags) {
                 const ok = (flags.dataset.success || "").trim();
@@ -201,9 +236,7 @@
                     html: err
                 });
             }
-            // --- FIM SCRIPT DE ALERTAS ---
-
-
+            
             // --- LÓGICA EXISTENTE DA PÁGINA ---
             $('#fornecedor-select').select2({ theme: 'bootstrap-5', width: '100%', minimumInputLength: 1, ajax: { url: '@Url.Action("BuscarFornecedores","Contratos")', dataType: 'json', delay: 250, data: p => ({ term: p.term, page: p.page || 1 }), processResults: (d, p) => ({ results: d.results, pagination: { more: d.pagination.more } }) } });
 
@@ -220,13 +253,20 @@
             {
                 <text>$('#historico-container').load('@Url.Action("Historico","Contratos", new { id = Model.Id })');</text>
             }
-
+            
             $('#form-contrato').on('submit', async function (e) {
+                valorMensalInput.val(parseCurrency(valorMensalInput.val()).toFixed(2).replace('.', ','));
+                valorTotalInput.val(parseCurrency(valorTotalInput.val()).toFixed(2).replace('.', ','));
+
                 const ids = $('#naturezas-select').val() || [];
                 if (ids.length > 1) {
                     e.preventDefault();
                     const result = await Swal.fire({ title: "Justificativa necessária", text: "Foi selecionado mais de uma Natureza. Informe a justificativa:", input: "textarea", showCancelButton: true });
-                    if (!result.isConfirmed || !result.value) { return false; }
+                    if (!result.isConfirmed || !result.value) { 
+                        valorMensalInput.val(formatCurrency(parseCurrency(valorMensalInput.val())));
+                        valorTotalInput.val(formatCurrency(parseCurrency(valorTotalInput.val())));
+                        return false; 
+                    }
                     $('#justificativa-hidden').val(result.value);
                     $(this).off('submit').submit();
                 }

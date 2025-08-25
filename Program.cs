@@ -20,9 +20,14 @@ builder.Configuration
     .AddEnvironmentVariables();
 
 // 1) Cultura
-var culture = new CultureInfo("en-US");
+// =====================================================================
+//      AQUI A CORREÇÃO! Alterado de "en-US" para "pt-BR"
+// =====================================================================
+var culture = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = culture;
 CultureInfo.DefaultThreadCurrentUICulture = culture;
+// =====================================================================
+
 
 // 2) MVC
 builder.Services.AddControllersWithViews();
