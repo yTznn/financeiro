@@ -1,42 +1,91 @@
 @{
-    ViewBag.Title = "Novo Cadastro";
+    ViewBag.Title = "Novo Cadastro de Fornecedor";
+    Layout = "_Layout";
 }
 
+<style>
+    body {
+        background-color: #f8f9fa; /* Um cinza bem claro para o fundo */
+    }
+
+    .choice-card {
+        text-decoration: none;
+        color: inherit;
+        border: 1px solid #e9ecef;
+        border-radius: 0.75rem; /* Bordas mais arredondadas */
+        transition: all 0.2s ease-in-out;
+        background-color: #fff;
+    }
+
+    .choice-card:hover {
+        transform: translateY(-5px) scale(1.02); /* Efeito de levantar e crescer */
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
+        border-color: var(--bs-primary);
+    }
+
+    .card-icon {
+        font-size: 4rem; /* Ícone bem grande e destacado */
+        margin-bottom: 1rem;
+        transition: color 0.2s ease-in-out;
+    }
+    
+    .choice-card:hover .card-icon {
+        color: var(--bs-primary) !important;
+    }
+
+    .select-link {
+        display: inline-block;
+        font-weight: 600;
+        color: #6c757d; /* Cor sutil para o link */
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .choice-card:hover .select-link {
+        color: var(--bs-primary);
+        letter-spacing: .5px; /* Efeito sutil no texto */
+    }
+
+</style>
+
 <div class="container py-5">
-    <div class="text-center mb-4">
-        <h1 class="display-6 fw-bold text-primary">📋 Novo Cadastro</h1>
-        <p class="text-muted">Escolha o tipo de pessoa que deseja cadastrar no sistema.</p>
+    <div class="text-center mb-5">
+        <i class="bx bx-user-plus" style="font-size: 3rem; color: var(--bs-primary);"></i>
+        <h1 class="display-5 fw-bold mt-2">Novo Fornecedor</h1>
+        <p class="lead text-muted">Para começar, escolha o tipo de cadastro que deseja realizar.</p>
     </div>
 
-    <div class="row justify-content-center">
-        <!-- Pessoa Jurídica -->
-        <div class="col-md-4 mb-3">
-            <div class="card border-primary shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h5 class="card-title">Pessoa Jurídica</h5>
-                    <p class="card-text text-muted">Empresas, instituições, organizações.</p>
-                    <a asp-controller="PessoasJuridicas"
-                       asp-action="Novo"
-                       class="btn btn-primary w-100">
-                        Cadastrar
-                    </a>
+    <div class="row justify-content-center g-4">
+        <div class="col-lg-4 col-md-5">
+            <a asp-controller="PessoasJuridicas" asp-action="Novo" class="choice-card d-block">
+                <div class="card-body p-4 p-lg-5 text-center">
+                    <i class='bx bxs-business card-icon text-primary'></i>
+                    <h4 class="card-title mb-2 fw-bold">Pessoa Jurídica</h4>
+                    <p class="card-text text-muted mb-4">Para empresas, instituições e organizações com CNPJ.</p>
+                    <span class="select-link">
+                        Selecionar <i class='bx bx-right-arrow-alt align-middle'></i>
+                    </span>
                 </div>
-            </div>
+            </a>
         </div>
 
-        <!-- Pessoa Física -->
-        <div class="col-md-4 mb-3">
-            <div class="card border-secondary shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h5 class="card-title">Pessoa Física</h5>
-                    <p class="card-text text-muted">Indivíduos, profissionais autônomos.</p>
-                    <a asp-controller="PessoasFisicas"
-                       asp-action="Novo"
-                       class="btn btn-secondary w-100">
-                        Cadastrar
-                    </a>
+        <div class="col-lg-4 col-md-5">
+            <a asp-controller="PessoasFisicas" asp-action="Novo" class="choice-card d-block">
+                <div class="card-body p-4 p-lg-5 text-center">
+                    <i class='bx bxs-user-badge card-icon text-success'></i>
+                    <h4 class="card-title mb-2 fw-bold">Pessoa Física</h4>
+                    <p class="card-text text-muted mb-4">Para indivíduos, profissionais autônomos e fornecedores com CPF.</p>
+                    <span class="select-link" style="--bs-primary: var(--bs-success);">
+                        Selecionar <i class='bx bx-right-arrow-alt align-middle'></i>
+                    </span>
                 </div>
-            </div>
+            </a>
         </div>
+    </div>
+
+    <div class="text-center mt-5">
+        <a asp-controller="Fornecedores" asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bx bx-arrow-back me-1"></i>
+            Voltar para a Lista
+        </a>
     </div>
 </div>

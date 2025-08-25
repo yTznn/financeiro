@@ -1,97 +1,114 @@
 @model Financeiro.Models.ViewModels.PessoaJuridicaViewModel
 @{
-    ViewBag.Title = Model.Id == 0 ? "Cadastrar nova pessoa jurídica" : "Editar pessoa jurídica";
+    ViewBag.Title = Model.Id == 0 ? "Nova Pessoa Jurídica" : "Editar Pessoa Jurídica";
     Layout = "_Layout";
 }
 
-<div id="pageFlags"
-     data-success="@TempData["Sucesso"]"
-     data-error="@TempData["Erro"]"></div>
+<style>
+    body { background-color: #f8f9fa; }
+    .form-card { border-radius: 0.75rem; border: 1px solid #dee2e6; }
+    .card-header-icon {
+        width: 50px;
+        height: 50px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background-color: rgba(var(--bs-primary-rgb), 0.1);
+        color: var(--bs-primary);
+        font-size: 1.75rem;
+    }
+    .input-group-text { background-color: #e9ecef; border: 1px solid #ced4da;}
+</style>
 
-<div class="container-md mt-4" style="max-width: 700px;">
-    <h2 class="mb-4 fw-bold">
-        <i class="bi bi-person-vcard-fill me-2"></i>@ViewBag.Title
-    </h2>
+<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
 
-    <form asp-controller="PessoasJuridicas"
-          asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
-          method="post"
-          class="row g-3">
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm form-card">
+                <div class="card-body p-4 p-md-5">
+                    <div class="text-center mb-4">
+                        <div class="card-header-icon mb-3">
+                             <i class='bx bxs-business'></i>
+                        </div>
+                        <h2 class="fw-bold">@ViewBag.Title</h2>
+                        <p class="text-muted">Preencha as informações abaixo para continuar.</p>
+                    </div>
 
-        @Html.AntiForgeryToken()
-        <input asp-for="Id" type="hidden" />
+                    <form asp-controller="PessoasJuridicas" asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
+                        @Html.AntiForgeryToken()
+                        <input asp-for="Id" type="hidden" />
 
-        <div class="col-12">
-            <label asp-for="RazaoSocial" class="form-label fw-semibold">
-                <i class="bi bi-briefcase-fill me-1 text-secondary"></i> Razão Social
-            </label>
-            <input asp-for="RazaoSocial" class="form-control" placeholder="Nome do fornecedor" />
-            <span asp-validation-for="RazaoSocial" class="text-danger small"></span>
-        </div>
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
 
-        <div class="col-12">
-            <label asp-for="NomeFantasia" class="form-label fw-semibold">
-                <i class="bi bi-shop-window me-1 text-secondary"></i> Nome Fantasia
-            </label>
-            <input asp-for="NomeFantasia" class="form-control" placeholder="Nome comercial / Fachada" />
-            <span asp-validation-for="NomeFantasia" class="text-danger small"></span>
-        </div>
+                        <h5 class="mb-3 fw-light text-primary border-bottom pb-2">Dados da Empresa</h5>
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <label asp-for="RazaoSocial" class="form-label"></label>
+                                <input asp-for="RazaoSocial" class="form-control" placeholder="Nome de registro da empresa" />
+                                <span asp-validation-for="RazaoSocial" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="NomeFantasia" class="form-label"></label>
+                                <input asp-for="NomeFantasia" class="form-control" placeholder="Nome comercial" />
+                                <span asp-validation-for="NomeFantasia" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="NumeroInscricao" class="form-label">CNPJ</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bx bx-id-card"></i></span>
+                                    <input asp-for="NumeroInscricao" class="form-control" placeholder="00.000.000/0000-00" />
+                                </div>
+                                <span asp-validation-for="NumeroInscricao" class="text-danger small"></span>
+                            </div>
+                        </div>
 
-        <div class="col-12">
-            <label asp-for="NumeroInscricao" class="form-label fw-semibold">
-                <i class="bi bi-file-earmark-text me-1 text-secondary"></i> CNPJ
-            </label>
-            <input asp-for="NumeroInscricao" class="form-control" placeholder="00.000.000/0000-00" />
-            <span asp-validation-for="NumeroInscricao" class="text-danger small"></span>
-        </div>
+                        <h5 class="mb-3 fw-light text-primary border-bottom pb-2">Informações de Contato</h5>
+                        <div class="row g-3 mb-4">
+                             <div class="col-md-6">
+                                <label asp-for="Email" class="form-label"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bx bx-envelope"></i></span>
+                                    <input asp-for="Email" class="form-control" placeholder="contato@empresa.com" />
+                                </div>
+                                <span asp-validation-for="Email" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Telefone" class="form-label"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bx bx-phone"></i></span>
+                                    <input asp-for="Telefone" class="form-control" placeholder="(00) 0000-0000" />
+                                </div>
+                                <span asp-validation-for="Telefone" class="text-danger small"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-4">
+                            <input asp-for="SituacaoAtiva" class="form-check-input" role="switch" />
+                            <label asp-for="SituacaoAtiva" class="form-check-label">Fornecedor Ativo</label>
+                        </div>
+                        
+                        <hr />
 
-        <div class="col-12">
-            <label asp-for="Email" class="form-label fw-semibold">
-                <i class="bi bi-envelope-fill me-1 text-secondary"></i> E-mail
-            </label>
-            <input asp-for="Email" class="form-control" placeholder="exemplo@dominio.com" />
-            <span asp-validation-for="Email" class="text-danger small"></span>
-        </div>
-
-        <div class="col-12">
-            <label asp-for="Telefone" class="form-label fw-semibold">
-                <i class="bi bi-telephone-fill me-1 text-secondary"></i> Telefone
-            </label>
-            <input asp-for="Telefone" class="form-control" placeholder="(xx) 9999-9999" />
-            <span asp-validation-for="Telefone" class="text-danger small"></span>
-        </div>
-
-        <div class="col-12 d-flex align-items-center">
-            <div class="form-check">
-                <input asp-for="SituacaoAtiva" class="form-check-input" />
-                <label asp-for="SituacaoAtiva" class="form-check-label fw-semibold">
-                    <i class="bi bi-check-circle text-success me-1"></i> Ativo
-                </label>
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <a asp-controller="Fornecedores" asp-action="Index" class="btn btn-outline-secondary px-4">Cancelar</a>
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bx bx-save me-1"></i> @(Model.Id == 0 ? "Salvar" : "Atualizar")
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-
-        <div class="col-12 mt-3">
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-save2-fill me-1"></i>
-                @(Model.Id == 0 ? "Salvar" : "Atualizar")
-            </button>
-            
-            <a asp-controller="Fornecedores" asp-action="Index" class="btn btn-secondary ms-2">
-                <i class="bi bi-arrow-left-circle me-1"></i> Cancelar
-            </a>
-        </div>
-    </form>
+    </div>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-
     <script src="~/lib/jquery-mask/jquery.mask.min.js"></script>
-
     <script>
         $(function () {
-            // ========== Máscaras
             $('#NumeroInscricao').mask('00.000.000/0000-00');
             $('#Telefone').mask('(00) 0000-00009').on('keyup', function(){
                 var val  = $(this).val().replace(/\D/g,'');
@@ -99,13 +116,12 @@
                 $(this).mask(mask);
             });
 
-            // ========== SweetAlert com TempData ==========
             const flags = document.getElementById("pageFlags");
             if (flags) {
                 const ok   = (flags.dataset.success || "").trim();
                 const erro = (flags.dataset.error   || "").trim();
-                if (ok)   Swal.fire({ text: ok,   icon: "success" });
-                if (erro) Swal.fire({ text: erro, icon: "error"   });
+                if (ok) Swal.fire({ text: ok, icon: "success", toast: true, position: 'top-end', showConfirmButton: false, timer: 3500 });
+                if (erro) Swal.fire({ text: erro, icon: "error" });
             }
         });
     </script>

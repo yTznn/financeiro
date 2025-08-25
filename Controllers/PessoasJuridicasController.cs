@@ -63,12 +63,13 @@ namespace Financeiro.Controllers
                 );
 
                 TempData["Sucesso"] = "Pessoa Jurídica criada com sucesso!";
-                return RedirectToAction("Index");
+                // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
+                return RedirectToAction("Index", "Fornecedores");
             }
             catch (Exception ex)
             {
                 TempData["Erro"] = $"Não foi possível salvar: {ex.Message}";
-                return RedirectToAction("Novo");   // <<-- esse é o ponto que muda
+                return RedirectToAction("Novo");
             }
         }
 
@@ -123,7 +124,8 @@ namespace Financeiro.Controllers
                 );
 
                 TempData["Sucesso"] = "Pessoa Jurídica atualizada com sucesso!";
-                return RedirectToAction("Index");
+                // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
+                return RedirectToAction("Index", "Fornecedores");
             }
             catch (Exception ex)
             {
@@ -135,6 +137,8 @@ namespace Financeiro.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(int pagina = 1)
         {
+            // Este método Index original não é mais a view principal de listagem.
+            // Pode ser removido se não for mais utilizado por nenhuma outra parte do sistema.
             const int itensPorPagina = 3;
 
             var (pessoas, totalRegistros) = await _repo.ListarPaginadoAsync(pagina, itensPorPagina);
@@ -142,7 +146,7 @@ namespace Financeiro.Controllers
 
             foreach (var p in pessoas)
             {
-                var possuiEnd   = await _endRepo  .ObterPorPessoaAsync        (p.Id) != null;
+                var possuiEnd   = await _endRepo.ObterPorPessoaAsync(p.Id) != null;
                 var possuiConta = await _contaRepo.ObterPorPessoaJuridicaAsync(p.Id) != null;
 
                 lista.Add(new PessoaJuridicaListaViewModel
@@ -165,12 +169,12 @@ namespace Financeiro.Controllers
         {
             try
             {
-                // Verifica se existe contrato vinculado
                 var possuiContrato = await _repo.ExisteContratoPorPessoaJuridicaAsync(id);
                 if (possuiContrato)
                 {
                     TempData["Erro"] = "Não é possível excluir: existem contratos vinculados a esta Pessoa.";
-                    return RedirectToAction("Index");
+                    // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
+                    return RedirectToAction("Index", "Fornecedores");
                 }
 
                 var pjAntes = await _repo.ObterPorIdAsync(id);
@@ -191,7 +195,8 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = $"Não foi possível excluir: {ex.Message}";
             }
 
-            return RedirectToAction("Index");
+            // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
+            return RedirectToAction("Index", "Fornecedores");
         }
     }
 }
