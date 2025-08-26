@@ -81,9 +81,12 @@
         var controller = item.Tipo == "PJ" ? "PessoasJuridicas" : "PessoasFisicas";
         var documentoFormatado = item.Tipo == "PJ" ? FormatCnpj(item.Documento) : FormatCpf(item.Documento);
         var cardClass = item.Tipo == "PJ" ? "pj-card" : "pf-card";
+        var key = $"{item.Tipo}-{item.FornecedorId}"; // chave única para evitar colisão de IDs
 
         <div class="col">
-            <div class="card h-100 shadow-sm border-0 fornecedor-card @cardClass" data-id="@item.FornecedorId" data-tipo="@item.Tipo">
+            <div class="card h-100 shadow-sm border-0 fornecedor-card @cardClass"
+                 data-id="@item.FornecedorId"
+                 data-tipo="@item.Tipo">
                 <div class="card-body d-flex flex-column">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div>
@@ -114,18 +117,31 @@
 
                     <div class="mt-3">
                         <div class="small text-muted mb-1"><i class="bx bx-map me-1"></i> Endereço principal</div>
-                        <div id="addr-@item.FornecedorId" class="text-muted"><span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…</div>
+                        <!-- IDs agora incluem o tipo para serem únicos -->
+                        <div id="addr-@key" class="text-muted">
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…
+                        </div>
                     </div>
 
                     <div class="mt-3">
                         <div class="small text-muted mb-1"><i class="bx bx-bank me-1"></i> Conta bancária (principal)</div>
-                        <div id="acc-@item.FornecedorId" class="small"><span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…</div>
+                        <!-- IDs agora incluem o tipo para serem únicos -->
+                        <div id="acc-@key" class="small">
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…
+                        </div>
                         
                         <div class="mt-2 d-flex gap-2">
-                             <a class="btn btn-sm btn-outline-success" asp-controller="ContasBancarias" asp-action="Novo" asp-route-pessoaId="@item.FornecedorId" asp-route-pf="@(item.Tipo == "PF" ? "true" : "false")">
+                             <a class="btn btn-sm btn-outline-success"
+                                asp-controller="ContasBancarias"
+                                asp-action="Novo"
+                                asp-route-pessoaId="@item.FornecedorId"
+                                asp-route-pf="@(item.Tipo == "PF" ? "true" : "false")">
                                 <i class='bx bx-plus-circle'></i> Nova conta
                             </a>
-                             <a class="btn btn-sm btn-outline-secondary" asp-controller="ContasBancarias" asp-action="@(item.Tipo == "PJ" ? "IndexPJ" : "IndexPF")" asp-route-pessoaId="@item.FornecedorId">
+                             <a class="btn btn-sm btn-outline-secondary"
+                                asp-controller="ContasBancarias"
+                                asp-action="@(item.Tipo == "PJ" ? "IndexPJ" : "IndexPF")"
+                                asp-route-pessoaId="@item.FornecedorId">
                                 <i class='bx bx-list-ul'></i> Ver todas
                             </a>
                         </div>
@@ -136,13 +152,26 @@
 
                 <div class="card-footer bg-transparent border-0 pt-3 pb-3">
                     <div class="d-flex flex-wrap gap-2">
-                        <a class="btn btn-sm btn-outline-secondary" asp-controller="Enderecos" asp-action="@(item.Tipo == "PJ" ? "GerenciarPessoaJuridica" : "GerenciarPessoaFisica")" asp-route-pessoaJuridicaId="@(item.Tipo == "PJ" ? item.FornecedorId : null)" asp-route-pessoaFisicaId="@(item.Tipo == "PF" ? item.FornecedorId : null)">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           asp-controller="Enderecos"
+                           asp-action="@(item.Tipo == "PJ" ? "GerenciarPessoaJuridica" : "GerenciarPessoaFisica")"
+                           asp-route-pessoaJuridicaId="@(item.Tipo == "PJ" ? item.FornecedorId : null)"
+                           asp-route-pessoaFisicaId="@(item.Tipo == "PF" ? item.FornecedorId : null)">
                             <i class='bx bx-map'></i> Endereços
                         </a>
-                        <a class="btn btn-sm btn-outline-primary" asp-controller="@controller" asp-action="Editar" asp-route-id="@item.FornecedorId">
+                        <a class="btn btn-sm btn-outline-primary"
+                           asp-controller="@controller"
+                           asp-action="Editar"
+                           asp-route-id="@item.FornecedorId">
                             <i class='bx bx-pencil'></i> Editar
                         </a>
-                        <form asp-controller="@controller" asp-action="Excluir" asp-route-id="@item.FornecedorId" method="post" class="d-inline js-delete-form" data-nome="@item.Nome" data-tipo="@item.Tipo">
+                        <form asp-controller="@controller"
+                              asp-action="Excluir"
+                              asp-route-id="@item.FornecedorId"
+                              method="post"
+                              class="d-inline js-delete-form"
+                              data-nome="@item.Nome"
+                              data-tipo="@item.Tipo">
                             @Html.AntiForgeryToken()
                             <button type="submit" class="btn btn-sm btn-outline-danger"><i class='bx bx-trash'></i> Excluir</button>
                         </form>
@@ -152,7 +181,6 @@
         </div>
     }
 </div>
-
 
 @if (totalPaginas > 1)
 {
@@ -204,31 +232,6 @@
         const d = ('' + cep).replace(/\D/g, '');
         return d.replace(/^(\d{5})(\d{3})$/, '$1-$2');
     }
-    
-    function formatEnderecoPf(e) {
-        if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
-        const l1 = [e.logradouro, e.numero].filter(Boolean).join(', ');
-        const l2 = [e.bairro, e.municipio].filter(Boolean).join(' - ');
-        const l3 = [e.uf, formatCep(e.cep)].filter(Boolean).join(' • ');
-        return [l1,l2,l3].filter(Boolean).join("<br>");
-    }
-
-    function renderEnderecoPj(slot, endereco) {
-        const e = endereco || {};
-        const _ = (a,b) => a ?? b ?? '';
-        slot.innerHTML = `
-            <div class="addr-grid">
-                <div class="row gx-2 gy-1">
-                    <div class="col-12"><div class="label">Logradouro</div><div class="value">${_(e.Logradouro, e.logradouro)}</div></div>
-                    <div class="col-4 col-sm-3"><div class="label">Número</div><div class="value">${_(e.Numero, e.numero)}</div></div>
-                    <div class="col-8 col-sm-9"><div class="label">Complemento</div><div class="value">${_(e.Complemento, e.complemento)}</div></div>
-                    <div class="col-4 col-sm-3"><div class="label">CEP</div><div class="value">${formatCep(_(e.Cep, e.cep))}</div></div>
-                    <div class="col-8 col-sm-3"><div class="label">Bairro</div><div class="value">${_(e.Bairro, e.bairro)}</div></div>
-                    <div class="col-8 col-sm-4"><div class="label">Município</div><div class="value">${_(e.Municipio, e.municipio)}</div></div>
-                    <div class="col-4 col-sm-2"><div class="label">UF</div><div class="value">${_(e.Uf, e.uf)}</div></div>
-                </div>
-            </div>`;
-    }
 
     function mask(val) {
         if (!val) return '';
@@ -237,7 +240,34 @@
         return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
     }
     
-    // ===== Renderização de Conta Principal (UNIFICADO E COMPLETO) =====
+    function formatEnderecoPf(e) {
+        if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
+        const logradouro = e.Logradouro ?? e.logradouro ?? '';
+        const numero = e.Numero ?? e.numero ?? '';
+        const bairro = e.Bairro ?? e.bairro ?? '';
+        const municipio = e.Municipio ?? e.municipio ?? '';
+        const uf = e.Uf ?? e.uf ?? '';
+        const cep = e.Cep ?? e.cep ?? '';
+        const l1 = [logradouro, numero].filter(Boolean).join(', ');
+        const l2 = [bairro, municipio].filter(Boolean).join(' - ');
+        const l3 = [uf, formatCep(cep)].filter(Boolean).join(' • ');
+        return [l1, l2, l3].filter(Boolean).join("<br>");
+    }
+
+    function renderEnderecoPj(slot, endereco) {
+        const e = endereco || {};
+        const _ = (a,b) => a ?? b ?? '';
+        slot.innerHTML = `<div class="addr-grid"><div class="row gx-2 gy-1">` +
+            `<div class="col-12"><div class="label">Logradouro</div><div class="value">${_(e.Logradouro, e.logradouro)}</div></div>` +
+            `<div class="col-4 col-sm-3"><div class="label">Número</div><div class="value">${_(e.Numero, e.numero)}</div></div>` +
+            `<div class="col-8 col-sm-9"><div class="label">Complemento</div><div class="value">${_(e.Complemento, e.complemento)}</div></div>` +
+            `<div class="col-4 col-sm-3"><div class="label">CEP</div><div class="value">${formatCep(_(e.Cep, e.cep))}</div></div>` +
+            `<div class="col-8 col-sm-3"><div class="label">Bairro</div><div class="value">${_(e.Bairro, e.bairro)}</div></div>` +
+            `<div class="col-8 col-sm-4"><div class="label">Município</div><div class="value">${_(e.Municipio, e.municipio)}</div></div>` +
+            `<div class="col-4 col-sm-2"><div class="label">UF</div><div class="value">${_(e.Uf, e.uf)}</div></div>` +
+            `</div></div>`;
+    }
+
     function renderPrincipalAccount(slot, acc, pessoaId, tipo) {
         if (!acc) {
             slot.innerHTML = `<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>`;
@@ -248,28 +278,16 @@
         const conta = acc.conta ?? acc.Conta ?? '';
         const pix = acc.chavePix ?? acc.ChavePix ?? '';
         const vinculoId = acc.vinculoId ?? acc.VinculoId;
-
         const urlEditar = `${base}ContasBancarias/Editar?vinculoId=${vinculoId}`;
         const urlVerTodas = `${base}ContasBancarias/${tipo === 'PJ' ? 'IndexPJ' : 'IndexPF'}?pessoaId=${pessoaId}`;
         
-        slot.innerHTML = `
-            <div class="acc-item">
-                <div class="acc-main">
-                    <div><strong>${banco || '(Sem banco)'}</strong>
-                        <span class="acc-chip chip-principal ms-2"><i class='bx bxs-star me-1'></i> Principal</span>
-                    </div>
-                    <div class="acc-muted">
-                        Agência: <span class="secret" data-secret>${mask(agencia)}</span> ·
-                        Conta: <span class="secret" data-secret>${mask(conta)}</span>
-                        ${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}
-                    </div>
-                </div>
-                <div class="acc-actions d-flex gap-1">
-                    <button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar"><i class='bx bx-low-vision'></i></button>
-                    <a class="btn btn-light border" href="${urlEditar}" title="Editar"><i class='bx bx-pencil'></i></a>
-                    <a class="btn btn-light border" href="${urlVerTodas}" title="Ver todas"><i class='bx bx-list-ul'></i></a>
-                </div>
-            </div>`;
+        slot.innerHTML = `<div class="acc-item" data-vinculo="${vinculoId}"><div class="acc-main">` +
+            `<div><strong>${banco || '(Sem banco)'}</strong><span class="acc-chip chip-principal ms-2"><i class='bx bxs-star me-1'></i> Principal</span></div>` +
+            `<div class="acc-muted">Agência: <span class="secret" data-secret>${mask(agencia)}</span> · Conta: <span class="secret" data-secret>${mask(conta)}</span>` +
+            `${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}</div></div>` +
+            `<div class="acc-actions d-flex gap-1"><button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar"><i class='bx bx-low-vision'></i></button>` +
+            `<a class="btn btn-light border" href="${urlEditar}" title="Editar"><i class='bx bx-pencil'></i></a>` +
+            `<a class="btn btn-light border" href="${urlVerTodas}" title="Ver todas"><i class='bx bx-list-ul'></i></a></div></div>`;
 
         slot.querySelector('.toggle-visibility')?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -279,15 +297,22 @@
 
     document.querySelectorAll(".fornecedor-card").forEach(function (card) {
         const id = card.dataset.id;
-        const tipo = card.dataset.tipo;
+        const tipo = card.dataset.tipo; // "PJ" ou "PF"
         if (!id || !tipo) return;
-        
-        const slotAddr = document.getElementById(`addr-${id}`);
-        const addrUrl = `${base}Enderecos/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
 
-        fetch(addrUrl)
+        const key = `${tipo}-${id}`; // chave única (evita colisão de ids)
+        const fetchOptions = {
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+        };
+        
+        // ENDEREÇO
+        const slotAddr = document.getElementById(`addr-${key}`);
+        const addrUrl = `${base}Enderecos/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
+        
+        fetch(addrUrl, fetchOptions)
             .then(r => r.ok ? r.json() : Promise.reject(r))
             .then(j => {
+                if (!slotAddr) return;
                 if (!j || !j.sucesso || !j.possuiPrincipal) {
                     slotAddr.innerHTML = `<span class="badge bg-secondary"><i class='bx bx-minus me-1'></i> Sem principal</span>`;
                     return;
@@ -298,18 +323,20 @@
                     slotAddr.innerHTML = formatEnderecoPf(j.endereco);
                 }
             })
-            .catch(() => { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Erro ao carregar"; });
+            .catch(() => { if (slotAddr) { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Erro ao carregar"; } });
 
-        const slotAcc = document.getElementById(`acc-${id}`);
+        // CONTA BANCÁRIA
+        const slotAcc = document.getElementById(`acc-${key}`);
         const accUrl = `${base}ContasBancarias/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
             
-        fetch(accUrl)
+        fetch(accUrl, fetchOptions)
             .then(r => r.ok ? r.json() : Promise.reject(r))
             .then(j => {
+                if (!slotAcc) return;
                 if (!j || !j.sucesso) throw new Error("API response not successful");
                 renderPrincipalAccount(slotAcc, j.possuiPrincipal ? j.conta : null, id, tipo);
             })
-            .catch(() => { slotAcc.classList.add("text-danger"); slotAcc.textContent = "Erro ao carregar"; });
+            .catch(() => { if (slotAcc) { slotAcc.classList.add("text-danger"); slotAcc.textContent = "Erro ao carregar"; } });
     });
 
     document.addEventListener("submit", function (e) {

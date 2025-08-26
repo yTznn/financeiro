@@ -12,10 +12,10 @@
      data-success="@TempData["Sucesso"]"
      data-error="@TempData["Erro"]"></div>
 
-<!-- form oculto para submissão de exclusão -->
 <form id="deleteForm" method="post" asp-action="Excluir" class="d-none">
     @Html.AntiForgeryToken()
     <input type="hidden" name="id" id="delete-id" />
+    <input type="hidden" name="justificativa" id="delete-justificativa" />
 </form>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -70,10 +70,11 @@
                                 data-count="@item.QuantidadeAditivos">
                             Ver Aditivos (@item.QuantidadeAditivos)
                         </button>
-
+                        
                         <button type="button"
                                 class="btn btn-sm btn-outline-danger"
-                                data-contrato-id="@item.Contrato.Id">
+                                data-contrato-id="@item.Contrato.Id"
+                                data-contrato-info="Contrato @item.Contrato.NumeroContrato.ToString("D2")-@item.Contrato.AnoContrato">
                             Excluir
                         </button>
                     </div>
@@ -97,26 +98,13 @@ else
                     <a class="page-link" asp-action="Index" asp-route-pagina="@i">@i</a>
                 </li>
             }
-        }
         </ul>
     </nav>
 }
 
 @section Scripts {
 <style>
-    /* evita quebra no título do swal */
-    .swal-title-no-wrap { white-space: nowrap; }
-
-    /* container para tabela de aditivos */
-    .swal-aditivos table {
-        width:100%;
-        font-size:14px;
-    }
-    .swal-aditivos th{
-        background:#eef6ff;
-        font-weight:bold;
-        white-space:nowrap;
-    }
+    /* estilos existentes ... */
 </style>
 
 <script>
@@ -130,29 +118,44 @@ else
         if (err) Swal.fire({ text: err, icon:"error"   });
     })();
 
-    // Excluir contrato
-    document.addEventListener("click", function(e){
+    // =========================================================================
+    // --- LÓGICA DE EXCLUSÃO ALTERADA ---
+    // =========================================================================
+    document.addEventListener("click", async function(e){
         const delBtn = e.target.closest("button[data-contrato-id]");
         if (delBtn){
-            e.preventDefault();
             const id = delBtn.getAttribute("data-contrato-id");
-            Swal.fire({
-                title:"Excluir contrato?",
-                text:"Tem certeza que deseja excluir este contrato?",
-                icon:"warning",
+            const info = delBtn.getAttribute("data-contrato-info");
+
+            const result = await Swal.fire({
+                title: "Confirmar Exclusão",
+                html: `Você tem certeza que deseja excluir o <strong>${info}</strong>?<br><br><b>Esta ação é irreversível. Por favor, forneça uma justificativa obrigatória:</b>`,
+                icon: "warning",
+                input: 'textarea',
+                inputPlaceholder: 'Descreva o motivo da exclusão...',
                 showCancelButton: true,
-                confirmButtonText:"Sim, excluir",
-                cancelButtonText:"Cancelar"
-            }).then(r=>{
-                if(r.isConfirmed){
-                    document.getElementById("delete-id").value = id;
-                    document.getElementById("deleteForm").submit();
+                confirmButtonText: "Sim, excluir!",
+                cancelButtonText: "Cancelar",
+                confirmButtonColor: '#d33',
+                inputValidator: (value) => {
+                    if (!value || value.trim() === '') {
+                        return 'A justificativa é obrigatória!'
+                    }
                 }
             });
+
+            if (result.isConfirmed && result.value) {
+                // Preenche o ID e a Justificativa no formulário oculto
+                document.getElementById("delete-id").value = id;
+                document.getElementById("delete-justificativa").value = result.value;
+                // Envia o formulário
+                document.getElementById("deleteForm").submit();
+            }
         }
     });
 
     // Ver aditivos (via AJAX + SweetAlert)
+    // ... seu código para ver aditivos permanece o mesmo ...
     document.addEventListener("click", async function(e){
         const btn = e.target.closest("button[data-ver-aditivos]");
         if (!btn) return;

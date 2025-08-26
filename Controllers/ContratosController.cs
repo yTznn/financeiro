@@ -39,7 +39,7 @@ namespace Financeiro.Controllers
             if (!ModelState.IsValid)
             {
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
-                                                      .Select(e => e.ErrorMessage);
+                                                    .Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
 
                 await PrepararViewBagParaFormulario(vm);
@@ -74,7 +74,7 @@ namespace Financeiro.Controllers
             if (!ModelState.IsValid)
             {
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
-                                                      .Select(e => e.ErrorMessage);
+                                                    .Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
 
                 await PrepararViewBagParaFormulario(vm);
@@ -131,12 +131,31 @@ namespace Financeiro.Controllers
             return View("ContratoForm", vm);
         }
 
+        // MÉTODO EXCLUIR MANTIDO, POIS ESTÁ FUNCIONANDO CORRETAMENTE
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Excluir(int id)
+        public async Task<IActionResult> Excluir(int id, string justificativa)
         {
+            if (string.IsNullOrWhiteSpace(justificativa))
+            {
+                TempData["Erro"] = "A justificativa é obrigatória para excluir o contrato.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var contratoParaExcluir = await _contratoRepo.ObterParaEdicaoAsync(id);
+            if(contratoParaExcluir == null)
+            {
+                return NotFound();
+            }
+
+            await _justificativaService.RegistrarAsync(
+                "Contrato",
+                "Exclusão de Contrato",
+                id,
+                justificativa);
+            
             await _contratoRepo.ExcluirAsync(id);
-            await _logService.RegistrarExclusaoAsync("Contrato", null, id);
+            await _logService.RegistrarExclusaoAsync("Contrato", contratoParaExcluir, id);
 
             TempData["Sucesso"] = "Contrato excluído com sucesso!";
             return RedirectToAction(nameof(Index));
@@ -150,35 +169,22 @@ namespace Financeiro.Controllers
             var numero = await _contratoRepo.SugerirProximoNumeroAsync(ano);
             return Json(new { proximoNumero = numero });
         }
-
-        // ===========================================================================
-        // MÉTODO CORRIGIDO ABAIXO
-        // ===========================================================================
+        
         [HttpGet]
         public async Task<IActionResult> BuscarFornecedores(string term = "", int page = 1)
         {
-            // 1. Definimos um tamanho de página para a busca AJAX.
             const int tamanhoPagina = 10;
-
-            // 2. Chamamos a nova assinatura do método, passando o tamanho da página
-            //    e recebendo 'totalItens' em vez de 'temMais'.
             var (itens, totalItens) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(term, page, tamanhoPagina);
-
-            // 3. Calculamos se existem mais resultados a serem carregados.
             bool temMaisPaginas = (page * tamanhoPagina) < totalItens;
 
             var resultado = new
             {
                 results = itens.Select(f => new { id = $"{f.Tipo}-{f.FornecedorId}", text = $"{f.Nome} ({f.Documento})" }),
-                pagination = new { more = temMaisPaginas } // Usamos nossa nova variável
+                pagination = new { more = temMaisPaginas }
             };
             return Json(resultado);
         }
-        // ===========================================================================
-        // FIM DO MÉTODO CORRIGIDO
-        // ===========================================================================
-
-
+        
         [HttpGet]
         public async Task<IActionResult> Historico(int id, int pag = 1)
         {
