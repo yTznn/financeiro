@@ -13,5 +13,6 @@ namespace Financeiro.Models
         public bool Ativo { get; set; }
         public string? Observacao { get; set; }
         public DateTime? DataAssinatura { get; set; }
+        public int EntidadeId { get; set; }
     }
 }

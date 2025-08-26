@@ -11,5 +11,8 @@ namespace Financeiro.Repositorios
         Task AtualizarAsync(int id, TipoAcordoViewModel vm);
         Task<TipoAcordo?> ObterPorIdAsync(int id);
         Task<IEnumerable<TipoAcordo>> ListarAsync();
+        Task ExcluirAsync(int id);
+        Task<bool> ExisteNumeroAsync(string numero, int? ignorarId = null);
+        Task<string> SugerirProximoNumeroAsync(int ano);
     }
 }

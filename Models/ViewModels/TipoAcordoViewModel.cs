@@ -8,6 +8,7 @@ namespace Financeiro.Models.ViewModels
         public int Id { get; set; }
 
         [Required(ErrorMessage = "Informe o número do acordo.")]
+        [StringLength(100, ErrorMessage = "Número muito longo (máx. {1} caracteres).")]
         public string Numero { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Informe o valor.")]
@@ -16,6 +17,7 @@ namespace Financeiro.Models.ViewModels
 
         [Required(ErrorMessage = "Descreva o objeto do termo.")]
         [Display(Name = "Objeto do Termo")]
+        [StringLength(4000, ErrorMessage = "Máximo de {1} caracteres.")]
         public string Objeto { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Informe a data de início.")]
@@ -37,5 +39,10 @@ namespace Financeiro.Models.ViewModels
         [DataType(DataType.Date)]
         [Display(Name = "Data de Assinatura")]
         public DateTime? DataAssinatura { get; set; }
+
+        // ➜ NOVO (para o select de Entidade)
+        [Required(ErrorMessage = "Selecione a Entidade.")]
+        [Display(Name = "Entidade")]
+        public int EntidadeId { get; set; }
     }
 }

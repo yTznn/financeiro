@@ -1,46 +1,275 @@
 @model IEnumerable<Financeiro.Models.TipoAcordo>
 
 @{
-    ViewBag.Title = "Tipos de Acordo";
+    ViewBag.Title = "Repasses (Tipos de Acordo)";
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
+<h2 class="mb-4 d-flex align-items-center justify-content-between">
+    <span>@ViewBag.Title</span>
+    <a asp-action="Novo" class="btn btn-primary">+ Novo Repasse</a>
+</h2>
 
-<a asp-action="Novo" class="btn btn-primary mb-3">
-    + Novo Tipo de Acordo
-</a>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0 w-100" id="t-repasses">
+            <thead class="table-light">
+                <tr class="text-center">
+                    <th style="width:130px">Número</th>
+                    <th style="width:140px">Valor</th>
+                    <th>Objeto</th>
+                    <th style="width:220px">Período</th>
+                    <th style="width:180px">Entidade</th>
+                    <th style="width:100px">Status</th>
+                    <th style="width:180px">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (!Model?.Any() ?? true)
+            {
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">Nenhum repasse cadastrado.</td>
+                </tr>
+            }
+            else
+            {
+                foreach (var item in Model)
+                {
+                    var alvoId = $"obj-{item.Id}";
+                    <tr>
+                        <td class="text-center fw-semibold">@item.Numero</td>
+                        <td class="text-end fw-semibold">@item.Valor.ToString("C")</td>
 
-<table class="table table-striped table-hover table-bordered align-middle">
-    <thead class="table-light text-center">
-        <tr>
-            <th>Número</th>
-            <th style="width:120px">Valor</th>
-            <th>Objeto</th>
-            <th style="width:130px">Data Início</th>
-            <th style="width:130px">Data Fim</th>
-            <th style="width:80px">Ativo</th>
-            <th style="width:150px">Ações</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in Model)
-        {
-            <tr>
-                <td class="text-center fw-semibold">@item.Numero</td>
-                <td class="text-end">@item.Valor.ToString("C")</td>
-                <td>@item.Objeto</td>
-                <td class="text-center">@item.DataInicio.ToString("dd/MM/yyyy")</td>
-                <td class="text-center">@item.DataFim.ToString("dd/MM/yyyy")</td>
-                <td class="text-center">@((item.Ativo) ? "Sim" : "Não")</td>
-                <td class="text-center">
-                    <a class="btn btn-sm btn-outline-primary"
-                       asp-action="Editar"
-                       asp-route-id="@item.Id">
-                        Editar
-                    </a>
-                </td>
-            </tr>
+                        <!-- OBJETO: quebra de linha + clamp 3 linhas + ver mais -->
+                        <td>
+                            <div class="obj-cell" id="@alvoId" title="@item.Objeto">
+                                @item.Objeto
+                            </div>
+                            <button type="button"
+                                    class="btn btn-link p-0 small mt-1 js-toggle-obj"
+                                    data-target="@alvoId">ver mais</button>
+                        </td>
+
+                        <td class="text-center">
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary">
+                                @item.DataInicio.ToString("dd/MM/yyyy") → @item.DataFim.ToString("dd/MM/yyyy")
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-info-subtle text-info">Entidade #@item.EntidadeId</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge @(item.Ativo ? "bg-success" : "bg-secondary")">
+                                @(item.Ativo ? "Ativo" : "Inativo")
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-inline-flex gap-1">
+                                <a class="btn btn-sm btn-outline-primary"
+                                   asp-action="Editar"
+                                   asp-route-id="@item.Id">Editar</a>
+                                <form asp-action="Excluir"
+                                      asp-route-id="@item.Id"
+                                      method="post"
+                                      class="d-inline js-delete"
+                                      data-nome="@item.Numero">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginação -->
+    <div class="card-footer bg-white border-0">
+        <nav class="d-flex justify-content-center">
+            <ul class="pagination mb-0" id="pager"></ul>
+        </nav>
+        <div class="text-center small text-muted mt-2" id="pageInfo"></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        // Mensagens (TempData)
+        (function () {
+            const ok = '@(TempData["Sucesso"] ?? "")';
+            const err = '@(TempData["Erro"] ?? "")';
+            if (ok)  Swal.fire({ icon: 'success', title: 'Sucesso', text: ok });
+            if (err) Swal.fire({ icon: 'error', title: 'Ops', text: err });
+        })();
+
+        // Confirmação de exclusão (botão confirmar VERMELHO)
+        function wireDeleteConfirm() {
+            document.querySelectorAll('form.js-delete').forEach(f => {
+                if (f.dataset.bound === '1') return; // evita bind duplicado
+                f.dataset.bound = '1';
+                f.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    const nome = this.getAttribute('data-nome') || 'este repasse';
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Confirmar exclusão?',
+                        text: `Você está prestes a excluir ${nome}. Os vínculos relacionados serão removidos.`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Excluir',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#dc3545',
+                        cancelButtonColor: '#6c757d'
+                    }).then(res => { if (res.isConfirmed) this.submit(); });
+                });
+            });
         }
-    </tbody>
-</table>
+
+        // Ver mais / ver menos no Objeto
+        function isClamped(el) { return el.scrollHeight > el.clientHeight + 1; }
+        function refreshToggleButtons(scope) {
+            (scope || document).querySelectorAll('.obj-cell').forEach(div => {
+                const btn = div.parentElement.querySelector('.js-toggle-obj');
+                if (!btn) return;
+                btn.style.display = isClamped(div) ? '' : 'none';
+                btn.textContent = div.classList.contains('expanded') ? 'ver menos' : 'ver mais';
+            });
+        }
+        document.addEventListener('click', (e) => {
+            const b = e.target.closest('.js-toggle-obj');
+            if (!b) return;
+            const id = b.getAttribute('data-target');
+            const div = document.getElementById(id);
+            if (!div) return;
+            div.classList.toggle('expanded');
+            refreshToggleButtons(document);
+        });
+
+        // ====== Paginação client-side (10 por página) ======
+        (function paginate() {
+            const table = document.getElementById('t-repasses');
+            const tbody = table?.querySelector('tbody');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (!rows.length || rows[0].querySelector('td[colspan]')) {
+                // sem dados
+                document.getElementById('pager').innerHTML = '';
+                document.getElementById('pageInfo').textContent = '';
+                return;
+            }
+
+            const pageSize = 10;
+
+            function getPageFromUrl() {
+                const u = new URL(window.location.href);
+                const p = parseInt(u.searchParams.get('pag') || '1', 10);
+                return isNaN(p) || p < 1 ? 1 : p;
+            }
+            function setPageInUrl(p) {
+                const u = new URL(window.location.href);
+                u.searchParams.set('pag', p);
+                window.history.replaceState({}, '', u.toString());
+            }
+
+            let currentPage = getPageFromUrl();
+            const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            function renderPage(page) {
+                currentPage = page;
+                // mostrar/ocultar linhas
+                rows.forEach((tr, idx) => {
+                    const start = (page - 1) * pageSize;
+                    const end = start + pageSize;
+                    tr.style.display = (idx >= start && idx < end) ? '' : 'none';
+                });
+
+                // paginador
+                const pager = document.getElementById('pager');
+                pager.innerHTML = '';
+                const addItem = (label, p, disabled = false, active = false) => {
+                    const li = document.createElement('li');
+                    li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+                    const a = document.createElement('a');
+                    a.className = 'page-link';
+                    a.href = '#';
+                    a.textContent = label;
+                    if (!disabled) {
+                        a.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            renderPage(p);
+                            setPageInUrl(p);
+                            // reavaliar clamp dos objetos visíveis
+                            refreshToggleButtons(tbody);
+                        });
+                    }
+                    li.appendChild(a);
+                    pager.appendChild(li);
+                };
+
+                addItem('«', 1, currentPage === 1);
+                addItem('‹', Math.max(1, currentPage - 1), currentPage === 1);
+
+                // janela de páginas (máx 5)
+                const windowSize = 5;
+                let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+                let end = Math.min(totalPages, start + windowSize - 1);
+                if (end - start + 1 < windowSize) start = Math.max(1, end - windowSize + 1);
+
+                for (let p = start; p <= end; p++) addItem(p.toString(), p, false, p === currentPage);
+
+                addItem('›', Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+                addItem('»', totalPages, currentPage === totalPages);
+
+                // info
+                const info = document.getElementById('pageInfo');
+                const firstItem = (page - 1) * pageSize + 1;
+                const lastItem = Math.min(page * pageSize, rows.length);
+                info.textContent = `Mostrando ${firstItem}–${lastItem} de ${rows.length} registros (pág. ${page}/${totalPages})`;
+
+                // binds necessários
+                wireDeleteConfirm();
+                refreshToggleButtons(tbody);
+            }
+
+            renderPage(currentPage);
+        })();
+
+        // Recalcular clamping ao carregar e redimensionar
+        window.addEventListener('load', () => refreshToggleButtons(document));
+        window.addEventListener('resize', () => refreshToggleButtons(document));
+    </script>
+
+    <style>
+        /* Importante para permitir quebra nas colunas: */
+        #t-repasses { table-layout: fixed; }
+        #t-repasses th, #t-repasses td { vertical-align: middle; }
+
+        /* Cores utilitárias */
+        .bg-info-subtle { background: #e6f4ff !important; color: #0b6bcb !important; }
+        .bg-secondary-subtle { background: #f1f3f5 !important; color: #65717c !important; }
+
+        /* OBJETO: clamp + wrap + expand */
+        .obj-cell {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            max-width: 100%;
+        }
+        .obj-cell.expanded {
+            -webkit-line-clamp: unset;
+            overflow: visible;
+        }
+
+        .js-toggle-obj { text-decoration: none; }
+        .js-toggle-obj:hover { text-decoration: underline; }
+    </style>
+}
