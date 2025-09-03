@@ -1,13 +1,15 @@
 @using Financeiro.Models
 @model Financeiro.Models.ViewModels.AditivoViewModel
+@using System.Globalization
 
 @{
     ViewBag.Title = "Registrar Aditivo do Instrumento";
     Layout = "_Layout";
     var atual = ViewBag.VersaoAtual as AcordoVersao;
+    var br = new CultureInfo("pt-BR");
 }
 
-<div class="container py-4">
+<div class="container py-4" style="max-width: 980px;">
     <div class="text-center mb-4">
         <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
         <p class="text-muted">Preencha os dados do aditivo para o instrumento abaixo.</p>
@@ -15,17 +17,47 @@
 
     @if (atual != null)
     {
-        <div class="alert alert-info shadow-sm">
-            <strong>Versão Atual (v@(atual.Versao)):</strong><br />
-            Valor vigente: <span class="fw-semibold">@atual.Valor.ToString("C")</span> |
-            Vigência: <span class="fw-semibold">@atual.VigenciaInicio:dd/MM/yyyy</span> –
-            <span class="fw-semibold">@(atual.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")</span>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge bg-info-subtle text-info fw-semibold">Versão atual</span>
+                            <span class="badge bg-primary-subtle text-primary">v @atual.Versao</span>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Valor vigente</div>
+                                <div class="fs-5 fw-bold">@atual.Valor.ToString("C", br)</div>
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <div class="text-muted small">Vigência</div>
+                                <div class="fw-semibold">
+                                    @($"{atual.VigenciaInicio:dd/MM/yyyy}") —
+                                    @(atual.VigenciaFim.HasValue ? atual.VigenciaFim.Value.ToString("dd/MM/yyyy") : "atual")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ms-auto">
+                        <i class="bi bi-file-earmark-text text-info" style="font-size:2rem;"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 
-    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger d-none" id="validationSummary"></div>
 
-    <form asp-controller="AditivosInstrumento" asp-action="Salvar" method="post" class="row g-3 bg-light p-4 rounded shadow-sm border" id="formAditivo" novalidate>
+    <form asp-controller="AditivosInstrumento"
+          asp-action="Salvar"
+          method="post"
+          class="row g-3 bg-white p-4 rounded shadow-sm border position-relative"
+          id="formAditivo"
+          novalidate
+          data-valor-atual="@((atual?.Valor ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))">
         @Html.AntiForgeryToken()
         <input asp-for="TipoAcordoId" type="hidden" />
 
@@ -35,7 +67,7 @@
                     asp-items="Html.GetEnumSelectList<TipoAditivo>()"
                     class="form-select"
                     id="TipoAditivo">
-                <option value="">-- selecione --</option>
+                <option value="">— selecione —</option>
             </select>
             <span asp-validation-for="TipoAditivo" class="text-danger small"></span>
         </div>
@@ -46,11 +78,15 @@
             <span asp-validation-for="DataAssinatura" class="text-danger small"></span>
         </div>
 
-        <!-- Valor (digitado sempre positivo; o sistema soma/subtrai conforme o tipo) -->
-        <div class="col-md-6" id="grupoNovoValor" style="display: none;">
+        <!-- Valor (sempre positivo; o sistema soma/subtrai conforme o tipo) -->
+        <div class="col-md-6" id="grupoNovoValor" style="display:none;">
             <label asp-for="NovoValor" class="form-label fw-semibold">Valor</label>
-            <input asp-for="NovoValor" type="text" inputmode="decimal" class="form-control" id="NovoValor" />
-            <div id="ajudaValor" class="form-text fw-bold" style="color:#c1121f"></div>
+            <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input asp-for="NovoValor" type="text" inputmode="decimal" class="form-control" id="NovoValor" />
+            </div>
+            <div id="ajudaValor" class="form-text fw-semibold mt-1 text-secondary"></div>
+            <div id="previewValor" class="small mt-1 text-muted"></div>
             <span asp-validation-for="NovoValor" class="text-danger small"></span>
         </div>
 
@@ -76,13 +112,15 @@
             <span asp-validation-for="Observacao" class="text-danger small"></span>
         </div>
 
-        <div class="col-12 mt-3">
-            <button type="submit" class="btn btn-success me-2">
-                Salvar Aditivo
-            </button>
+        <div class="col-12 mt-2 d-flex gap-2">
+            <button type="submit" class="btn btn-success">Salvar Aditivo</button>
             <a asp-controller="Instrumentos" asp-action="Editar" asp-route-id="@Model.TipoAcordoId" class="btn btn-outline-secondary">
                 Voltar
             </a>
+        </div>
+
+        <div class="position-absolute top-0 end-0 m-3 d-none" id="flagAuto">
+            <span class="badge bg-primary-subtle text-primary">Cálculo automático</span>
         </div>
     </form>
 </div>
@@ -110,9 +148,13 @@
         const ajudaValor= document.getElementById('ajudaValor');
         const novaIni   = document.getElementById('NovaDataInicio');
         const novaFim   = document.getElementById('NovaDataFim');
+        const preview   = document.getElementById('previewValor');
+        const flagAuto  = document.getElementById('flagAuto');
 
         // enum atual: Prazo=1, PrazoAcrescimo=2, PrazoSupressao=3, Supressao=4, Acrescimo=5
         const T = { Prazo:1, PrazoAcrescimo:2, PrazoSupressao:3, Supressao:4, Acrescimo:5 };
+
+        const valorAtual = Number((document.getElementById('formAditivo')?.dataset?.valorAtual) || '0');
 
         function show(el, on){ if (el) el.style.display = on ? 'block' : 'none'; }
         function req(el, on){ if (el){ el.required = !!on; el.setAttribute('aria-required', on ? 'true' : 'false'); } }
@@ -121,26 +163,36 @@
             (inputs||[]).forEach(i => { if (i) i.value = ''; });
         }
 
+        function parsePtBr(s){ return Number((s||'').replace(/\./g,'').replace(',','.')) || 0; }
+        function fmtBr(n){ try { return Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); } catch { return 'R$ ' + (n||0).toFixed(2); } }
+
+        function atualizarPreview() {
+            preview.textContent = '';
+            const tipo = parseInt(selTipo?.value || '0', 10);
+            const precisaValor = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            if (!precisaValor || !inpValor) return;
+
+            const delta = parsePtBr(inpValor.value);
+            if (delta <= 0) return;
+
+            const final = (tipo === T.Supressao || tipo === T.PrazoSupressao)
+                          ? (valorAtual - delta)
+                          : (valorAtual + delta);
+
+            preview.textContent = `Valor vigente: ${fmtBr(valorAtual)}  →  Valor estimado após o aditivo: ${fmtBr(final)}.`;
+        }
+
         function atualizarAjudaValor(tipo){
-            if (!ajudaValor) return;
             let msg = '';
             switch (tipo) {
-                case T.Supressao:
-                    msg = 'O valor digitado será SUBTRAÍDO do valor vigente do instrumento.';
-                    break;
-                case T.Acrescimo:
-                    msg = 'O valor digitado será ACRESCENTADO ao valor vigente do instrumento.';
-                    break;
-                case T.PrazoSupressao:
-                    msg = 'O valor digitado será SUBTRAÍDO e o prazo também será alterado.';
-                    break;
-                case T.PrazoAcrescimo:
-                    msg = 'O valor digitado será ACRESCENTADO e o prazo também será alterado.';
-                    break;
-                default:
-                    msg = '';
+                case T.Supressao:       msg = 'O valor digitado será SUBTRAÍDO do valor vigente do instrumento.'; break;
+                case T.Acrescimo:       msg = 'O valor digitado será ACRESCENTADO ao valor vigente do instrumento.'; break;
+                case T.PrazoSupressao:  msg = 'O valor digitado será SUBTRAÍDO e o prazo também será alterado.'; break;
+                case T.PrazoAcrescimo:  msg = 'O valor digitado será ACRESCENTADO e o prazo também será alterado.'; break;
+                default: msg = '';
             }
             ajudaValor.textContent = msg;
+            flagAuto?.classList.toggle('d-none', !msg);
         }
 
         function aplicarTipo() {
@@ -161,28 +213,27 @@
             clearIfHidden(grpVig,   [novaIni, novaFim]);
 
             atualizarAjudaValor(tipo);
+            atualizarPreview();
         }
 
         selTipo?.addEventListener('change', aplicarTipo);
+        inpValor?.addEventListener('input', atualizarPreview);
         aplicarTipo(); // estado inicial
+
+        // Summary só se tiver erro
+        const summary = document.getElementById("validationSummary");
+        if (summary && summary.innerText.trim().length > 0) summary.classList.remove("d-none");
 
         // confirmação + normalização numérica antes de enviar
         const form = document.getElementById('formAditivo');
         form?.addEventListener('submit', async (e) => {
-            // validações de client antes do confirm
             if (window.jQuery && !$(form).valid()) return;
 
-            // normalização pt-BR -> en-US
             if (grpValor && grpValor.style.display !== 'none' && inpValor) {
                 const clean = (inpValor.value || '').replace(/\./g, '').replace(',', '.');
-                if (clean && isNaN(clean)) {
+                if (!clean || isNaN(clean) || Number(clean) <= 0) {
                     e.preventDefault();
-                    return Swal.fire({ icon:'warning', title:'Informe um valor numérico válido.' });
-                }
-                // valor deve ser > 0 quando exigido (sinal será definido no servidor)
-                if (!clean || Number(clean) <= 0) {
-                    e.preventDefault();
-                    return Swal.fire({ icon:'warning', title:'Informe um valor maior que zero.' });
+                    return Swal.fire({ icon:'warning', title:'Informe um valor numérico maior que zero.' });
                 }
                 inpValor.value = clean;
             }
@@ -192,7 +243,10 @@
                     e.preventDefault();
                     return Swal.fire({ icon:'warning', title:'Informe as duas datas de vigência.' });
                 }
-                if (new Date(novaFim.value) < new Date(novaIni.value)) {
+                // comparar apenas datas (sem hora)
+                const di = new Date(novaIni.value + 'T00:00:00');
+                const df = new Date(novaFim.value + 'T00:00:00');
+                if (df < di) {
                     e.preventDefault();
                     return Swal.fire({ icon:'warning', title:'Data de fim não pode ser anterior ao início.' });
                 }
@@ -209,7 +263,7 @@
             if (ok.isConfirmed) form.submit();
         });
 
-        // SweetAlert vindos do TempData (se a view for reexibida)
+        // SweetAlert vindos do TempData (se reexibir a view)
         const okMsg  = @Html.Raw(Json.Serialize(TempData["Sucesso"]?.ToString() ?? ""));
         const errMsg = @Html.Raw(Json.Serialize(TempData["Erro"]?.ToString() ?? ""));
         if (okMsg)  Swal.fire({ icon:'success', title:'Sucesso', text: okMsg });

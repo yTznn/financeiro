@@ -1,28 +1,55 @@
 @model IEnumerable<Financeiro.Models.AcordoVersao>
+@using System.Globalization
+@using Financeiro.Models
 
-<table class="table table-hover table-bordered align-middle">
-    <thead class="table-light text-center">
-        <tr>
-            <th scope="col">Versão</th>
-            <th scope="col">Vigência</th>
-            <th scope="col">Valor</th>
-            <th scope="col">Tipo Aditivo</th>
-            <th scope="col">Assinatura</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var v in Model)
-        {
-            <tr>
-                <td class="text-center fw-semibold">@v.Versao</td>
-                <td class="text-center">
-                    @v.VigenciaInicio:dd/MM/yyyy —
-                    @(v.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")
-                </td>
-                <td class="text-end">@v.Valor.ToString("C")</td>
-                <td class="text-center">@((v.TipoAditivo?.ToString()) ?? "Original")</td>
-                <td class="text-center">@((v.DataAssinatura?.ToString("dd/MM/yyyy")) ?? "-")</td>
-            </tr>
-        }
-    </tbody>
-</table>
+@{
+    var br = new CultureInfo("pt-BR");
+
+    string BadgeTipo(TipoAditivo? t) => t switch
+    {
+        null                     => "<span class=\"badge bg-secondary-subtle text-secondary\">Original</span>",
+        TipoAditivo.Prazo        => "<span class=\"badge bg-info-subtle text-info\">Prazo</span>",
+        TipoAditivo.Acrescimo    => "<span class=\"badge bg-success-subtle text-success\">Acréscimo</span>",
+        TipoAditivo.Supressao    => "<span class=\"badge bg-danger-subtle text-danger\">Supressão</span>",
+        TipoAditivo.PrazoAcrescimo => "<span class=\"badge bg-success-subtle text-success\">Prazo + Acréscimo</span>",
+        TipoAditivo.PrazoSupressao => "<span class=\"badge bg-danger-subtle text-danger\">Prazo + Supressão</span>",
+        _ => $"<span class=\"badge bg-secondary-subtle text-secondary\">{t}</span>"
+    };
+}
+
+<style>
+  /* escopo local */
+  #hist-aditivos th, #hist-aditivos td { vertical-align: middle; white-space: normal; }
+  #hist-aditivos .nowrap { white-space: nowrap; }
+  #hist-aditivos .money  { font-variant-numeric: tabular-nums; }
+  #hist-aditivos thead th { background-color:#0d6efd14; }
+</style>
+
+<div id="hist-aditivos">
+  <table class="table table-hover table-bordered align-middle mb-0">
+      <thead class="table-light text-center">
+          <tr>
+              <th scope="col" class="nowrap" style="width:80px">Versão</th>
+              <th scope="col">Vigência</th>
+              <th scope="col" class="nowrap" style="width:140px">Valor</th>
+              <th scope="col" class="nowrap" style="width:160px">Tipo Aditivo</th>
+              <th scope="col" class="nowrap" style="width:120px">Assinatura</th>
+          </tr>
+      </thead>
+      <tbody>
+          @foreach (var v in Model)
+          {
+              <tr>
+                  <td class="text-center fw-semibold nowrap">@v.Versao</td>
+                  <td class="text-center">
+                      @($"{v.VigenciaInicio:dd/MM/yyyy}") —
+                      @(v.VigenciaFim.HasValue ? v.VigenciaFim.Value.ToString("dd/MM/yyyy") : "atual")
+                  </td>
+                  <td class="text-end money">@v.Valor.ToString("C", br)</td>
+                  <td class="text-center">@Html.Raw(BadgeTipo(v.TipoAditivo))</td>
+                  <td class="text-center">@((v.DataAssinatura.HasValue ? v.DataAssinatura.Value.ToString("dd/MM/yyyy") : "-"))</td>
+              </tr>
+          }
+      </tbody>
+  </table>
+</div>

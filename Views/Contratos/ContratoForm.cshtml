@@ -1,5 +1,6 @@
 @model Financeiro.Models.ViewModels.ContratoViewModel
 @using Financeiro.Models
+@using System.Linq
 
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
@@ -10,8 +11,8 @@
 }
 
 <div id="pageFlags"
-     data-success="@TempData["Sucesso"]"
-     data-error="@TempData["Erro"]"></div>
+     data-success="@(TempData["Sucesso"] ?? TempData["MensagemSucesso"])"
+     data-error="@(TempData["Erro"] ?? TempData["MensagemErro"])"></div>
 
 <h3 class="fw-bold mb-4"><i class="bi bi-file-earmark-text-fill me-2"></i>@ViewData["Title"]</h3>
 <hr />
@@ -142,6 +143,7 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
         // ===== FUNÇÕES GLOBAIS (devem existir antes dos overrides) =====
@@ -160,34 +162,36 @@
         }
 
         // ===== CONFIGURAÇÃO DO JQUERY VALIDATE =====
-        $.validator.setDefaults({
-            onkeyup: false,
-            onfocusout: function (element) { $(element).valid(); }
-        });
+        if ($.validator) {
+            $.validator.setDefaults({
+                onkeyup: false,
+                onfocusout: function (element) { $(element).valid(); }
+            });
 
-        // Aceitar vírgula como decimal
-        $.validator.methods.number = function (value, element) {
-            const parsedValue = parseCurrency(value);
-            return this.optional(element) || !isNaN(parsedValue);
-        };
+            // Aceitar vírgula como decimal
+            $.validator.methods.number = function (value, element) {
+                const parsedValue = parseCurrency(value);
+                return this.optional(element) || !isNaN(parsedValue);
+            };
 
-        // Comparações min/max/range usando parseCurrency
-        $.validator.methods.min = function (value, element, param) {
-            const v = parseCurrency(value);
-            const p = typeof param === "string" ? parseFloat(param.replace(",", ".")) : param;
-            return this.optional(element) || (!isNaN(v) && v >= p);
-        };
-        $.validator.methods.max = function (value, element, param) {
-            const v = parseCurrency(value);
-            const p = typeof param === "string" ? parseFloat(param.replace(",", ".")) : param;
-            return this.optional(element) || (!isNaN(v) && v <= p);
-        };
-        $.validator.methods.range = function (value, element, params) {
-            const v = parseCurrency(value);
-            const min = typeof params[0] === "string" ? parseFloat(params[0].replace(",", ".")) : params[0];
-            const max = typeof params[1] === "string" ? parseFloat(params[1].replace(",", ".")) : params[1];
-            return this.optional(element) || (!isNaN(v) && v >= min && v <= max);
-        };
+            // Comparações min/max/range usando parseCurrency
+            $.validator.methods.min = function (value, element, param) {
+                const v = parseCurrency(value);
+                const p = typeof param === "string" ? parseFloat(param.replace(",", ".")) : param;
+                return this.optional(element) || (!isNaN(v) && v >= p);
+            };
+            $.validator.methods.max = function (value, element, param) {
+                const v = parseCurrency(value);
+                const p = typeof param === "string" ? parseFloat(param.replace(",", ".")) : param;
+                return this.optional(element) || (!isNaN(v) && v <= p);
+            };
+            $.validator.methods.range = function (value, element, params) {
+                const v = parseCurrency(value);
+                const min = typeof params[0] === "string" ? parseFloat(params[0].replace(",", ".")) : params[0];
+                const max = typeof params[1] === "string" ? parseFloat(params[1].replace(",", ".")) : params[1];
+                return this.optional(element) || (!isNaN(v) && v >= min && v <= max);
+            };
+        }
 
         $(document).ready(function () {
             const isEdit = @((Model.Id > 0).ToString().ToLower());

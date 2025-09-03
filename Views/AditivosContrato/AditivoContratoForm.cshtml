@@ -1,74 +1,110 @@
 @model Financeiro.Models.ViewModels.AditivoContratoViewModel
 @using Financeiro.Models
+@using System.Globalization
 
 @{
-    ViewBag.Title = "Registrar Aditivo de Contrato";
-    Layout = "_Layout";
+    ViewBag.Title  = "Registrar Aditivo de Contrato";
+    Layout         = "_Layout";
     var versaoAtual = ViewBag.VersaoAtual as ContratoVersao;
+    var br = new CultureInfo("pt-BR");
 }
 
-<div class="container-md mt-4" style="max-width: 900px;">
+<div class="container-md mt-4" style="max-width: 980px;">
     <div class="text-center mb-4">
         <h2 class="fw-bold">@ViewBag.Title</h2>
-        <p class="text-muted">Preencha os dados do novo aditivo para o contrato abaixo.</p>
+        <p class="text-muted mb-0">Preencha os dados do novo aditivo para o contrato abaixo.</p>
     </div>
 
-    @* Versão atual do contrato *@
+    @* ——— Versão atual do contrato ——— *@
     @if (versaoAtual != null)
     {
-        <div class="alert alert-info shadow-sm mb-3">
-            <strong>Versão Atual (v@versaoAtual.Versao)</strong><br />
-            Valor: <span class="fw-semibold">@versaoAtual.ValorContrato.ToString("C")</span>
-            &nbsp;|&nbsp;
-            Vigência: <span class="fw-semibold">@versaoAtual.DataInicio:dd/MM/yyyy</span> a
-            <span class="fw-semibold">@versaoAtual.DataFim:dd/MM/yyyy</span><br />
-            Objeto: <span class="fw-semibold">@versaoAtual.ObjetoContrato</span>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge bg-info-subtle text-info fw-semibold">Versão atual</span>
+                            <span class="badge bg-primary-subtle text-primary">v @versaoAtual.Versao</span>
+                        </div>
+
+                        <div class="text-muted small">Objeto</div>
+                        <div class="fw-semibold mb-2">@versaoAtual.ObjetoContrato</div>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <div class="text-muted small">Valor vigente</div>
+                                <div class="fs-5 fw-bold">@versaoAtual.ValorContrato.ToString("C", br)</div>
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <div class="text-muted small">Vigência</div>
+                                <div class="fw-semibold">
+                                    @($"{versaoAtual.DataInicio:dd/MM/yyyy}") — @($"{versaoAtual.DataFim:dd/MM/yyyy}")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ms-auto">
+                        <i class="bi bi-file-earmark-text text-info" style="font-size:2rem;"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 
-    @* Summary de erros *@
+    @* summary de validação *@
     <div asp-validation-summary="All" class="alert alert-danger d-none" id="validationSummary"></div>
 
-    <form asp-action="Salvar" method="post" class="row g-3 bg-white p-4 rounded shadow-sm border">
+    <form asp-action="Salvar"
+          method="post"
+          class="row g-3 bg-white p-4 rounded shadow-sm border position-relative"
+          id="formAditivoContrato"
+          novalidate
+          data-valor-atual="@((versaoAtual?.ValorContrato ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))">
         @Html.AntiForgeryToken()
         <input asp-for="ContratoId" type="hidden" />
 
         <div class="col-md-4">
-            <label asp-for="TipoAditivo" class="form-label fw-semibold"></label>
+            <label asp-for="TipoAditivo" class="form-label fw-semibold">Tipo de Aditivo</label>
             <select asp-for="TipoAditivo"
                     asp-items="Html.GetEnumSelectList<TipoAditivo>()"
                     class="form-select" id="tipoAditivoSelect">
-                <option value="">-- selecione --</option>
+                <option value="">— selecione —</option>
             </select>
             <span asp-validation-for="TipoAditivo" class="text-danger small"></span>
         </div>
 
         <div class="col-md-4">
-            <label asp-for="DataInicioAditivo" class="form-label fw-semibold"></label>
+            <label asp-for="DataInicioAditivo" class="form-label fw-semibold">Início do Aditivo</label>
             <input asp-for="DataInicioAditivo" type="date" class="form-control" />
             <span asp-validation-for="DataInicioAditivo" class="text-danger small"></span>
         </div>
 
         <div class="col-md-4" id="campo-novo-valor" style="display:none;">
-            <label asp-for="NovoValor" class="form-label fw-semibold"></label>
-            <input asp-for="NovoValor" type="number" step="0.01" class="form-control" />
+            <label asp-for="NovoValor" class="form-label fw-semibold">Valor (positivo)</label>
+            <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input asp-for="NovoValor" type="text" inputmode="decimal" class="form-control" id="NovoValor" />
+            </div>
+            <div id="ajudaValor" class="form-text fw-semibold mt-1 text-secondary"></div>
+            <div id="previewValor" class="small mt-1 text-muted"></div>
             <span asp-validation-for="NovoValor" class="text-danger small"></span>
         </div>
 
         <div class="col-md-4" id="campo-nova-data" style="display:none;">
-            <label asp-for="NovaDataFim" class="form-label fw-semibold"></label>
-            <input asp-for="NovaDataFim" type="date" class="form-control" />
+            <label asp-for="NovaDataFim" class="form-label fw-semibold">Nova Data de Fim</label>
+            <input asp-for="NovaDataFim" type="date" class="form-control" id="NovaDataFim" />
             <span asp-validation-for="NovaDataFim" class="text-danger small"></span>
         </div>
 
         <div class="col-12" id="campo-novo-objeto" style="display:none;">
-            <label asp-for="NovoObjeto" class="form-label fw-semibold"></label>
+            <label asp-for="NovoObjeto" class="form-label fw-semibold">Novo Objeto</label>
             <textarea asp-for="NovoObjeto" class="form-control" rows="3"></textarea>
             <span asp-validation-for="NovoObjeto" class="text-danger small"></span>
         </div>
 
         <div class="col-12">
-            <label asp-for="Observacao" class="form-label fw-semibold"></label>
+            <label asp-for="Observacao" class="form-label fw-semibold">Observações</label>
             <textarea asp-for="Observacao"
                       class="form-control"
                       placeholder="Observações adicionais..."
@@ -76,54 +112,141 @@
             <span asp-validation-for="Observacao" class="text-danger small"></span>
         </div>
 
-        <div class="col-12">
-            <button type="submit" class="btn btn-success me-2">
+        <div class="col-12 d-flex gap-2 pt-2">
+            <button type="submit" class="btn btn-success">
                 <i class="bi bi-save2-fill me-1"></i> Salvar Aditivo
             </button>
-            <a asp-controller="Contratos"
-               asp-action="Editar"
-               asp-route-id="@Model.ContratoId"
-               class="btn btn-outline-secondary">
+            <a asp-controller="Contratos" asp-action="Editar" asp-route-id="@Model.ContratoId" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left-circle me-1"></i> Cancelar
             </a>
+        </div>
+
+        <div class="position-absolute top-0 end-0 m-3 d-none" id="flagAuto">
+            <span class="badge bg-primary-subtle text-primary">Cálculo automático</span>
         </div>
     </form>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-        // Exibir/esconder campos conforme o tipo de aditivo
-        document.addEventListener('DOMContentLoaded', function () {
-            const tipoSelect = document.getElementById('tipoAditivoSelect');
-            const campoValor = document.getElementById('campo-novo-valor');
-            const campoData  = document.getElementById('campo-nova-data');
-            const campoObj   = document.getElementById('campo-novo-objeto');
+    document.addEventListener('DOMContentLoaded', function () {
+        // aceitar formato pt-BR no client-validate
+        if (window.jQuery && $.validator) {
+            $.validator.methods.number = function (value, element) {
+                if (this.optional(element)) return true;
+                const clean = (value || '').replace(/\./g, '').replace(',', '.');
+                return clean.trim() !== '' && !isNaN(clean);
+            };
+        }
 
-            function toggleCampos() {
-                const valor = tipoSelect.value;
+        const form        = document.getElementById('formAditivoContrato');
+        const tipoSelect  = document.getElementById('tipoAditivoSelect');
+        const campoValor  = document.getElementById('campo-novo-valor');
+        const campoData   = document.getElementById('campo-nova-data');
+        const campoObj    = document.getElementById('campo-novo-objeto');
+        const inpValor    = document.getElementById('NovoValor');
+        const ajudaValor  = document.getElementById('ajudaValor');
+        const preview     = document.getElementById('previewValor');
+        const novaFim     = document.getElementById('NovaDataFim');
+        const flagAuto    = document.getElementById('flagAuto');
 
-                // campos que afetam prazo
-                const exibePrazo = ["1", "2", "3"].includes(valor);
-                // campos que afetam valor
-                const exibeValor = ["2", "3", "4", "5"].includes(valor);
+        // enum: Prazo=1, PrazoAcrescimo=2, PrazoSupressao=3, Supressao=4, Acrescimo=5
+        const T = { Prazo:1, PrazoAcrescimo:2, PrazoSupressao:3, Supressao:4, Acrescimo:5 };
 
-                campoValor.style.display = exibeValor ? 'block' : 'none';
-                campoData.style.display  = exibePrazo ? 'block' : 'none';
+        const valorAtual = Number(form?.dataset?.valorAtual || '0'); // vindo do data-valor-atual
 
-                // (📌 se no futuro quiser permitir troca de objeto, alterar aqui)
-                campoObj.style.display = 'none';
+        function show(el, on){ if (el) el.style.display = on ? 'block' : 'none'; }
+        function req(el, on){ if (el){ el.required = !!on; el.setAttribute('aria-required', on ? 'true' : 'false'); } }
+
+        function atualizarAjudaValor(tipo){
+            let msg = '';
+            switch (tipo) {
+                case T.Supressao:       msg = 'O valor digitado será SUBTRAÍDO do valor vigente do contrato.'; break;
+                case T.Acrescimo:       msg = 'O valor digitado será ACRESCENTADO ao valor vigente do contrato.'; break;
+                case T.PrazoSupressao:  msg = 'O valor digitado será SUBTRAÍDO e o prazo também será alterado.'; break;
+                case T.PrazoAcrescimo:  msg = 'O valor digitado será ACRESCENTADO e o prazo também será alterado.'; break;
+                default: msg = '';
+            }
+            ajudaValor.textContent = msg;
+            flagAuto?.classList.toggle('d-none', !msg);
+        }
+
+        function parsePtBr(s){
+            if(!s) return 0;
+            return Number((s || '').replace(/\./g,'').replace(',','.')) || 0;
+        }
+        function fmtBr(n){
+            try { return Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+            catch { return 'R$ ' + (n || 0).toFixed(2); }
+        }
+
+        function atualizarPreview(){
+            preview.textContent = '';
+            const tipo = parseInt(tipoSelect?.value || '0', 10);
+            const precisaValor = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            if(!precisaValor || !inpValor) return;
+
+            const delta = parsePtBr(inpValor.value);
+            if (delta <= 0) return;
+
+            const final = (tipo === T.Supressao || tipo === T.PrazoSupressao)
+                          ? (valorAtual - delta)
+                          : (valorAtual + delta);
+
+            preview.textContent = `Valor vigente: ${fmtBr(valorAtual)}  →  Valor estimado após o aditivo: ${fmtBr(final)}.`;
+        }
+
+        function aplicarTipo() {
+            const tipo = parseInt(tipoSelect?.value || '0', 10);
+
+            const precisaValor    = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            const precisaVigencia = [T.Prazo, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+
+            show(campoValor, precisaValor);
+            show(campoData,  precisaVigencia);
+            show(campoObj,   false); // manter oculto por ora
+
+            req(inpValor, precisaValor);
+            req(novaFim,  precisaVigencia);
+
+            atualizarAjudaValor(tipo);
+            atualizarPreview();
+        }
+
+        tipoSelect?.addEventListener('change', aplicarTipo);
+        inpValor?.addEventListener('input', atualizarPreview);
+        aplicarTipo(); // estado inicial
+
+        // mostrar summary apenas quando houver erros
+        const summary = document.getElementById("validationSummary");
+        if (summary && summary.innerText.trim().length > 0) summary.classList.remove("d-none");
+
+        // submit com normalização e confirmação
+        form?.addEventListener('submit', async (e) => {
+            if (window.jQuery && !$(form).valid()) return;
+
+            if (campoValor && campoValor.style.display !== 'none' && inpValor) {
+                const clean = (inpValor.value || '').replace(/\./g, '').replace(',', '.');
+                if (!clean || isNaN(clean) || Number(clean) <= 0) {
+                    e.preventDefault();
+                    return Swal.fire({ icon:'warning', title:'Informe um valor numérico maior que zero.' });
+                }
+                inpValor.value = clean;
             }
 
-            tipoSelect.addEventListener('change', toggleCampos);
-            toggleCampos();
-
-            // Mostrar summary somente quando houver erro
-            const summary = document.getElementById("validationSummary");
-            if (summary && summary.innerText.trim().length > 0) {
-                summary.classList.remove("d-none");
-            }
+            e.preventDefault();
+            const ok = await Swal.fire({
+                icon:'question',
+                title:'Confirmar registro do aditivo?',
+                showCancelButton:true,
+                confirmButtonText:'Salvar',
+                cancelButtonText:'Cancelar'
+            });
+            if (ok.isConfirmed) form.submit();
         });
+    });
     </script>
 }

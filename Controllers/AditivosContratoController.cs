@@ -3,6 +3,7 @@ using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Servicos;
 using System.Threading.Tasks;
+using System;
 
 namespace Financeiro.Controllers
 {
@@ -13,31 +14,28 @@ namespace Financeiro.Controllers
     {
         private readonly IContratoVersaoRepositorio _versaoRepo;
         private readonly IContratoVersaoService _service;
+        private readonly ILogService _logService;
+        private readonly IJustificativaService _justificativaService;
 
         public AditivosContratoController(
             IContratoVersaoRepositorio versaoRepo,
-            IContratoVersaoService service)
+            IContratoVersaoService service,
+            ILogService logService,
+            IJustificativaService justificativaService)
         {
             _versaoRepo = versaoRepo;
             _service = service;
+            _logService = logService;
+            _justificativaService = justificativaService;
         }
 
         [HttpGet]
         public async Task<IActionResult> Novo(int contratoId)
         {
-            // Busca a versão atual para exibir os dados no formulário
             var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(contratoId);
-            if (versaoAtual == null)
-            {
-                // Se não houver versão, o serviço criará a original.
-                // Podemos redirecionar para uma página de erro ou deixar o serviço lidar com isso.
-                // Por enquanto, vamos permitir que o serviço crie a versão 1.
-            }
-            
             ViewBag.VersaoAtual = versaoAtual;
+
             var vm = new AditivoContratoViewModel { ContratoId = contratoId };
-            
-            // Ainda vamos criar esta View no próximo passo
             return View("AditivoContratoForm", vm);
         }
 
@@ -52,9 +50,54 @@ namespace Financeiro.Controllers
             }
 
             await _service.CriarAditivoAsync(vm);
-            
+
+            // ✅ log de criação do aditivo de contrato
+            await _logService.RegistrarCriacaoAsync(
+                "ContratoAditivo",
+                vm,
+                vm.ContratoId);
+
             TempData["MensagemSucesso"] = "Aditivo do contrato salvo com sucesso!";
             return RedirectToAction("Editar", "Contratos", new { id = vm.ContratoId });
+        }
+
+        /* ========== CANCELAR ÚLTIMO ADITIVO (POST/AJAX) ========== */
+        [HttpPost]
+        public async Task<IActionResult> CancelarAditivo([FromBody] CancelarAditivoViewModel body)
+        {
+            try
+            {
+                var atual = await _versaoRepo.ObterVersaoAtualAsync(body.ContratoId);
+                if (atual == null || atual.Versao != body.Versao)
+                    return BadRequest("Versão inválida.");
+
+                // Exclui a versão atual (último aditivo)
+                await _versaoRepo.ExcluirAsync(atual.Id);
+
+                // Restaura o contrato a partir da versão anterior (sua infra já provê esse método)
+                var anterior = await _versaoRepo.ObterVersaoAtualAsync(body.ContratoId);
+                if (anterior != null)
+                {
+                    await _versaoRepo.RestaurarContratoAPartirDaVersaoAsync(anterior);
+                }
+
+                // ✅ log da exclusão (cancelamento do aditivo)
+                await _logService.RegistrarExclusaoAsync("ContratoAditivo", atual, atual.Id);
+
+                // ✅ justificativa obrigatória no cancelamento
+                await _justificativaService.RegistrarAsync(
+                    "ContratoAditivo",
+                    $"Cancelamento da versão {atual.Versao}",
+                    atual.Id,
+                    body.Justificativa);
+
+                return Ok(new { message = "Aditivo cancelado com sucesso." });
+            }
+            catch (Exception)
+            {
+                // deixe propagar pro seu handler global; se preferir, retorne algo amigável aqui
+                throw;
+            }
         }
     }
 }

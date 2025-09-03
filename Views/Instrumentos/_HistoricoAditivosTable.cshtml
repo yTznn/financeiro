@@ -1,47 +1,87 @@
 @model IEnumerable<Financeiro.Models.AcordoVersao>
+@using System.Globalization
+@using Financeiro.Models
 
 @{
+    var br = new CultureInfo("pt-BR");
     int totalPaginas = ViewBag.TotalPaginas ?? 1;
     int paginaAtual  = ViewBag.PaginaAtual  ?? 1;
+
+    // usado pelos links de paginação (fallback pelo 1º item)
+    int instrumentoId = ViewBag.InstrumentoId ?? (Model?.FirstOrDefault()?.TipoAcordoId ?? 0);
+
+    string BadgeTipo(TipoAditivo? t) => t switch
+    {
+        null                     => "<span class=\"badge bg-secondary-subtle text-secondary\">Original</span>",
+        TipoAditivo.Prazo        => "<span class=\"badge bg-info-subtle text-info\">Prazo</span>",
+        TipoAditivo.Acrescimo    => "<span class=\"badge bg-success-subtle text-success\">Acréscimo</span>",
+        TipoAditivo.Supressao    => "<span class=\"badge bg-danger-subtle text-danger\">Supressão</span>",
+        TipoAditivo.PrazoAcrescimo => "<span class=\"badge bg-success-subtle text-success\">Prazo + Acréscimo</span>",
+        TipoAditivo.PrazoSupressao => "<span class=\"badge bg-danger-subtle text-danger\">Prazo + Supressão</span>",
+        _ => $"<span class=\"badge bg-secondary-subtle text-secondary\">{t}</span>"
+    };
 }
 
-<table class="table table-sm table-bordered table-hover table-striped align-middle">
-    <thead class="table-light text-center">
-        <tr>
-            <th style="width:80px">Versão</th>
-            <th>Vigência</th>
-            <th style="width:120px">Valor</th>
-            <th style="width:140px">Tipo Aditivo</th>
-            <th style="width:120px">Assinatura</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var v in Model)
-        {
-            <tr>
-                <td class="text-center fw-semibold">@v.Versao</td>
-                <td class="text-center">
-                    @v.VigenciaInicio:dd/MM/yyyy —
-                    @(v.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")
-                </td>
-                <td class="text-end">@v.Valor.ToString("C")</td>
-                <td class="text-center">@((v.TipoAditivo?.ToString()) ?? "Original")</td>
-                <td class="text-center">@((v.DataAssinatura?.ToString("dd/MM/yyyy")) ?? "-")</td>
-            </tr>
-        }
-    </tbody>
-</table>
+<style>
+  #hist-aditivos-table th, #hist-aditivos-table td { vertical-align: middle; white-space: normal; }
+  #hist-aditivos-table .nowrap { white-space: nowrap; }
+  #hist-aditivos-table .money  { font-variant-numeric: tabular-nums; }
+  #hist-aditivos-table thead th { background-color:#0d6efd14; }
+</style>
 
-@if (totalPaginas > 1)
-{
-    <nav>
-        <ul class="pagination pagination-sm justify-content-center">
-            @for (int p = 1; p <= totalPaginas; p++)
-            {
-                <li class="page-item @(p == paginaAtual ? "active" : "")">
-                    <a class="page-link hist-page-link" href="#" data-pagina="@p">@p</a>
-                </li>
-            }
-        </ul>
-    </nav>
-}
+<div id="hist-aditivos-table">
+  <table class="table table-sm table-bordered table-hover align-middle mb-2">
+      <thead class="table-light text-center">
+          <tr>
+              <th class="nowrap" style="width:80px">Versão</th>
+              <th>Vigência</th>
+              <th class="nowrap" style="width:140px">Valor</th>
+              <th class="nowrap" style="width:160px">Tipo Aditivo</th>
+              <th class="nowrap" style="width:120px">Assinatura</th>
+          </tr>
+      </thead>
+      <tbody>
+          @foreach (var v in Model)
+          {
+              <tr>
+                  <td class="text-center fw-semibold nowrap">@v.Versao</td>
+                  <td class="text-center">
+                      @($"{v.VigenciaInicio:dd/MM/yyyy}") —
+                      @(v.VigenciaFim.HasValue ? v.VigenciaFim.Value.ToString("dd/MM/yyyy") : "atual")
+                  </td>
+                  <td class="text-end money">@v.Valor.ToString("C", br)</td>
+                  <td class="text-center">@Html.Raw(BadgeTipo(v.TipoAditivo))</td>
+                  <td class="text-center">@((v.DataAssinatura.HasValue ? v.DataAssinatura.Value.ToString("dd/MM/yyyy") : "-"))</td>
+              </tr>
+          }
+      </tbody>
+  </table>
+
+  @if (totalPaginas > 1)
+  {
+      <nav>
+          <ul class="pagination pagination-sm justify-content-center">
+              @for (int p = 1; p <= totalPaginas; p++)
+              {
+                  <li class="page-item @(p == paginaAtual ? "active" : "")">
+                      <a class="page-link hist-page-link"
+                         href="#"
+                         data-pagina="@p"
+                         data-instrumento-id="@instrumentoId">@p</a>
+                  </li>
+              }
+          </ul>
+      </nav>
+  }
+</div>
+
+<script>
+  // Paginação AJAX: recarrega o conteúdo do modal/área #histBody
+  $(document).on('click', '.hist-page-link', function (e) {
+      e.preventDefault();
+      const page = $(this).data('pagina');
+      const id   = $(this).data('instrumento-id') || @instrumentoId;
+      const url  = '@Url.Action("Historico","Instrumentos")' + '?id=' + id + '&pag=' + page;
+      $('#histBody').load(url);
+  });
+</script>
