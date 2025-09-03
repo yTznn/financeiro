@@ -30,7 +30,7 @@
             <select asp-for="TipoAcordoId"
                     class="form-select"
                     asp-items="@(new SelectList(ViewBag.TiposDeAcordo, "Id", "Numero"))">
-                <option value="">Selecione um termo</option>
+                <option value="">Selecione um Instrumento</option>
             </select>
             <span asp-validation-for="TipoAcordoId" class="text-danger"></span>
         </div>

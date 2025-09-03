@@ -22,8 +22,12 @@ build_property._RazorSourceGeneratorDebug =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWRpdGl2b3NDb250cmF0b1xBZGl0aXZvQ29udHJhdG9Gb3JtLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/Aditivos/AditivoForm.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWRpdGl2b3NcQWRpdGl2b0Zvcm0uY3NodG1s
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/AditivosInstrumento/AditivoForm.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWRpdGl2b3NJbnN0cnVtZW50b1xBZGl0aXZvRm9ybS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/AditivosTipoAcordo/AditivoForm.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQWRpdGl2b3NUaXBvQWNvcmRvXEFkaXRpdm9Gb3JtLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/ContasBancarias/ContaForm.cshtml]
@@ -102,6 +106,22 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/Instrumentos/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5zdHJ1bWVudG9zXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/Instrumentos/InstrumentoForm.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5zdHJ1bWVudG9zXEluc3RydW1lbnRvRm9ybS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/Instrumentos/_HistoricoAditivos.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5zdHJ1bWVudG9zXF9IaXN0b3JpY29BZGl0aXZvcy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/Instrumentos/_HistoricoAditivosTable.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5zdHJ1bWVudG9zXF9IaXN0b3JpY29BZGl0aXZvc1RhYmxlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/Naturezas/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmF0dXJlemFzXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
@@ -160,22 +180,6 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/Shared/_ValidationScriptsPartial.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/TipoAcordos/Index.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVGlwb0Fjb3Jkb3NcSW5kZXguY3NodG1s
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/TipoAcordos/TipoAcordoForm.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVGlwb0Fjb3Jkb3NcVGlwb0Fjb3Jkb0Zvcm0uY3NodG1s
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/TipoAcordos/_HistoricoAditivos.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVGlwb0Fjb3Jkb3NcX0hpc3Rvcmljb0FkaXRpdm9zLmNzaHRtbA==
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/TipoAcordos/_HistoricoAditivosTable.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVGlwb0Fjb3Jkb3NcX0hpc3Rvcmljb0FkaXRpdm9zVGFibGUuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/Usuarios/Index.cshtml]

@@ -1,0 +1,219 @@
+@using Financeiro.Models
+@model Financeiro.Models.ViewModels.AditivoViewModel
+
+@{
+    ViewBag.Title = "Registrar Aditivo do Instrumento";
+    Layout = "_Layout";
+    var atual = ViewBag.VersaoAtual as AcordoVersao;
+}
+
+<div class="container py-4">
+    <div class="text-center mb-4">
+        <h2 class="fw-bold text-primary">@ViewBag.Title</h2>
+        <p class="text-muted">Preencha os dados do aditivo para o instrumento abaixo.</p>
+    </div>
+
+    @if (atual != null)
+    {
+        <div class="alert alert-info shadow-sm">
+            <strong>Versão Atual (v@(atual.Versao)):</strong><br />
+            Valor vigente: <span class="fw-semibold">@atual.Valor.ToString("C")</span> |
+            Vigência: <span class="fw-semibold">@atual.VigenciaInicio:dd/MM/yyyy</span> –
+            <span class="fw-semibold">@(atual.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")</span>
+        </div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+    <form asp-controller="AditivosInstrumento" asp-action="Salvar" method="post" class="row g-3 bg-light p-4 rounded shadow-sm border" id="formAditivo" novalidate>
+        @Html.AntiForgeryToken()
+        <input asp-for="TipoAcordoId" type="hidden" />
+
+        <div class="col-md-6">
+            <label asp-for="TipoAditivo" class="form-label fw-semibold">Tipo de Aditivo</label>
+            <select asp-for="TipoAditivo"
+                    asp-items="Html.GetEnumSelectList<TipoAditivo>()"
+                    class="form-select"
+                    id="TipoAditivo">
+                <option value="">-- selecione --</option>
+            </select>
+            <span asp-validation-for="TipoAditivo" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-6">
+            <label asp-for="DataAssinatura" class="form-label fw-semibold">Data de Assinatura</label>
+            <input asp-for="DataAssinatura" type="date" class="form-control" />
+            <span asp-validation-for="DataAssinatura" class="text-danger small"></span>
+        </div>
+
+        <!-- Valor (digitado sempre positivo; o sistema soma/subtrai conforme o tipo) -->
+        <div class="col-md-6" id="grupoNovoValor" style="display: none;">
+            <label asp-for="NovoValor" class="form-label fw-semibold">Valor</label>
+            <input asp-for="NovoValor" type="text" inputmode="decimal" class="form-control" id="NovoValor" />
+            <div id="ajudaValor" class="form-text fw-bold" style="color:#c1121f"></div>
+            <span asp-validation-for="NovoValor" class="text-danger small"></span>
+        </div>
+
+        <!-- Vigência -->
+        <div class="col-md-12" id="grp-vigencia" style="display:none;">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="NovaDataInicio" class="form-label fw-semibold">Nova Data de Início</label>
+                    <input asp-for="NovaDataInicio" type="date" class="form-control" id="NovaDataInicio" />
+                    <span asp-validation-for="NovaDataInicio" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="NovaDataFim" class="form-label fw-semibold">Nova Data de Fim</label>
+                    <input asp-for="NovaDataFim" type="date" class="form-control" id="NovaDataFim" />
+                    <span asp-validation-for="NovaDataFim" class="text-danger small"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <label asp-for="Observacao" class="form-label fw-semibold">Observações</label>
+            <textarea asp-for="Observacao" rows="2" class="form-control" placeholder="Observações adicionais..."></textarea>
+            <span asp-validation-for="Observacao" class="text-danger small"></span>
+        </div>
+
+        <div class="col-12 mt-3">
+            <button type="submit" class="btn btn-success me-2">
+                Salvar Aditivo
+            </button>
+            <a asp-controller="Instrumentos" asp-action="Editar" asp-route-id="@Model.TipoAcordoId" class="btn btn-outline-secondary">
+                Voltar
+            </a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // aceitar formato pt-BR no client-validate
+        if (window.jQuery && $.validator) {
+            $.validator.methods.number = function (value, element) {
+                if (this.optional(element)) return true;
+                const clean = (value || '').replace(/\./g, '').replace(',', '.');
+                return clean.trim() !== '' && !isNaN(clean);
+            };
+        }
+
+        const selTipo   = document.getElementById('TipoAditivo');
+        const grpValor  = document.getElementById('grupoNovoValor');
+        const grpVig    = document.getElementById('grp-vigencia');
+
+        const inpValor  = document.getElementById('NovoValor');
+        const ajudaValor= document.getElementById('ajudaValor');
+        const novaIni   = document.getElementById('NovaDataInicio');
+        const novaFim   = document.getElementById('NovaDataFim');
+
+        // enum atual: Prazo=1, PrazoAcrescimo=2, PrazoSupressao=3, Supressao=4, Acrescimo=5
+        const T = { Prazo:1, PrazoAcrescimo:2, PrazoSupressao:3, Supressao:4, Acrescimo:5 };
+
+        function show(el, on){ if (el) el.style.display = on ? 'block' : 'none'; }
+        function req(el, on){ if (el){ el.required = !!on; el.setAttribute('aria-required', on ? 'true' : 'false'); } }
+        function clearIfHidden(wrapper, inputs){
+            if (!wrapper || wrapper.style.display !== 'none') return;
+            (inputs||[]).forEach(i => { if (i) i.value = ''; });
+        }
+
+        function atualizarAjudaValor(tipo){
+            if (!ajudaValor) return;
+            let msg = '';
+            switch (tipo) {
+                case T.Supressao:
+                    msg = 'O valor digitado será SUBTRAÍDO do valor vigente do instrumento.';
+                    break;
+                case T.Acrescimo:
+                    msg = 'O valor digitado será ACRESCENTADO ao valor vigente do instrumento.';
+                    break;
+                case T.PrazoSupressao:
+                    msg = 'O valor digitado será SUBTRAÍDO e o prazo também será alterado.';
+                    break;
+                case T.PrazoAcrescimo:
+                    msg = 'O valor digitado será ACRESCENTADO e o prazo também será alterado.';
+                    break;
+                default:
+                    msg = '';
+            }
+            ajudaValor.textContent = msg;
+        }
+
+        function aplicarTipo() {
+            const tipo = parseInt(selTipo?.value || '0', 10);
+
+            const precisaValor    = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            const precisaVigencia = [T.Prazo, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+
+            show(grpValor, precisaValor);
+            show(grpVig,   precisaVigencia);
+
+            req(inpValor, precisaValor);
+            req(novaIni,  precisaVigencia);
+            req(novaFim,  precisaVigencia);
+
+            // limpar quando esconder
+            clearIfHidden(grpValor, [inpValor]);
+            clearIfHidden(grpVig,   [novaIni, novaFim]);
+
+            atualizarAjudaValor(tipo);
+        }
+
+        selTipo?.addEventListener('change', aplicarTipo);
+        aplicarTipo(); // estado inicial
+
+        // confirmação + normalização numérica antes de enviar
+        const form = document.getElementById('formAditivo');
+        form?.addEventListener('submit', async (e) => {
+            // validações de client antes do confirm
+            if (window.jQuery && !$(form).valid()) return;
+
+            // normalização pt-BR -> en-US
+            if (grpValor && grpValor.style.display !== 'none' && inpValor) {
+                const clean = (inpValor.value || '').replace(/\./g, '').replace(',', '.');
+                if (clean && isNaN(clean)) {
+                    e.preventDefault();
+                    return Swal.fire({ icon:'warning', title:'Informe um valor numérico válido.' });
+                }
+                // valor deve ser > 0 quando exigido (sinal será definido no servidor)
+                if (!clean || Number(clean) <= 0) {
+                    e.preventDefault();
+                    return Swal.fire({ icon:'warning', title:'Informe um valor maior que zero.' });
+                }
+                inpValor.value = clean;
+            }
+
+            if (grpVig && grpVig.style.display !== 'none' && novaIni && novaFim) {
+                if (!novaIni.value || !novaFim.value) {
+                    e.preventDefault();
+                    return Swal.fire({ icon:'warning', title:'Informe as duas datas de vigência.' });
+                }
+                if (new Date(novaFim.value) < new Date(novaIni.value)) {
+                    e.preventDefault();
+                    return Swal.fire({ icon:'warning', title:'Data de fim não pode ser anterior ao início.' });
+                }
+            }
+
+            e.preventDefault();
+            const ok = await Swal.fire({
+                icon:'question',
+                title:'Confirmar registro do aditivo?',
+                showCancelButton:true,
+                confirmButtonText:'Salvar',
+                cancelButtonText:'Cancelar'
+            });
+            if (ok.isConfirmed) form.submit();
+        });
+
+        // SweetAlert vindos do TempData (se a view for reexibida)
+        const okMsg  = @Html.Raw(Json.Serialize(TempData["Sucesso"]?.ToString() ?? ""));
+        const errMsg = @Html.Raw(Json.Serialize(TempData["Erro"]?.ToString() ?? ""));
+        if (okMsg)  Swal.fire({ icon:'success', title:'Sucesso', text: okMsg });
+        if (errMsg) Swal.fire({ icon:'error',   title:'Ops',     text: errMsg });
+    });
+    </script>
+}

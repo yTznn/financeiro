@@ -11,71 +11,90 @@ namespace Financeiro.Servicos
     /// </summary>
     public class VersaoAcordoService : IVersaoAcordoService
     {
-        private readonly ITipoAcordoRepositorio _acordoRepo;
-        private readonly IAditivoRepositorio    _versaoRepo;
+        private readonly IInstrumentoRepositorio _instrRepo;
+        private readonly IInstrumentoVersaoRepositorio _versaoRepo;
 
-        public VersaoAcordoService(ITipoAcordoRepositorio acordoRepo,
-                                   IAditivoRepositorio versaoRepo)
+        public VersaoAcordoService(IInstrumentoRepositorio instrRepo,
+                                   IInstrumentoVersaoRepositorio versaoRepo)
         {
-            _acordoRepo = acordoRepo;
+            _instrRepo  = instrRepo;
             _versaoRepo = versaoRepo;
         }
 
         public async Task CriarAditivoAsync(AditivoViewModel vm)
         {
-            /* 1) Obtém a versão atual (vigente) */
+            if (vm is null) throw new ArgumentNullException(nameof(vm));
+            if (vm.TipoAcordoId <= 0) throw new ArgumentException("Instrumento inválido.");
+
+            // 1) Obtém a versão vigente do instrumento
             var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId)
-                        ?? throw new Exception("Versão atual não encontrada.");
+                       ?? throw new Exception("Versão atual não encontrada.");
 
-            /* 2) Fecha a vigência atual */
-            atual.VigenciaFim = (vm.NovaDataInicio ?? DateTime.Today).AddDays(-1);
+            var novaDataInicio = (vm.NovaDataInicio ?? DateTime.Today).Date;
 
-            // Atualiza a linha antiga (pode ser via update; aqui, sobrescrevemos)
-            await _versaoRepo.InserirAsync(atual);
+            if (novaDataInicio < atual.VigenciaInicio.Date)
+                throw new ArgumentException("A Data de Início do aditivo não pode ser anterior à vigência atual.");
 
-            /* 3) Número da nova versão */
-            int novaVersaoNum = atual.Versao + 1;
-
-            /* 4) Cria a nova versão */
-            var novaVersao = new AcordoVersao
+            if (novaDataInicio == atual.VigenciaInicio.Date)
             {
-                TipoAcordoId     = atual.TipoAcordoId,
-                Versao           = novaVersaoNum,
-                VigenciaInicio   = vm.NovaDataInicio ?? atual.VigenciaInicio,
-                VigenciaFim      = null,                         // vigente
-                Valor            = vm.NovoValor      ?? atual.Valor,
-                Objeto           = atual.Objeto,                // mantém
-                TipoAditivo      = vm.TipoAditivo,
-                Observacao       = vm.Observacao,
-                DataAssinatura   = vm.DataAssinatura,
-                DataRegistro     = DateTime.Now
-            };
+                // Aditivo no MESMO dia: apenas atualiza os detalhes da versão vigente
+                var novoValorFinal = vm.NovoValor ?? atual.Valor;
 
-            await _versaoRepo.InserirAsync(novaVersao);
+                await _versaoRepo.AtualizarDetalhesAsync(
+                    versaoId: atual.Id,
+                    novoValor: novoValorFinal,
+                    tipoAditivo: vm.TipoAditivo,
+                    observacao: vm.Observacao,
+                    dataAssinatura: vm.DataAssinatura
+                );
+            }
+            else
+            {
+                // Aditivo em DATA FUTURA:
+                // 2) Fecha a vigência da versão atual no dia anterior
+                await _versaoRepo.AtualizarVigenciaFimAsync(atual.Id, novaDataInicio.AddDays(-1));
 
-            /* 5) Reflete na tabela TipoAcordo (valor e vigência em vigor) */
-            var acordoPai = await _acordoRepo.ObterPorIdAsync(vm.TipoAcordoId)
-                          ?? throw new Exception("TipoAcordo não encontrado.");
+                // 3) Cria a nova versão que passa a vigorar
+                var novaVersao = new AcordoVersao
+                {
+                    TipoAcordoId   = atual.TipoAcordoId,
+                    Versao         = atual.Versao + 1,
+                    VigenciaInicio = novaDataInicio,
+                    VigenciaFim    = null, // vigente
+                    Valor          = vm.NovoValor ?? atual.Valor,
+                    Objeto         = atual.Objeto,      // mantém
+                    TipoAditivo    = vm.TipoAditivo,
+                    Observacao     = vm.Observacao,
+                    DataAssinatura = vm.DataAssinatura,
+                    DataRegistro   = DateTime.Now
+                };
 
-            acordoPai.Valor      = novaVersao.Valor;
-            acordoPai.DataInicio = novaVersao.VigenciaInicio;
-            acordoPai.DataFim    = vm.NovaDataFim ?? acordoPai.DataFim;
+                await _versaoRepo.InserirAsync(novaVersao);
+            }
 
-            // Converte para ViewModel porque AtualizarAsync espera esse tipo
+            // 4) Reflete no Instrumento pai (valor/datas)
+            var instrumento = await _instrRepo.ObterPorIdAsync(vm.TipoAcordoId)
+                             ?? throw new Exception("Instrumento não encontrado.");
+
+            // Obtém novamente a versão vigente já atualizada/criada acima
+            var vigente = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId)
+                         ?? throw new Exception("Versão vigente não encontrada.");
+
             var vmUpdate = new TipoAcordoViewModel
             {
-                Id             = acordoPai.Id,
-                Numero         = acordoPai.Numero,
-                Valor          = acordoPai.Valor,
-                Objeto         = acordoPai.Objeto,
-                DataInicio     = acordoPai.DataInicio,
-                DataFim        = acordoPai.DataFim,
-                Ativo          = acordoPai.Ativo,
-                Observacao     = acordoPai.Observacao,
-                DataAssinatura = acordoPai.DataAssinatura
+                Id             = instrumento.Id,
+                Numero         = instrumento.Numero,
+                Valor          = vigente.Valor,
+                Objeto         = instrumento.Objeto,
+                DataInicio     = vigente.VigenciaInicio,
+                DataFim        = vm.NovaDataFim ?? instrumento.DataFim,
+                Ativo          = instrumento.Ativo,
+                Observacao     = instrumento.Observacao,
+                DataAssinatura = instrumento.DataAssinatura,
+                EntidadeId     = instrumento.EntidadeId
             };
 
-            await _acordoRepo.AtualizarAsync(acordoPai.Id, vmUpdate);
+            await _instrRepo.AtualizarAsync(instrumento.Id, vmUpdate);
         }
     }
 }

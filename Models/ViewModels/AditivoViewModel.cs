@@ -1,38 +1,30 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using Financeiro.Models;   // p/ usar o enum TipoAditivo
+using Financeiro.Models;
 
 namespace Financeiro.Models.ViewModels
 {
-    /// <summary>
-    /// Dados que o usuário informa ao registrar um aditivo.
-    /// Validação condicional feita em IValidatableObject.
-    /// </summary>
     public class AditivoViewModel : IValidatableObject
     {
-        /* ---------- vínculo ---------- */
         [Required]
-        public int TipoAcordoId { get; set; }  // acordo que será aditivado
+        public int TipoAcordoId { get; set; }
 
-        /* ---------- escolha do tipo ---------- */
         [Required(ErrorMessage = "Selecione o tipo de aditivo.")]
         [Display(Name = "Tipo de Aditivo")]
         public TipoAditivo TipoAditivo { get; set; }
 
-        /* ---------- campos que podem mudar ---------- */
-        [Display(Name = "Novo Valor")]
-        public decimal? NovoValor { get; set; }          // obrigatório p/ acréscimo ou supressão
+        [Display(Name = "Valor")] // Nome alterado para refletir que é o valor do aditivo
+        public decimal? NovoValor { get; set; }
 
         [Display(Name = "Nova Data Início")]
         [DataType(DataType.Date)]
-        public DateTime? NovaDataInicio { get; set; }    // obrigatório se alterar prazo
+        public DateTime? NovaDataInicio { get; set; }
 
         [Display(Name = "Nova Data Fim")]
         [DataType(DataType.Date)]
-        public DateTime? NovaDataFim { get; set; }       // obrigatório se alterar prazo
+        public DateTime? NovaDataFim { get; set; }
 
-        /* ---------- metadados ---------- */
         [Display(Name = "Observação")]
         public string? Observacao { get; set; }
 
@@ -40,22 +32,35 @@ namespace Financeiro.Models.ViewModels
         [DataType(DataType.Date)]
         public DateTime? DataAssinatura { get; set; }
 
-        /* ---------- validação condicional ---------- */
         public IEnumerable<ValidationResult> Validate(ValidationContext context)
         {
             bool alteraValor = TipoAditivo is TipoAditivo.Acrescimo
-                                         or TipoAditivo.Supressao
-                                         or TipoAditivo.PrazoAcrescimo
-                                         or TipoAditivo.PrazoSupressao;
+                             or TipoAditivo.Supressao
+                             or TipoAditivo.PrazoAcrescimo
+                             or TipoAditivo.PrazoSupressao;
 
             bool alteraPrazo = TipoAditivo is TipoAditivo.Prazo
-                                         or TipoAditivo.PrazoAcrescimo
-                                         or TipoAditivo.PrazoSupressao;
+                             or TipoAditivo.PrazoAcrescimo
+                             or TipoAditivo.PrazoSupressao;
 
-            if (alteraValor && NovoValor is null)
-                yield return new ValidationResult(
-                    "Novo Valor é obrigatório para esse tipo de aditivo.",
-                    new[] { nameof(NovoValor) });
+            if (alteraValor)
+            {
+                if (NovoValor is null)
+                {
+                    yield return new ValidationResult(
+                        "O Valor é obrigatório para esse tipo de aditivo.",
+                        new[] { nameof(NovoValor) });
+                }
+                // --- ALTERAÇÃO PRINCIPAL AQUI ---
+                // A validação agora apenas garante que o valor inserido seja sempre positivo.
+                // A responsabilidade de negativar o valor (para supressão) é do Controller.
+                else if (NovoValor.Value <= 0)
+                {
+                     yield return new ValidationResult(
+                        "O valor do aditivo deve ser maior que zero.",
+                        new[] { nameof(NovoValor) });
+                }
+            }
 
             if (alteraPrazo && (NovaDataInicio is null || NovaDataFim is null))
                 yield return new ValidationResult(

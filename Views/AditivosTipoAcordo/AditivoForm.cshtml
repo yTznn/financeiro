@@ -18,7 +18,7 @@
         <div class="alert alert-info shadow-sm">
             <strong>Versão Atual (v@(atual.Versao)):</strong><br />
             Valor: <span class="fw-semibold">@atual.Valor.ToString("C")</span> |
-            Vigência: <span class="fw-semibold">@atual.VigenciaInicio:dd/MM/yyyy</span> - 
+            Vigência: <span class="fw-semibold">@atual.VigenciaInicio:dd/MM/yyyy</span> -
             <span class="fw-semibold">@(atual.VigenciaFim?.ToString("dd/MM/yyyy") ?? "atual")</span>
         </div>
     }
@@ -42,25 +42,25 @@
 
         <div class="col-md-4">
             <label asp-for="NovoValor" class="form-label fw-semibold"></label>
-            <input asp-for="NovoValor" type="number" step="0.01" class="form-control" />
+            <input asp-for="NovoValor" type="number" step="0.01" class="form-control" id="NovoValor" />
             <span asp-validation-for="NovoValor" class="text-danger small"></span>
         </div>
 
         <div class="col-md-4">
             <label asp-for="NovaDataInicio" class="form-label fw-semibold"></label>
-            <input asp-for="NovaDataInicio" type="date" class="form-control" />
+            <input asp-for="NovaDataInicio" type="date" class="form-control" id="NovaDataInicio" />
             <span asp-validation-for="NovaDataInicio" class="text-danger small"></span>
         </div>
 
         <div class="col-md-4">
             <label asp-for="NovaDataFim" class="form-label fw-semibold"></label>
-            <input asp-for="NovaDataFim" type="date" class="form-control" />
+            <input asp-for="NovaDataFim" type="date" class="form-control" id="NovaDataFim" />
             <span asp-validation-for="NovaDataFim" class="text-danger small"></span>
         </div>
 
         <div class="col-md-4">
             <label asp-for="DataAssinatura" class="form-label fw-semibold"></label>
-            <input asp-for="DataAssinatura" type="date" class="form-control" />
+            <input asp-for="DataAssinatura" type="date" class="form-control" id="DataAssinatura" />
             <span asp-validation-for="DataAssinatura" class="text-danger small"></span>
         </div>
 
@@ -88,22 +88,51 @@
     <partial name="_ValidationScriptsPartial" />
 
     <script>
-        const select = document.getElementById('selectTipo');
-        const campoValor = document.querySelector('[asp-for="NovoValor"]')?.closest('.col-md-4');
-        const campoInicio = document.querySelector('[asp-for="NovaDataInicio"]')?.closest('.col-md-4');
-        const campoFim = document.querySelector('[asp-for="NovaDataFim"]')?.closest('.col-md-4');
+        (function () {
+            const select = document.getElementById('selectTipo');
+            const campoValor  = document.getElementById('NovoValor')?.closest('.col-md-4');
+            const campoInicio = document.getElementById('NovaDataInicio')?.closest('.col-md-4');
+            const campoFim    = document.getElementById('NovaDataFim')?.closest('.col-md-4');
 
-        function toggleCampos() {
-            const v = select.value;
-            const alteraPrazo = v === "Prazo" || v === "PrazoAcrescimo" || v === "PrazoSupressao";
-            const alteraValor = v === "Acrescimo" || v === "Supressao" || v === "PrazoAcrescimo" || v === "PrazoSupressao";
+            // Função robusta: funciona tanto se o Enum renderizar value numérico quanto texto
+            function getSelectedKey() {
+                if (!select) return '';
+                const opt = select.options[select.selectedIndex];
+                // valor (geralmente numérico) e texto (nome do enum)
+                const val = (opt?.value || '').trim();
+                const txt = (opt?.text || '').trim();
+                return { val, txt };
+            }
 
-            if (campoValor) campoValor.style.display = alteraValor ? '' : 'none';
-            if (campoInicio) campoInicio.style.display = alteraPrazo ? '' : 'none';
-            if (campoFim) campoFim.style.display = alteraPrazo ? '' : 'none';
-        }
+            function toggleCampos() {
+                const { val, txt } = getSelectedKey();
 
-        select.addEventListener('change', toggleCampos);
-        document.addEventListener('DOMContentLoaded', toggleCampos);
+                // Checa por texto do Enum (Prazo, Acréscimo, Supressão, etc.)
+                // e também permite mapear por value se você quiser no futuro.
+                const key = (txt || '').toLowerCase();
+
+                const isPrazo =
+                    key.includes('prazo');
+
+                const isValor =
+                    key.includes('acréscimo') || key.includes('acrescimo') ||
+                    key.includes('supressão') || key.includes('supressao');
+
+                // Para casos compostos (PrazoAcrescimo / PrazoSupressao)
+                const alteraPrazo = isPrazo;
+                const alteraValor = isValor || (isPrazo && (key.includes('acrésc') || key.includes('acresc') || key.includes('supress')));
+
+                if (campoValor)  campoValor.style.display  = alteraValor ? '' : 'none';
+                if (campoInicio) campoInicio.style.display = alteraPrazo ? '' : 'none';
+                if (campoFim)    campoFim.style.display    = alteraPrazo ? '' : 'none';
+            }
+
+            if (select) {
+                select.addEventListener('change', toggleCampos);
+                document.addEventListener('DOMContentLoaded', toggleCampos);
+                // Executa uma vez imediatamente (caso a página carregue com valor selecionado)
+                toggleCampos();
+            }
+        })();
     </script>
 }

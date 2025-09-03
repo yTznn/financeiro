@@ -8,11 +8,14 @@ using Financeiro.Infraestrutura;
 
 namespace Financeiro.Repositorios
 {
-    public class TipoAcordoRepositorio : ITipoAcordoRepositorio
+    /// <summary>
+    /// Repositório da “faixa nova” de Instrumento (mapeando a tabela atual TipoAcordo).
+    /// </summary>
+    public class InstrumentoRepositorio : IInstrumentoRepositorio
     {
         private readonly IDbConnectionFactory _connectionFactory;
 
-        public TipoAcordoRepositorio(IDbConnectionFactory connectionFactory)
+        public InstrumentoRepositorio(IDbConnectionFactory connectionFactory)
         {
             _connectionFactory = connectionFactory;
         }
@@ -72,31 +75,29 @@ namespace Financeiro.Repositorios
             return await conn.QueryAsync<TipoAcordo>(sql);
         }
 
-        // NOVO: exclui filhos e depois o TipoAcordo
+        /// <summary>
+        /// Exclui filhos e depois o Instrumento (mantém comportamento atual).
+        /// </summary>
         public async Task ExcluirAsync(int id)
         {
             using var conn = _connectionFactory.CreateConnection();
             if (conn.State != ConnectionState.Open) conn.Open();
             using var tx = conn.BeginTransaction();
 
-            // 1) Apaga detalhes de orçamentos vinculados ao TipoAcordo
             const string delOrcDet = @"
                 DELETE od
                 FROM OrcamentoDetalhe od
                 INNER JOIN Orcamento o ON o.Id = od.OrcamentoId
                 WHERE o.TipoAcordoId = @id;";
 
-            // 2) Apaga orçamentos
             const string delOrc = @"
                 DELETE FROM Orcamento
                 WHERE TipoAcordoId = @id;";
 
-            // 3) Apaga versões/aditivos do acordo
             const string delVersao = @"
                 DELETE FROM AcordoVersao
                 WHERE TipoAcordoId = @id;";
 
-            // 4) Por fim, o próprio TipoAcordo
             const string delAcordo = @"
                 DELETE FROM TipoAcordo
                 WHERE Id = @id;";
@@ -108,36 +109,38 @@ namespace Financeiro.Repositorios
 
             tx.Commit();
         }
+
         public async Task<bool> ExisteNumeroAsync(string numero, int? ignorarId = null)
         {
             using var conn = _connectionFactory.CreateConnection();
-            const string sql =
-                @"SELECT 1
+            const string sql = @"
+                SELECT 1
                 FROM TipoAcordo
                 WHERE Numero = @numero
-                    AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
             var existe = await conn.QueryFirstOrDefaultAsync<int?>(sql, new { numero, ignorarId });
             return existe.HasValue;
         }
+
         public async Task<string> SugerirProximoNumeroAsync(int ano)
         {
             using var conn = _connectionFactory.CreateConnection();
 
-            // 1) procura padrão "NNN/ANO"
+            // ex.: pega o maior 'X' do padrão 'X/ANO'
             const string sqlPadraoAno = @"
-        SELECT MAX(TRY_CONVERT(int, LEFT(Numero, NULLIF(CHARINDEX('/', Numero),0)-1)))
-        FROM TipoAcordo
-        WHERE Numero LIKE '%/' + CAST(@ano AS varchar(4))";
+                SELECT MAX(TRY_CONVERT(int, LEFT(Numero, NULLIF(CHARINDEX('/', Numero),0)-1)))
+                FROM TipoAcordo
+                WHERE Numero LIKE '%/' + CAST(@ano AS varchar(4))";
             var maxComAno = await conn.QueryFirstOrDefaultAsync<int?>(sqlPadraoAno, new { ano });
 
             if (maxComAno.HasValue)
                 return $"{maxComAno.Value + 1}/{ano}";
 
-            // 2) caso não usem "/ANO", usa inteiro puro
+            // fallback: se não há padrão com ano, tenta inteiro puro
             const string sqlInteiro = @"SELECT MAX(TRY_CONVERT(int, Numero)) FROM TipoAcordo";
             var maxInteiro = await conn.QueryFirstOrDefaultAsync<int?>(sqlInteiro);
 
-            return (maxInteiro.HasValue ? (maxInteiro.Value + 1).ToString() : $"1/{ano}");
+            return maxInteiro.HasValue ? (maxInteiro.Value + 1).ToString() : $"1/{ano}";
         }
     }
 }

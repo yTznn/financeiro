@@ -20,14 +20,9 @@ builder.Configuration
     .AddEnvironmentVariables();
 
 // 1) Cultura
-// =====================================================================
-//      AQUI A CORREÇÃO! Alterado de "en-US" para "pt-BR"
-// =====================================================================
 var culture = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = culture;
 CultureInfo.DefaultThreadCurrentUICulture = culture;
-// =====================================================================
-
 
 // 2) MVC
 builder.Services.AddControllersWithViews();
@@ -64,9 +59,12 @@ builder.Services.AddTransient<PessoaFisicaValidacoes>();
 
 builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
 builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
-builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
-builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
-builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
+
+// --- Trilhas antigas removidas ---
+// builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
+// builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
+// builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
+
 builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
 builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
 builder.Services.AddTransient<IContratoRepositorio, ContratoRepositorio>();
@@ -101,6 +99,15 @@ builder.Services.AddHttpContextAccessor(); // necessário para obter dados do us
 
 // 💬 Justificativas
 builder.Services.AddScoped<IJustificativaService, JustificativaService>();
+#endregion
+
+#region ✅ NOVO – Faixa nova de Instrumento (paralela, sem quebrar a antiga)
+// Repositórios específicos de Instrumento (mapeando as tabelas atuais TipoAcordo/AcordoVersao)
+builder.Services.AddTransient<IInstrumentoRepositorio, InstrumentoRepositorio>();
+builder.Services.AddTransient<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepositorio>();
+
+// Serviço específico para versões/aditivos de Instrumento
+builder.Services.AddTransient<IInstrumentoVersaoService, InstrumentoVersaoService>();
 #endregion
 
 var app = builder.Build();

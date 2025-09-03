@@ -12,12 +12,12 @@ namespace Financeiro.Controllers
     public class OrcamentosController : Controller
     {
         private readonly IOrcamentoRepositorio _orcamentoRepo;
-        private readonly ITipoAcordoRepositorio _tipoAcordoRepo;
+        private readonly IInstrumentoRepositorio _instrumentoRepo;
 
-        public OrcamentosController(IOrcamentoRepositorio orcamentoRepo, ITipoAcordoRepositorio tipoAcordoRepo)
+        public OrcamentosController(IOrcamentoRepositorio orcamentoRepo, IInstrumentoRepositorio instrumentoRepo)
         {
             _orcamentoRepo = orcamentoRepo;
-            _tipoAcordoRepo = tipoAcordoRepo;
+            _instrumentoRepo = instrumentoRepo;
         }
 
         [HttpGet]
@@ -30,11 +30,13 @@ namespace Financeiro.Controllers
         [HttpGet]
         public async Task<IActionResult> Novo()
         {
-            ViewBag.TiposDeAcordo = await _tipoAcordoRepo.ListarAsync();
+            // Mantém o nome "TiposDeAcordo" para compatibilidade com a view
+            ViewBag.TiposDeAcordo = await _instrumentoRepo.ListarAsync();
             return View("OrcamentoForm", new OrcamentoViewModel());
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(OrcamentoViewModel vm, string detalhamentoJson)
         {
             if (!string.IsNullOrEmpty(detalhamentoJson))
@@ -44,7 +46,7 @@ namespace Financeiro.Controllers
 
             if (!ModelState.IsValid)
             {
-                ViewBag.TiposDeAcordo = await _tipoAcordoRepo.ListarAsync();
+                ViewBag.TiposDeAcordo = await _instrumentoRepo.ListarAsync();
                 return View("OrcamentoForm", vm);
             }
 
@@ -66,6 +68,7 @@ namespace Financeiro.Controllers
             {
                 Id = orcamentoHeader.Id,
                 Nome = orcamentoHeader.Nome,
+                // Mantém a propriedade atual (TipoAcordoId) enquanto a model não for renomeada
                 TipoAcordoId = orcamentoHeader.TipoAcordoId,
                 VigenciaInicio = orcamentoHeader.VigenciaInicio,
                 VigenciaFim = orcamentoHeader.VigenciaFim,
@@ -75,16 +78,17 @@ namespace Financeiro.Controllers
                 Detalhamento = detalhamentoHierarquico
             };
 
-            ViewBag.TiposDeAcordo = await _tipoAcordoRepo.ListarAsync();
+            ViewBag.TiposDeAcordo = await _instrumentoRepo.ListarAsync();
             return View("OrcamentoForm", vm);
         }
-        
+
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(OrcamentoViewModel vm, string detalhamentoJson)
         {
             if (!ModelState.IsValid)
             {
-                ViewBag.TiposDeAcordo = await _tipoAcordoRepo.ListarAsync();
+                ViewBag.TiposDeAcordo = await _instrumentoRepo.ListarAsync();
                 return View("OrcamentoForm", vm);
             }
 

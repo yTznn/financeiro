@@ -1,4 +1,5 @@
 using System;
+using Financeiro.Models.Dto;
 
 namespace Financeiro.Models
 {
@@ -19,13 +20,5 @@ namespace Financeiro.Models
         public string?  Observacao       { get; set; }
         public DateTime? DataAssinatura  { get; set; }
         public DateTime DataRegistro     { get; set; } = DateTime.Now;
-    }
-    public enum TipoAditivo
-    {
-        Prazo = 1,
-        PrazoAcrescimo,
-        PrazoSupressao,
-        Supressao,
-        Acrescimo
     }
 }
