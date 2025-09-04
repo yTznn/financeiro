@@ -6,14 +6,6 @@
     var culturaBrasileira = new CultureInfo("pt-BR");
 }
 
-@if (TempData["MensagemSucesso"] != null)
-{
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        @TempData["MensagemSucesso"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
-
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3>@ViewData["Title"]</h3>
     <a asp-action="Novo" class="btn btn-primary">Novo Orçamento</a>
@@ -23,7 +15,6 @@
     <thead class="table-dark">
         <tr>
             <th>Nome</th>
-            <!-- ✅ NOVO: Coluna para a Observação -->
             <th>Observação</th>
             <th>Vigência</th>
             <th>Valor Total</th>
@@ -38,7 +29,6 @@
             {
                 <tr>
                     <td>@item.Nome</td>
-                    <!-- ✅ NOVO: Célula para exibir a Observação -->
                     <td>@item.Observacao</td>
                     <td>@item.VigenciaInicio.ToShortDateString() a @item.VigenciaFim.ToShortDateString()</td>
                     <td>@item.ValorPrevistoTotal.ToString("C", culturaBrasileira)</td>
@@ -56,9 +46,10 @@
                         <a asp-action="Editar" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">
                             Editar
                         </a>
-                        <button type="button" class="btn btn-sm btn-outline-danger" 
-                                data-bs-toggle="modal" data-bs-target="#modalExclusao"
-                                data-orcamento-id="@item.Id">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger btn-excluir"
+                                data-id="@item.Id"
+                                data-nome="@item.Nome">
                             Excluir
                         </button>
                     </td>
@@ -68,48 +59,76 @@
         else
         {
             <tr>
-                <!-- ✅ NOVO: Colspan atualizado para 6 -->
                 <td colspan="6" class="text-center">Nenhum orçamento cadastrado.</td>
             </tr>
         }
     </tbody>
 </table>
 
-<!-- Modal de Confirmação de Exclusão -->
-<div class="modal fade" id="modalExclusao" tabindex="-1" aria-labelledby="modalExclusaoLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalExclusaoLabel">Confirmar Exclusão</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.</p>
-            </div>
-            <div class="modal-footer">
-                <form id="form-exclusao" asp-action="Excluir" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" id="orcamentoIdExcluir" />
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger">Confirmar Exclusão</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
+<!-- ✅ Formulário oculto para POST da exclusão com AntiForgery -->
+<form id="form-exclusao" asp-action="Excluir" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="orcamentoIdExcluir" />
+    <input type="hidden" name="justificativa" id="justificativaExclusao" />
+</form>
 
 @section Scripts {
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        var modalExclusao = document.getElementById('modalExclusao');
-        modalExclusao.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget;
-            var orcamentoId = button.getAttribute('data-orcamento-id');
-            
-            var inputId = modalExclusao.querySelector('#orcamentoIdExcluir');
-            inputId.value = orcamentoId;
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const hasSwal = typeof window.Swal !== 'undefined';
+
+    // ---- SweetAlerts de TempData (sucesso/erro/alerta)
+    const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"] ?? TempData["MensagemSucesso"]));
+    const msgErro    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
+    const msgAlerta  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Alerta"]));
+
+    if (hasSwal) {
+        if (msgSucesso) Swal.fire({ icon:'success', title:'Sucesso', text: msgSucesso });
+        if (msgErro)    Swal.fire({ icon:'error',   title:'Ops',     text: msgErro });
+        if (msgAlerta)  Swal.fire({ icon:'warning', title:'Atenção', text: msgAlerta });
+    }
+
+    // ---- Exclusão com justificativa (SweetAlert textarea)
+    const formExclusao = document.getElementById('form-exclusao');
+    const inputId      = document.getElementById('orcamentoIdExcluir');
+    const inputJust    = document.getElementById('justificativaExclusao');
+
+    document.querySelectorAll('.btn-excluir').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id   = btn.getAttribute('data-id');
+            const nome = btn.getAttribute('data-nome') || '';
+
+            if (!hasSwal) {
+                const ok = confirm(`Excluir o orçamento "${nome}"?`);
+                if (!ok) return;
+                const j = prompt('Informe uma justificativa para a exclusão:');
+                if (!j) return;
+                inputId.value = id;
+                inputJust.value = j;
+                formExclusao.submit();
+                return;
+            }
+
+            const { value: text, isConfirmed } = await Swal.fire({
+                icon: 'question',
+                title: 'Confirmar exclusão',
+                html: `<p>Tem certeza que deseja excluir o orçamento <strong>${nome}</strong>?</p><p>Descreva a justificativa:</p>`,
+                input: 'textarea',
+                inputPlaceholder: 'Motivo da exclusão...',
+                inputAttributes: { 'aria-label': 'Motivo da exclusão' },
+                inputValidator: (value) => !value ? 'Por favor, informe a justificativa.' : undefined,
+                showCancelButton: true,
+                confirmButtonText: 'Excluir',
+                cancelButtonText: 'Cancelar'
+            });
+
+            if (isConfirmed && text) {
+                inputId.value = id;
+                inputJust.value = text;
+                formExclusao.submit();
+            }
         });
     });
-    </script>
+});
+</script>
 }
