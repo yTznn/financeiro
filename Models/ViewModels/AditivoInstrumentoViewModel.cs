@@ -5,16 +5,17 @@ using Financeiro.Models;
 
 namespace Financeiro.Models.ViewModels
 {
-    public class AditivoViewModel : IValidatableObject
+    public class AditivoInstrumentoViewModel : IValidatableObject
     {
         [Required]
-        public int TipoAcordoId { get; set; }
+        [Display(Name = "Instrumento")]
+        public int InstrumentoId { get; set; }
 
         [Required(ErrorMessage = "Selecione o tipo de aditivo.")]
         [Display(Name = "Tipo de Aditivo")]
         public TipoAditivo TipoAditivo { get; set; }
 
-        [Display(Name = "Valor")] // Nome alterado para refletir que é o valor do aditivo
+        [Display(Name = "Valor")]
         public decimal? NovoValor { get; set; }
 
         [Display(Name = "Nova Data Início")]
@@ -48,24 +49,24 @@ namespace Financeiro.Models.ViewModels
                 if (NovoValor is null)
                 {
                     yield return new ValidationResult(
-                        "O Valor é obrigatório para esse tipo de aditivo.",
+                        "O valor é obrigatório para esse tipo de aditivo.",
                         new[] { nameof(NovoValor) });
                 }
-                // --- ALTERAÇÃO PRINCIPAL AQUI ---
-                // A validação agora apenas garante que o valor inserido seja sempre positivo.
-                // A responsabilidade de negativar o valor (para supressão) é do Controller.
                 else if (NovoValor.Value <= 0)
                 {
-                     yield return new ValidationResult(
+                    // Supressão negativa será tratada na lógica do serviço/controller.
+                    yield return new ValidationResult(
                         "O valor do aditivo deve ser maior que zero.",
                         new[] { nameof(NovoValor) });
                 }
             }
 
             if (alteraPrazo && (NovaDataInicio is null || NovaDataFim is null))
+            {
                 yield return new ValidationResult(
                     "Nova Data Início e Nova Data Fim são obrigatórias quando há alteração de prazo.",
                     new[] { nameof(NovaDataInicio), nameof(NovaDataFim) });
+            }
 
             if (NovaDataInicio is not null && NovaDataFim is not null &&
                 NovaDataFim < NovaDataInicio)

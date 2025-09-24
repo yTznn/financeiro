@@ -1,20 +1,24 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Financeiro.Models;
 
 namespace Financeiro.Repositorios
 {
+    /// <summary>
+    /// Interface legado para aditivos de Instrumento.
+    /// Mantida para compatibilidade, mas usando InstrumentoVersao.
+    /// </summary>
     public interface IAditivoRepositorio
     {
-        /// <summary>Insere um novo registro de versão (aditivo).</summary>
-        Task InserirAsync(AcordoVersao versao);
+        Task InserirAsync(InstrumentoVersao versao);
+        Task<IEnumerable<InstrumentoVersao>> ListarPorInstrumentoAsync(int instrumentoId);
+        Task<InstrumentoVersao?> ObterVersaoAtualAsync(int instrumentoId);
+        Task<(IEnumerable<InstrumentoVersao> Itens, int TotalPaginas)> ListarPaginadoAsync(int instrumentoId, int pagina, int tamPag = 5);
+        Task ExcluirAsync(int versaoId);
 
-        /// <summary>Retorna todas as versões de um acordo, ordenadas pela versão.</summary>
-        Task<IEnumerable<AcordoVersao>> ListarPorAcordoAsync(int tipoAcordoId);
-
-        /// <summary>Retorna a versão vigente (VigenciaFim = null) do acordo.</summary>
-        Task<AcordoVersao?> ObterVersaoAtualAsync(int tipoAcordoId);
-        Task<(IEnumerable<AcordoVersao> itens, int totalPaginas)> ListarPaginadoAsync(int acordoId, int pagina, int tamPag = 5);
-
+        Task<InstrumentoVersao?> ObterVersaoAnteriorAsync(int instrumentoId, int versaoAtual);
+        Task AtualizarVigenciaFimAsync(int versaoId, DateTime? dataFim);
+        Task AtualizarDetalhesAsync(int versaoId, decimal novoValor, TipoAditivo tipoAditivo, string? observacao, DateTime? dataAssinatura);
     }
 }

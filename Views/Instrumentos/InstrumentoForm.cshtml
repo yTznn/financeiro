@@ -1,10 +1,22 @@
-@model Financeiro.Models.ViewModels.TipoAcordoViewModel
+@model Financeiro.Models.ViewModels.InstrumentoViewModel
+
+@using System.Globalization
 
 @{
-    ViewBag.Title   = Model.Id == 0 ? "Novo Instrumento" : "Editar Instrumento";
-    Layout          = "_Layout";
-    var action      = (string?)ViewBag.FormAction ?? (Model.Id == 0 ? "Salvar" : "Atualizar");
-    var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.AcordoVersao;
+    ViewBag.Title = Model.Id == 0 ? "Novo Instrumento" : "Editar Instrumento";
+    Layout        = "_Layout";
+    var action    = (string?)ViewBag.FormAction ?? (Model.Id == 0 ? "Salvar" : "Atualizar");
+
+    // Tipagem forte para evitar RuntimeBinderException
+    var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.InstrumentoVersao;
+
+    // Cálculo do "vigente" com fallback para os dados base do Instrumento
+    decimal   valorVig = versaoAtual?.Valor ?? Model.Valor;
+    DateTime  iniVig   = versaoAtual?.VigenciaInicio ?? Model.DataInicio;
+    DateTime? fimVig   = versaoAtual?.VigenciaFim ?? Model.DataFim; // DataFim é DateTime, pode usar como fallback
+    string    fimVigTxt= fimVig.HasValue ? fimVig.Value.ToString("dd/MM/yyyy") : "atual";
+
+    var br = new CultureInfo("pt-BR");
 }
 
 <h2 class="mb-4">@ViewBag.Title</h2>
@@ -22,21 +34,50 @@
             </span>
           }
         </div>
+
         <div class="fs-5 fw-semibold mb-1">
           <span id="resumoEntidade">Entidade: (selecione)</span>
         </div>
+
+        <!-- Linha do período BASE (inputs) — continuará sendo atualizada pelo JS -->
         <div class="text-muted">
-          Período: <span id="resumoPeriodo">
+          Período (base): <span id="resumoPeriodo">
             @(Model.DataInicio != default && Model.DataFim != default
               ? $"{Model.DataInicio:dd/MM/yyyy} → {Model.DataFim:dd/MM/yyyy}"
               : "definir datas")
           </span>
         </div>
+
+        <!-- Linha da VIGÊNCIA VIGENTE -->
+        <div class="text-muted mt-1">
+          Vigência vigente:
+          <span class="badge rounded-pill bg-secondary-subtle text-secondary">
+            @iniVig.ToString("dd/MM/yyyy") → @fimVigTxt
+          </span>
+          @if (iniVig != Model.DataInicio || (fimVig?.Date ?? DateTime.MinValue) != Model.DataFim.Date)
+          {
+              <span class="small text-muted ms-2">
+                (base: @Model.DataInicio.ToString("dd/MM/yyyy") → @Model.DataFim.ToString("dd/MM/yyyy"))
+              </span>
+          }
+        </div>
       </div>
+
+      <!-- Bloco do VALOR VIGENTE + (orig.) -->
       <div class="text-end ms-auto">
-        <div class="text-muted small">Valor acordado</div>
-        <div class="display-6 fw-bold" id="resumoValor">
-          @(Model.Valor > 0 ? Model.Valor.ToString("C", new System.Globalization.CultureInfo("pt-BR")) : "R$ 0,00")
+        <div class="text-muted small">Valor vigente</div>
+        <div class="display-6 fw-bold" id="resumoValorVigente">
+          @valorVig.ToString("C", br)
+        </div>
+        @if (valorVig != Model.Valor)
+        {
+          <div class="small text-muted">orig.: @Model.Valor.ToString("C", br)</div>
+        }
+
+        <!-- Mantém também o bloco dinâmico do "Valor acordado" (base) atualizado pelo JS via input -->
+        <div class="text-muted small mt-3">Valor (base)</div>
+        <div class="fw-semibold" id="resumoValor">
+          @(Model.Valor > 0 ? Model.Valor.ToString("C", br) : "R$ 0,00")
         </div>
       </div>
     </div>
@@ -54,7 +95,8 @@
     </button>
     @if (versaoAtual != null)
     {
-      <a class="btn btn-outline-danger" id="btnCancelarAditivo" data-instrumento="@Model.Id" data-versao="@versaoAtual.Versao">
+      <a class="btn btn-outline-danger" id="btnCancelarAditivo"
+         data-instrumento="@Model.Id" data-versao="@versaoAtual.Versao">
         Cancelar último aditivo
       </a>
     }
@@ -75,47 +117,56 @@
     </select>
     <span asp-validation-for="EntidadeId" class="text-danger"></span>
   </div>
+
   <div class="col-md-3">
     <label asp-for="Numero" class="form-label">Número</label>
     <input asp-for="Numero" class="form-control" id="Numero" />
     <span asp-validation-for="Numero" class="text-danger"></span>
   </div>
+
   <div class="col-md-3">
-    <label asp-for="Valor" class="form-label">Valor acordado</label>
+    <label asp-for="Valor" class="form-label">Valor (base)</label>
     <input asp-for="Valor" type="text" inputmode="decimal" class="form-control" id="Valor" />
     <span asp-validation-for="Valor" class="text-danger"></span>
   </div>
+
   <div class="col-md-12">
     <label asp-for="Objeto" class="form-label">Objeto</label>
     <textarea asp-for="Objeto" class="form-control" rows="3" maxlength="4000" id="Objeto"></textarea>
     <span asp-validation-for="Objeto" class="text-danger"></span>
   </div>
+
   <div class="col-md-3">
-    <label asp-for="DataInicio" class="form-label">Data de Início</label>
+    <label asp-for="DataInicio" class="form-label">Data de Início (base)</label>
     <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio"/>
     <span asp-validation-for="DataInicio" class="text-danger"></span>
   </div>
+
   <div class="col-md-3">
-    <label asp-for="DataFim" class="form-label">Data de Fim</label>
+    <label asp-for="DataFim" class="form-label">Data de Fim (base)</label>
     <input asp-for="DataFim" type="date" class="form-control" id="DataFim"/>
     <span asp-validation-for="DataFim" class="text-danger"></span>
   </div>
+
   <div class="col-md-3">
     <label asp-for="DataAssinatura" class="form-label">Data de Assinatura</label>
     <input asp-for="DataAssinatura" type="date" class="form-control" id="DataAssinatura"/>
     <span asp-validation-for="DataAssinatura" class="text-danger"></span>
   </div>
+
   <div class="col-md-3 d-flex align-items-center">
     <div class="form-check mt-4">
       <input asp-for="Ativo" class="form-check-input" id="Ativo" />
       <label asp-for="Ativo" class="form-check-label">Ativo</label>
     </div>
   </div>
+
   <div class="col-md-12">
     <label asp-for="Observacao" class="form-label">Observações</label>
     <textarea asp-for="Observacao" class="form-control" rows="2" id="Observacao"></textarea>
     <span asp-validation-for="Observacao" class="text-danger"></span>
   </div>
+
   <div class="col-12 d-flex gap-2">
     <button type="submit" class="btn btn-success" id="btnSubmit">
       @(Model.Id == 0 ? "Salvar" : "Atualizar")
@@ -157,15 +208,15 @@
         };
     }
 
-    // ====== CAMPOS / RESUMO ======
+    // ====== CAMPOS / RESUMO (base) ======
     const selEntidade   = document.getElementById('EntidadeId');
     const resumoEntidade= document.getElementById('resumoEntidade');
     const resumoValor   = document.getElementById('resumoValor');
     const resumoPeriodo = document.getElementById('resumoPeriodo');
-    const inNumero      = document.getElementById('Numero');
     const inValor       = document.getElementById('Valor');
     const di            = document.getElementById('DataInicio');
     const df            = document.getElementById('DataFim');
+    const inNumero      = document.getElementById('Numero');
     const obs           = document.getElementById('Observacao');
     const objeto        = document.getElementById('Objeto');
 
@@ -180,8 +231,12 @@
     function atualizarResumo(){
       const optText = selEntidade?.selectedOptions?.length ? selEntidade.selectedOptions[0].text : '(selecione)';
       resumoEntidade.textContent = 'Entidade: ' + (optText || '(selecione)');
+
+      // Valor (base)
       const v = getValorDoInput();
       resumoValor.textContent = v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      // Período (base)
       const d1 = di?.value, d2 = df?.value;
       resumoPeriodo.textContent = (d1 && d2)
         ? new Date(d1).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) + ' → ' + new Date(d2).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
@@ -209,10 +264,10 @@
     const form = document.getElementById('formInstrumento');
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      const v = getValorDoInput();
       if (!selEntidade.value){
         return Swal.fire({ icon:'warning', title:'Selecione a Entidade', text:'O instrumento precisa estar vinculado a uma Entidade.' });
       }
+      const v = getValorDoInput();
       if (v <= 0){
         return Swal.fire({ icon:'warning', title:'Valor inválido', text:'Informe um valor maior que zero.' });
       }

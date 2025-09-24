@@ -1,80 +1,44 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Dapper;
-using Financeiro.Infraestrutura;
 using Financeiro.Models;
 
 namespace Financeiro.Repositorios
 {
     /// <summary>
-    /// Acesso a dados da tabela dbo.AcordoVersao (histórico de aditivos/versões).
+    /// Repositório legado para aditivos, encaminhando para IInstrumentoVersaoRepositorio.
     /// </summary>
     public class AditivoRepositorio : IAditivoRepositorio
     {
-        private readonly IDbConnectionFactory _factory;
+        private readonly IInstrumentoVersaoRepositorio _inner;
 
-        public AditivoRepositorio(IDbConnectionFactory factory)
+        public AditivoRepositorio(IInstrumentoVersaoRepositorio inner)
         {
-            _factory = factory;
+            _inner = inner;
         }
 
-        public async Task InserirAsync(AcordoVersao versao)
-        {
-            const string sql = @"
-        INSERT INTO dbo.AcordoVersao
-            (TipoAcordoId, Versao, VigenciaInicio, VigenciaFim,
-            Valor, Objeto, TipoAditivo, Observacao, DataAssinatura, DataRegistro)
-        VALUES
-            (@TipoAcordoId, @Versao, @VigenciaInicio, @VigenciaFim,
-            @Valor, @Objeto, @TipoAditivo, @Observacao, @DataAssinatura, @DataRegistro);";
+        public Task InserirAsync(InstrumentoVersao versao)
+            => _inner.InserirAsync(versao);
 
-            using var conn = _factory.CreateConnection();
-            await conn.ExecuteAsync(sql, versao);
-        }
+        public Task<IEnumerable<InstrumentoVersao>> ListarPorInstrumentoAsync(int instrumentoId)
+            => _inner.ListarPorInstrumentoAsync(instrumentoId);
 
-        public async Task<IEnumerable<AcordoVersao>> ListarPorAcordoAsync(int tipoAcordoId)
-        {
-            const string sql = @"
-        SELECT *
-        FROM   dbo.AcordoVersao
-        WHERE  TipoAcordoId = @tipoAcordoId
-        ORDER  BY Versao;";
+        public Task<InstrumentoVersao?> ObterVersaoAtualAsync(int instrumentoId)
+            => _inner.ObterVersaoAtualAsync(instrumentoId);
 
-            using var conn = _factory.CreateConnection();
-            return await conn.QueryAsync<AcordoVersao>(sql, new { tipoAcordoId });
-        }
+        public Task<(IEnumerable<InstrumentoVersao> Itens, int TotalPaginas)> ListarPaginadoAsync(int instrumentoId, int pagina, int tamPag = 5)
+            => _inner.ListarPaginadoAsync(instrumentoId, pagina, tamPag);
 
-        public async Task<AcordoVersao?> ObterVersaoAtualAsync(int tipoAcordoId)
-        {
-            const string sql = @"
-        SELECT TOP 1 *
-        FROM   dbo.AcordoVersao
-        WHERE  TipoAcordoId = @tipoAcordoId
-        AND  VigenciaFim IS NULL
-        ORDER  BY Versao DESC;";
+        public Task ExcluirAsync(int versaoId)
+            => _inner.ExcluirAsync(versaoId);
 
-            using var conn = _factory.CreateConnection();
-            return await conn.QueryFirstOrDefaultAsync<AcordoVersao>(sql, new { tipoAcordoId });
-        }
-        public async Task<(IEnumerable<AcordoVersao>, int)> 
-        ListarPaginadoAsync(int acordoId, int pagina, int tamPag = 5)
-        {
-            const string sqlItens = @"
-        SELECT * FROM dbo.AcordoVersao
-        WHERE  TipoAcordoId = @acordoId
-        ORDER  BY Versao DESC
-        OFFSET (@pagina-1)*@tam ROWS FETCH NEXT @tam ROWS ONLY;";
+        public Task<InstrumentoVersao?> ObterVersaoAnteriorAsync(int instrumentoId, int versaoAtual)
+            => _inner.ObterVersaoAnteriorAsync(instrumentoId, versaoAtual);
 
-            const string sqlCount = @"
-        SELECT COUNT(*) FROM dbo.AcordoVersao
-        WHERE TipoAcordoId = @acordoId;";
+        public Task AtualizarVigenciaFimAsync(int versaoId, DateTime? dataFim)
+            => _inner.AtualizarVigenciaFimAsync(versaoId, dataFim);
 
-            using var conn = _factory.CreateConnection();
-            var itens  = await conn.QueryAsync<AcordoVersao>(sqlItens,
-                            new { acordoId, pagina, tam = tamPag });
-            int total  = await conn.ExecuteScalarAsync<int>(sqlCount, new { acordoId });
-            int totPag = (int)Math.Ceiling(total / (double)tamPag);
-            return (itens, totPag);
-        }
+        public Task AtualizarDetalhesAsync(int versaoId, decimal novoValor, TipoAditivo tipoAditivo, string? observacao, DateTime? dataAssinatura)
+            => _inner.AtualizarDetalhesAsync(versaoId, novoValor, tipoAditivo, observacao, dataAssinatura);
     }
 }

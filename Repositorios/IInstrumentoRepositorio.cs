@@ -7,10 +7,10 @@ namespace Financeiro.Repositorios
 {
     public interface IInstrumentoRepositorio
     {
-        Task InserirAsync(TipoAcordoViewModel vm);
-        Task AtualizarAsync(int id, TipoAcordoViewModel vm);
-        Task<TipoAcordo?> ObterPorIdAsync(int id);
-        Task<IEnumerable<TipoAcordo>> ListarAsync();
+        Task InserirAsync(InstrumentoViewModel vm);
+        Task AtualizarAsync(int id, InstrumentoViewModel vm);
+        Task<Instrumento?> ObterPorIdAsync(int id);
+        Task<IEnumerable<Instrumento>> ListarAsync();
         Task ExcluirAsync(int id);
 
         Task<bool> ExisteNumeroAsync(string numero, int? ignorarId = null);

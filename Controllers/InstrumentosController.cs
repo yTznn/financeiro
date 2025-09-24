@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -42,7 +43,7 @@ namespace Financeiro.Controllers
                 .ToList();
         }
 
-        private void ValidarDatas(TipoAcordoViewModel vm)
+        private void ValidarDatas(InstrumentoViewModel vm)
         {
             if (vm.DataInicio < MinAppDate)
                 ModelState.AddModelError(nameof(vm.DataInicio), "Data início deve ser a partir de 01/01/2020.");
@@ -60,8 +61,6 @@ namespace Financeiro.Controllers
             if (string.IsNullOrWhiteSpace(s))
                 return string.Empty;
 
-            // Remove: emojis (via categoria de *surrogates*), ZWJ, variation selector
-            // e os caracteres ASCII explícitos: * ! @ # '
             var cleaned = System.Text.RegularExpressions.Regex.Replace(
                 s,
                 @"\p{Cs}|\u200D|\uFE0F|[\u2600-\u27BF]|[\*\!\@\#']",
@@ -86,6 +85,33 @@ namespace Financeiro.Controllers
         public async Task<IActionResult> Index()
         {
             var lista = await _repo.ListarAsync();
+
+            // Carrega versões vigentes em paralelo (evita N+1 sequencial)
+            var tasks = lista.Select(async it => new
+            {
+                it.Id,
+                Versao = await _versaoRepo.ObterVersaoAtualAsync(it.Id),
+                Base = it
+            }).ToList();
+
+            await Task.WhenAll(tasks);
+
+            var vigentes = new Dictionary<int, (decimal valor, DateTime inicio, DateTime? fim)>();
+            foreach (var t in tasks.Select(x => x.Result))
+            {
+                var v = t.Versao;
+                var it = t.Base;
+
+                var valor = v?.Valor ?? it.Valor;
+                var inicio = v?.VigenciaInicio ?? it.DataInicio;
+                // se houver versão vigente, mostramos FIM = v.VigenciaFim (pode ser null => "atual");
+                // se NÃO houver versão, usamos o DataFim do instrumento.
+                DateTime? fim = v != null ? v.VigenciaFim : it.DataFim;
+
+                vigentes[it.Id] = (valor, inicio, fim);
+            }
+            ViewBag.Vigentes = vigentes;
+
             return View(lista);
         }
 
@@ -110,13 +136,13 @@ namespace Financeiro.Controllers
                 numeroSugerido = string.Empty;
             }
 
-            var vm = new TipoAcordoViewModel
+            var vm = new InstrumentoViewModel
             {
-                Ativo          = true,
-                DataInicio     = hoje,
-                DataFim        = hoje,
+                Ativo = true,
+                DataInicio = hoje,
+                DataFim = hoje,
                 DataAssinatura = hoje,
-                Numero         = numeroSugerido ?? string.Empty
+                Numero = numeroSugerido ?? string.Empty
             };
 
             return View("InstrumentoForm", vm);
@@ -124,10 +150,10 @@ namespace Financeiro.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Salvar(TipoAcordoViewModel vm)
+        public async Task<IActionResult> Salvar(InstrumentoViewModel vm)
         {
-            vm.Numero     = NormalizarNumero(Sanitize(vm.Numero));
-            vm.Objeto     = Sanitize(vm.Objeto);
+            vm.Numero = NormalizarNumero(Sanitize(vm.Numero));
+            vm.Objeto = Sanitize(vm.Objeto);
             vm.Observacao = Sanitize(vm.Observacao);
 
             if (string.IsNullOrWhiteSpace(vm.Numero))
@@ -162,8 +188,15 @@ namespace Financeiro.Controllers
 
                 await _logService.RegistrarCriacaoAsync("Instrumento", new
                 {
-                    vm.Numero, vm.Valor, vm.Objeto, vm.DataInicio, vm.DataFim,
-                    vm.Ativo, vm.Observacao, vm.DataAssinatura, vm.EntidadeId
+                    vm.Numero,
+                    vm.Valor,
+                    vm.Objeto,
+                    vm.DataInicio,
+                    vm.DataFim,
+                    vm.Ativo,
+                    vm.Observacao,
+                    vm.DataAssinatura,
+                    vm.EntidadeId
                 }, registroId: 0);
 
                 TempData["Sucesso"] = "Instrumento criado com sucesso.";
@@ -210,36 +243,42 @@ namespace Financeiro.Controllers
             var instrumento = await _repo.ObterPorIdAsync(id);
             if (instrumento is null) return NotFound();
 
-            var vm = new TipoAcordoViewModel
+            var vm = new InstrumentoViewModel
             {
-                Id             = instrumento.Id,
-                Numero         = instrumento.Numero,
-                Valor          = instrumento.Valor,
-                Objeto         = instrumento.Objeto,
-                DataInicio     = instrumento.DataInicio,
-                DataFim        = instrumento.DataFim,
-                Ativo          = instrumento.Ativo,
-                Observacao     = instrumento.Observacao,
+                Id = instrumento.Id,
+                Numero = instrumento.Numero,
+                Valor = instrumento.Valor,
+                Objeto = instrumento.Objeto,
+                DataInicio = instrumento.DataInicio,
+                DataFim = instrumento.DataFim,
+                Ativo = instrumento.Ativo,
+                Observacao = instrumento.Observacao,
                 DataAssinatura = instrumento.DataAssinatura,
-                EntidadeId     = instrumento.EntidadeId
+                EntidadeId = instrumento.EntidadeId
             };
 
             await CarregarEntidadesAsync(vm.EntidadeId);
 
-            ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
-            ViewBag.FormAction  = "Atualizar";
+            var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+            ViewBag.VersaoAtual = versaoAtual;
+            ViewBag.FormAction = "Atualizar";
+
+            // Preenche "vigente" para a View (fallback para os campos do Instrumento)
+            ViewBag.ValorVigente = versaoAtual?.Valor ?? instrumento.Valor;
+            ViewBag.InicioVigente = versaoAtual?.VigenciaInicio ?? instrumento.DataInicio;            // DateTime
+            ViewBag.FimVigente = versaoAtual != null ? versaoAtual.VigenciaFim : (DateTime?)instrumento.DataFim; // DateTime?
 
             return View("InstrumentoForm", vm);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Atualizar(int id, TipoAcordoViewModel vm)
+        public async Task<IActionResult> Atualizar(int id, InstrumentoViewModel vm)
         {
             if (id != vm.Id) return BadRequest();
 
-            vm.Numero     = NormalizarNumero(Sanitize(vm.Numero));
-            vm.Objeto     = Sanitize(vm.Objeto);
+            vm.Numero = NormalizarNumero(Sanitize(vm.Numero));
+            vm.Objeto = Sanitize(vm.Objeto);
             vm.Observacao = Sanitize(vm.Observacao);
 
             if (string.IsNullOrWhiteSpace(vm.Numero))
@@ -255,7 +294,11 @@ namespace Financeiro.Controllers
             {
                 await CarregarEntidadesAsync(vm.EntidadeId);
                 ViewBag.FormAction = "Atualizar";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
+                ViewBag.VersaoAtual = v;
+                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
+                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
+                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
                 return View("InstrumentoForm", vm);
             }
 
@@ -264,7 +307,11 @@ namespace Financeiro.Controllers
                 ModelState.AddModelError(nameof(vm.Numero), "Já existe um instrumento com este número.");
                 await CarregarEntidadesAsync(vm.EntidadeId);
                 ViewBag.FormAction = "Atualizar";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
+                ViewBag.VersaoAtual = v;
+                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
+                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
+                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
                 return View("InstrumentoForm", vm);
             }
 
@@ -303,7 +350,11 @@ namespace Financeiro.Controllers
                 ModelState.AddModelError(nameof(vm.Numero), "Já existe um instrumento com este número.");
                 await CarregarEntidadesAsync(vm.EntidadeId);
                 ViewBag.FormAction = "Atualizar";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
+                ViewBag.VersaoAtual = v;
+                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
+                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
+                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
                 return View("InstrumentoForm", vm);
             }
             catch (SqlException ex) when (ex.Number == 8152)
@@ -311,7 +362,11 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = "Algum campo excedeu o limite permitido. Reduza o texto.";
                 await CarregarEntidadesAsync(vm.EntidadeId);
                 ViewBag.FormAction = "Atualizar";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
+                ViewBag.VersaoAtual = v;
+                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
+                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
+                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
                 return View("InstrumentoForm", vm);
             }
             catch (SqlException ex) when (ex.Number == 547)
@@ -319,7 +374,11 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = "Não foi possível concluir devido a vínculos relacionados.";
                 await CarregarEntidadesAsync(vm.EntidadeId);
                 ViewBag.FormAction = "Atualizar";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
+                ViewBag.VersaoAtual = v;
+                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
+                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
+                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
                 return View("InstrumentoForm", vm);
             }
             catch (Exception)
@@ -327,7 +386,11 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
                 await CarregarEntidadesAsync(vm.EntidadeId);
                 ViewBag.FormAction = "Atualizar";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
+                ViewBag.VersaoAtual = v;
+                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
+                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
+                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
                 return View("InstrumentoForm", vm);
             }
         }
@@ -361,19 +424,25 @@ namespace Financeiro.Controllers
         }
 
         /* ---------- HISTÓRICO (Partial) ---------- */
+        // Agora Historico aceita 'pag' e devolve a TABELA paginada (_HistoricoAditivosTable)
         [HttpGet]
-        public async Task<IActionResult> Historico(int id)
+        public async Task<IActionResult> Historico(int id, int pag = 1)
         {
-            var versoes = await _versaoRepo.ListarPorInstrumentoAsync(id);
-            return PartialView("_HistoricoAditivos", versoes);
+            var (itens, totalPaginas) = await _versaoRepo.ListarPaginadoAsync(id, pag);
+            ViewBag.TotalPaginas = totalPaginas;
+            ViewBag.PaginaAtual = pag;
+            ViewBag.InstrumentoId = id;
+            return PartialView("_HistoricoAditivosTable", itens);
         }
 
+        // (Opcional) mantém a rota antiga, se alguém ainda usar
         [HttpGet]
         public async Task<IActionResult> HistoricoPagina(int id, int pag = 1)
         {
             var (itens, totalPaginas) = await _versaoRepo.ListarPaginadoAsync(id, pag);
             ViewBag.TotalPaginas = totalPaginas;
-            ViewBag.PaginaAtual  = pag;
+            ViewBag.PaginaAtual = pag;
+            ViewBag.InstrumentoId = id;
             return PartialView("_HistoricoAditivosTable", itens);
         }
 

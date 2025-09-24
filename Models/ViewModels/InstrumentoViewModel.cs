@@ -3,16 +3,18 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Financeiro.Models.ViewModels
 {
-    public class TipoAcordoViewModel
+    public class InstrumentoViewModel
     {
         public int Id { get; set; }
 
-        [Required(ErrorMessage = "Informe o número do acordo.")]
+        [Required(ErrorMessage = "Informe o número do instrumento.")]
+        [Display(Name = "Número")]
         [StringLength(100, ErrorMessage = "Número muito longo (máx. {1} caracteres).")]
         public string Numero { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Informe o valor.")]
         [Range(0.01, double.MaxValue, ErrorMessage = "Valor deve ser maior que zero.")]
+        [Display(Name = "Valor (legado)")]
         public decimal Valor { get; set; }
 
         [Required(ErrorMessage = "Descreva o objeto do termo.")]
@@ -30,7 +32,7 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Data Fim")]
         public DateTime DataFim { get; set; }
 
-        [Display(Name = "Está ativo?")]
+        [Display(Name = "Ativo?")]
         public bool Ativo { get; set; }
 
         [Display(Name = "Observação")]
@@ -40,7 +42,6 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Data de Assinatura")]
         public DateTime? DataAssinatura { get; set; }
 
-        // ➜ NOVO (para o select de Entidade)
         [Required(ErrorMessage = "Selecione a Entidade.")]
         [Display(Name = "Entidade")]
         public int EntidadeId { get; set; }

@@ -8,6 +8,7 @@ using Financeiro.Servicos.Anexos;
 using Financeiro.Servicos.Seguranca;
 using Financeiro.Validacoes;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,24 +20,30 @@ builder.Configuration
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-// 1) Cultura
+// 1) Cultura padrão de threads
 var culture = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = culture;
 CultureInfo.DefaultThreadCurrentUICulture = culture;
 
-// 2) MVC
+// 2) MVC (com runtime compilation em DEBUG)
+#if DEBUG
+builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation();
+#else
 builder.Services.AddControllersWithViews();
+#endif
 
 // 2.1) AutoMapper
 builder.Services.AddAutoMapper(typeof(EntidadeProfile).Assembly);
 
-// 3) Autenticação Cookie
+// 3) Autenticação Cookie (com expiração e sliding)
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(opt =>
     {
-        opt.LoginPath        = "/Conta/Login";
-        opt.LogoutPath       = "/Conta/Logout";
-        opt.AccessDeniedPath = "/Conta/AcessoNegado";
+        opt.LoginPath         = "/Conta/Login";
+        opt.LogoutPath        = "/Conta/Logout";
+        opt.AccessDeniedPath  = "/Conta/AcessoNegado";
+        opt.ExpireTimeSpan    = TimeSpan.FromHours(8);
+        opt.SlidingExpiration = true;
     });
 
 builder.Services.AddAuthorization();
@@ -59,11 +66,6 @@ builder.Services.AddTransient<PessoaFisicaValidacoes>();
 
 builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
 builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
-
-// --- Trilhas antigas removidas ---
-// builder.Services.AddTransient<ITipoAcordoRepositorio, TipoAcordoRepositorio>();
-// builder.Services.AddTransient<IAditivoRepositorio, AditivoRepositorio>();
-// builder.Services.AddTransient<IVersaoAcordoService, VersaoAcordoService>();
 
 builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
 builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
@@ -101,13 +103,10 @@ builder.Services.AddHttpContextAccessor(); // necessário para obter dados do us
 builder.Services.AddScoped<IJustificativaService, JustificativaService>();
 #endregion
 
-#region ✅ NOVO – Faixa nova de Instrumento (paralela, sem quebrar a antiga)
-// Repositórios específicos de Instrumento (mapeando as tabelas atuais TipoAcordo/AcordoVersao)
-builder.Services.AddTransient<IInstrumentoRepositorio, InstrumentoRepositorio>();
-builder.Services.AddTransient<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepositorio>();
-
-// Serviço específico para versões/aditivos de Instrumento
-builder.Services.AddTransient<IInstrumentoVersaoService, InstrumentoVersaoService>();
+#region ✅ NOVO – Faixa de Instrumento (com lifetimes Scoped)
+builder.Services.AddScoped<IInstrumentoRepositorio, InstrumentoRepositorio>();
+builder.Services.AddScoped<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepositorio>();
+builder.Services.AddScoped<IInstrumentoVersaoService, InstrumentoVersaoService>();
 #endregion
 
 var app = builder.Build();
@@ -121,6 +120,16 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// 🌎 Localização no pipeline (garante pt-BR no model binding)
+var supportedCultures = new[] { new CultureInfo("pt-BR") };
+app.UseRequestLocalization(new RequestLocalizationOptions
+{
+    DefaultRequestCulture = new RequestCulture("pt-BR"),
+    SupportedCultures = supportedCultures,
+    SupportedUICultures = supportedCultures
+});
+
 app.UseRouting();
 
 app.UseAuthentication();

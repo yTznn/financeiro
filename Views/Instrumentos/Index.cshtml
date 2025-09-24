@@ -1,8 +1,17 @@
-@model IEnumerable<Financeiro.Models.TipoAcordo>
+@model IEnumerable<Financeiro.Models.Instrumento>
+
+@using System.Globalization
+@using System.Collections.Generic
 
 @{
     ViewBag.Title = "Instrumentos";
     Layout = "_Layout";
+
+    // Dicionário que veio do controller: Id → (valor vigente, início vigente, fim vigente?)
+    var vig = ViewBag.Vigentes as IDictionary<int, (decimal valor, DateTime inicio, DateTime? fim)>
+              ?? new Dictionary<int, (decimal, DateTime, DateTime?)>();
+
+    var br = new CultureInfo("pt-BR");
 }
 
 <h2 class="mb-4 d-flex align-items-center justify-content-between">
@@ -16,9 +25,9 @@
             <thead class="table-light">
                 <tr class="text-center">
                     <th style="width:130px">Número</th>
-                    <th style="width:140px">Valor</th>
+                    <th style="width:160px">Valor vigente</th>
                     <th>Objeto</th>
-                    <th style="width:220px">Período</th>
+                    <th style="width:240px">Vigência</th>
                     <th style="width:180px">Entidade</th>
                     <th style="width:100px">Status</th>
                     <th style="width:180px">Ações</th>
@@ -38,7 +47,26 @@
                     var alvoId = $"obj-{item.Id}";
                     <tr>
                         <td class="text-center fw-semibold">@item.Numero</td>
-                        <td class="text-end fw-semibold">@item.Valor.ToString("C")</td>
+
+                        <!-- VALOR VIGENTE (com “orig.” se diferente do base) -->
+                        <td class="text-end fw-semibold">
+                            @{
+                                if (vig.TryGetValue(item.Id, out var vinfo))
+                                {
+                                    var (valorVig, _, _) = vinfo;
+                                    @valorVig.ToString("C", br)
+
+                                    if (valorVig != item.Valor)
+                                    {
+                                        <div class="small text-muted">orig.: @item.Valor.ToString("C", br)</div>
+                                    }
+                                }
+                                else
+                                {
+                                    @item.Valor.ToString("C", br)
+                                }
+                            }
+                        </td>
 
                         <!-- OBJETO: clamp + ver mais -->
                         <td>
@@ -50,19 +78,43 @@
                                     data-target="@alvoId">ver mais</button>
                         </td>
 
+                        <!-- VIGÊNCIA VIGENTE (com “base:” se diferente do instrumento) -->
                         <td class="text-center">
-                            <span class="badge rounded-pill bg-secondary-subtle text-secondary">
-                                @item.DataInicio.ToString("dd/MM/yyyy") → @item.DataFim.ToString("dd/MM/yyyy")
-                            </span>
+                            @{
+                                if (vig.TryGetValue(item.Id, out var vper))
+                                {
+                                    var (_, inicioVig, fimVig) = vper;
+                                    var fimTxt = fimVig.HasValue ? fimVig.Value.ToString("dd/MM/yyyy") : "atual";
+                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary">
+                                        @inicioVig.ToString("dd/MM/yyyy") → @fimTxt
+                                    </span>
+
+                                    if (inicioVig != item.DataInicio || (fimVig ?? DateTime.MinValue) != item.DataFim)
+                                    {
+                                        <div class="small text-muted mt-1">
+                                            base: @item.DataInicio.ToString("dd/MM/yyyy") → @item.DataFim.ToString("dd/MM/yyyy")
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary">
+                                        @item.DataInicio.ToString("dd/MM/yyyy") → @item.DataFim.ToString("dd/MM/yyyy")
+                                    </span>
+                                }
+                            }
                         </td>
+
                         <td class="text-center">
                             <span class="badge bg-info-subtle text-info">Entidade #@item.EntidadeId</span>
                         </td>
+
                         <td class="text-center">
                             <span class="badge @(item.Ativo ? "bg-success" : "bg-secondary")">
                                 @(item.Ativo ? "Ativo" : "Inativo")
                             </span>
                         </td>
+
                         <td class="text-center">
                             <div class="d-inline-flex gap-1">
                                 <a class="btn btn-sm btn-outline-primary"

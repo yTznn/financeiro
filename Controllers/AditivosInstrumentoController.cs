@@ -43,105 +43,115 @@ namespace Financeiro.Controllers
             {
                 var pai = await _instrRepo.ObterPorIdAsync(instrumentoId);
                 if (pai == null) return NotFound("Instrumento não encontrado.");
-                ViewBag.VersaoAtual = new { Versao = 1, Valor = pai.Valor, VigenciaInicio = pai.DataInicio, VigenciaFim = (DateTime?)null };
+
+                ViewBag.VersaoAtual = new
+                {
+                    Versao         = 1,
+                    Valor          = pai.Valor,
+                    VigenciaInicio = pai.DataInicio,
+                    VigenciaFim    = (DateTime?)null
+                };
             }
             else
             {
-                ViewBag.VersaoAtual = atual;
+                // 🔒 Padroniza o shape para a view (evita dynamic/binder issues)
+                ViewBag.VersaoAtual = new
+                {
+                    Versao         = atual.Versao,
+                    Valor          = atual.Valor,
+                    VigenciaInicio = atual.VigenciaInicio,
+                    VigenciaFim    = atual.VigenciaFim
+                };
             }
 
-            var vm = new AditivoViewModel { TipoAcordoId = instrumentoId };
+            var vm = new AditivoInstrumentoViewModel { InstrumentoId = instrumentoId };
             return View("AditivoForm", vm);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Salvar(AditivoViewModel vm, string justificativa = null)
+        public async Task<IActionResult> Salvar(AditivoInstrumentoViewModel vm, string? justificativa = null)
         {
+            if (vm == null || vm.InstrumentoId <= 0)
+                return BadRequest("Instrumento inválido.");
+
             if (!ModelState.IsValid)
             {
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId);
+                var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
+                ViewBag.VersaoAtual = atual == null
+                    ? new { Versao = 1, Valor = 0m, VigenciaInicio = (DateTime?)null, VigenciaFim = (DateTime?)null }
+                    : new { Versao = atual.Versao, Valor = atual.Valor, VigenciaInicio = (DateTime?)atual.VigenciaInicio, VigenciaFim = atual.VigenciaFim };
                 return View("AditivoForm", vm);
             }
 
-            // Normaliza o sinal do valor (delta)
+            // Normaliza o sinal do delta de valor
             if (vm.NovoValor.HasValue)
             {
                 var abs = Math.Abs(vm.NovoValor.Value);
-                switch (vm.TipoAditivo)
+                vm.NovoValor = vm.TipoAditivo switch
                 {
-                    case TipoAditivo.Supressao:
-                    case TipoAditivo.PrazoSupressao:
-                        vm.NovoValor = -abs;
-                        break;
-                    case TipoAditivo.Acrescimo:
-                    case TipoAditivo.PrazoAcrescimo:
-                        vm.NovoValor = abs;
-                        break;
-                }
+                    TipoAditivo.Supressao or TipoAditivo.PrazoSupressao => -abs,
+                    TipoAditivo.Acrescimo or TipoAditivo.PrazoAcrescimo =>  abs,
+                    _ => vm.NovoValor
+                };
             }
-            
-            // --- LÓGICA DE DATAS FINAL E CORRIGIDA ---
-            bool alteraPrazo = vm.TipoAditivo == TipoAditivo.Prazo
-                            || vm.TipoAditivo == TipoAditivo.PrazoAcrescimo
-                            || vm.TipoAditivo == TipoAditivo.PrazoSupressao;
 
+            // Só-valor → manter vigência atual
+            bool alteraPrazo = vm.TipoAditivo is TipoAditivo.Prazo or TipoAditivo.PrazoAcrescimo or TipoAditivo.PrazoSupressao;
             if (!alteraPrazo)
             {
-                // Para aditivos que só mudam o valor, a vigência não se altera.
-                // Para sinalizar ao Service que ele deve ATUALIZAR a versão atual,
-                // definimos a data de início do aditivo como a mesma da versão vigente.
-                var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId);
+                var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
                 if (atual != null)
                 {
                     vm.NovaDataInicio = atual.VigenciaInicio;
-                    vm.NovaDataFim = atual.VigenciaFim;
+                    vm.NovaDataFim    = atual.VigenciaFim; // pode ser null (vigente)
                 }
                 else
                 {
-                    // Caso seja o primeiro aditivo de um instrumento sem versão, usa a data do instrumento pai.
-                    var pai = await _instrRepo.ObterPorIdAsync(vm.TipoAcordoId);
+                    var pai = await _instrRepo.ObterPorIdAsync(vm.InstrumentoId);
                     vm.NovaDataInicio = pai?.DataInicio;
-                    vm.NovaDataFim = pai?.DataFim;
+                    vm.NovaDataFim    = pai?.DataFim;
                 }
             }
-            // Se 'alteraPrazo' for true, as datas virão do formulário e não precisam ser definidas aqui.
-
 
             try
             {
                 await _service.CriarAditivoAsync(vm);
-                await _logService.RegistrarCriacaoAsync("InstrumentoAditivo", vm, vm.TipoAcordoId);
+                await _logService.RegistrarCriacaoAsync("InstrumentoAditivo", vm, vm.InstrumentoId);
 
                 if (!string.IsNullOrWhiteSpace(justificativa))
                 {
                     await _justificativaService.RegistrarAsync(
-                        "InstrumentoAditivo", "Criação de aditivo", vm.TipoAcordoId, justificativa);
+                        "InstrumentoAditivo",
+                        "Criação de aditivo",
+                        vm.InstrumentoId,
+                        justificativa);
                 }
 
                 TempData["Sucesso"] = "Aditivo criado com sucesso!";
-                return RedirectToAction("Editar", "Instrumentos", new { id = vm.TipoAcordoId });
+                return RedirectToAction("Editar", "Instrumentos", new { id = vm.InstrumentoId });
             }
-            catch (ArgumentException ex) // Captura exceções de regra de negócio de forma específica
+            catch (ArgumentException ex)
             {
-                _logger.LogWarning("Falha de validação ao salvar aditivo: {message}", ex.Message);
-                TempData["Erro"] = ex.Message; // Mostra a mensagem de validação para o usuário
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId);
-                return View("AditivoForm", vm);
+                _logger.LogWarning(ex, "Falha de validação ao salvar aditivo para instrumento {id}", vm.InstrumentoId);
+                TempData["Erro"] = ex.Message;
             }
             catch (SqlException ex) when (ex.Number == 8152)
             {
                 TempData["Erro"] = "Algum campo excedeu o limite permitido. Reduza o texto.";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId);
-                return View("AditivoForm", vm);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Falha inesperada ao salvar aditivo para o Instrumento ID {InstrumentoId}", vm.TipoAcordoId);
+                _logger.LogError(ex, "Falha inesperada ao salvar aditivo para o Instrumento ID {InstrumentoId}", vm.InstrumentoId);
                 TempData["Erro"] = "Ops, algo deu errado ao salvar o aditivo.";
-                ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.TipoAcordoId);
-                return View("AditivoForm", vm);
             }
+
+            // Reexibe view com VersaoAtual padronizada
+            var v = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
+            ViewBag.VersaoAtual = v == null
+                ? new { Versao = 1, Valor = 0m, VigenciaInicio = (DateTime?)null, VigenciaFim = (DateTime?)null }
+                : new { Versao = v.Versao, Valor = v.Valor, VigenciaInicio = (DateTime?)v.VigenciaInicio, VigenciaFim = v.VigenciaFim };
+            return View("AditivoForm", vm);
         }
 
         [HttpPost]
@@ -152,12 +162,17 @@ namespace Financeiro.Controllers
 
             try
             {
-                var (removida, vigente) = await _service.CancelarUltimoAditivoAsync(body.InstrumentoId, body.Versao, body.Justificativa);
+                var (removida, vigente) = await _service.CancelarUltimoAditivoAsync(
+                    body.InstrumentoId, body.Versao, body.Justificativa);
 
                 await _logService.RegistrarExclusaoAsync("InstrumentoAditivo", removida, removida.Id);
                 await _justificativaService.RegistrarAsync(
-                    "InstrumentoAditivo", $"Cancelamento da versão {removida.Versao}", removida.Id, body.Justificativa );
-                
+                    "InstrumentoAditivo",
+                    $"Cancelamento da versão {removida.Versao}",
+                    removida.Id,
+                    body.Justificativa
+                );
+
                 TempData["Sucesso"] = "Último aditivo foi cancelado com sucesso.";
                 return Ok();
             }

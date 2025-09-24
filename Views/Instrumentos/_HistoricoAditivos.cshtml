@@ -1,4 +1,4 @@
-@model IEnumerable<Financeiro.Models.AcordoVersao>
+@model IEnumerable<Financeiro.Models.InstrumentoVersao>
 @using System.Globalization
 @using Financeiro.Models
 
@@ -7,10 +7,10 @@
 
     string BadgeTipo(TipoAditivo? t) => t switch
     {
-        null                     => "<span class=\"badge bg-secondary-subtle text-secondary\">Original</span>",
-        TipoAditivo.Prazo        => "<span class=\"badge bg-info-subtle text-info\">Prazo</span>",
-        TipoAditivo.Acrescimo    => "<span class=\"badge bg-success-subtle text-success\">Acréscimo</span>",
-        TipoAditivo.Supressao    => "<span class=\"badge bg-danger-subtle text-danger\">Supressão</span>",
+        null                       => "<span class=\"badge bg-secondary-subtle text-secondary\">Original</span>",
+        TipoAditivo.Prazo          => "<span class=\"badge bg-info-subtle text-info\">Prazo</span>",
+        TipoAditivo.Acrescimo      => "<span class=\"badge bg-success-subtle text-success\">Acréscimo</span>",
+        TipoAditivo.Supressao      => "<span class=\"badge bg-danger-subtle text-danger\">Supressão</span>",
         TipoAditivo.PrazoAcrescimo => "<span class=\"badge bg-success-subtle text-success\">Prazo + Acréscimo</span>",
         TipoAditivo.PrazoSupressao => "<span class=\"badge bg-danger-subtle text-danger\">Prazo + Supressão</span>",
         _ => $"<span class=\"badge bg-secondary-subtle text-secondary\">{t}</span>"
