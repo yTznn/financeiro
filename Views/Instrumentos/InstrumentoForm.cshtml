@@ -33,10 +33,10 @@
       @if (Model.Id != 0 && ViewBag.ResumoAtual != null) {
         var r = (Financeiro.Models.ViewModels.InstrumentoResumoViewModel)ViewBag.ResumoAtual;
         <a class="btn btn-outline-secondary btn-sm"
-           asp-controller="LancamentosInstrumento"
-           asp-action="Index"
-           asp-route-instrumentoId="@r.InstrumentoId">
-           Ver lançamentos do mês
+          asp-controller="RecebimentosInstrumento" 
+          asp-action="Index"
+          asp-route-instrumentoId="@resumo.InstrumentoId"> 
+          Ver Recebimentos
         </a>
       }
     </div>

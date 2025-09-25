@@ -105,8 +105,8 @@ builder.Services.AddScoped<IJustificativaService, JustificativaService>();
 builder.Services.AddScoped<IInstrumentoRepositorio, InstrumentoRepositorio>();
 builder.Services.AddScoped<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepositorio>();
 builder.Services.AddScoped<IInstrumentoVersaoService, InstrumentoVersaoService>();
+builder.Services.AddScoped<IRecebimentoInstrumentoRepositorio, RecebimentoInstrumentoRepositorio>();
 
-builder.Services.AddScoped<ILancamentoInstrumentoRepositorio, LancamentoInstrumentoRepositorio>();
 #endregion
 
 var app = builder.Build();

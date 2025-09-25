@@ -1,0 +1,91 @@
+@model IEnumerable<Financeiro.Models.ViewModels.RecebimentoViewModel>
+@using System.Globalization
+
+@{
+    var instrumento = ViewBag.Instrumento as Financeiro.Models.Instrumento;
+    ViewData["Title"] = $"Recebimentos do Instrumento Nº {instrumento?.Numero}";
+    var br = new CultureInfo("pt-BR");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="mb-0">@ViewData["Title"]</h2>
+        <a asp-controller="Instrumentos" asp-action="Editar" asp-route-id="@instrumento.Id">Voltar para o Instrumento</a>
+    </div>
+    <a asp-action="Novo" asp-route-instrumentoId="@instrumento.Id" class="btn btn-primary">+ Novo Recebimento</a>
+</div>
+
+<table class="table table-hover">
+    <thead class="table-light">
+        <tr>
+            <th>Período do Recebimento</th>
+            <th class="text-end">Valor</th>
+            <th>Observação</th>
+            <th style="width: 150px;"></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (!Model.Any())
+        {
+            <tr>
+                <td colspan="4" class="text-center text-muted py-4">Nenhum recebimento lançado para este instrumento.</td>
+            </tr>
+        }
+        else
+        {
+            foreach (var item in Model)
+            {
+                <tr>
+                    <td>@item.DataInicio.ToString("dd/MM/yyyy") a @item.DataFim.ToString("dd/MM/yyyy")</td>
+                    <td class="text-end">@item.Valor.ToString("C", br)</td>
+                    <td>@item.Observacao</td>
+                    <td class="text-end">
+                        <a asp-action="Editar" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Editar</a>
+                        <form asp-action="Excluir" method="post" class="d-inline js-delete-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <input type="hidden" name="instrumentoId" value="@item.InstrumentoId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Mensagens (TempData)
+        (function () {
+            const ok = '@(TempData["Sucesso"] ?? "")';
+            const err = '@(TempData["Erro"] ?? "")';
+            const alert = '@(TempData["Alerta"] ?? "")';
+
+            if (ok)  Swal.fire({ icon: 'success', title: 'Sucesso!', text: ok });
+            if (err) Swal.fire({ icon: 'error', title: 'Ops...', text: err });
+            if (alert) Swal.fire({ icon: 'info', title: 'Atenção', text: alert });
+        })();
+
+        // Confirmação de exclusão
+        document.querySelectorAll('form.js-delete-form').forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Confirma o cancelamento do recebimento?',
+                    text: "Esta ação não poderá ser revertida.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sim, Cancelar!',
+                    cancelButtonText: 'Voltar',
+                    confirmButtonColor: '#dc3545'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+        });
+    </script>
+}

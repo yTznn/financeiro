@@ -118,18 +118,6 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW5zdHJ1bWVudG9zXF9IaXN0b3JpY29BZGl0aXZvc1RhYmxlLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/LancamentosInstrumento/Editar.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTGFuY2FtZW50b3NJbnN0cnVtZW50b1xFZGl0YXIuY3NodG1s
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/LancamentosInstrumento/Index.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTGFuY2FtZW50b3NJbnN0cnVtZW50b1xJbmRleC5jc2h0bWw=
-build_metadata.AdditionalFiles.CssScope = 
-
-[C:/Users/Elielton Souza/Desktop/financeiro/Views/LancamentosInstrumento/Novo.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTGFuY2FtZW50b3NJbnN0cnVtZW50b1xOb3ZvLmNzaHRtbA==
-build_metadata.AdditionalFiles.CssScope = 
-
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/Naturezas/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmF0dXJlemFzXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
@@ -180,6 +168,18 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/PessoasJuridicas/PessoaForm.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGVzc29hc0p1cmlkaWNhc1xQZXNzb2FGb3JtLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/RecebimentosInstrumento/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUmVjZWJpbWVudG9zSW5zdHJ1bWVudG9cSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/RecebimentosInstrumento/RecebimentoForm.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUmVjZWJpbWVudG9zSW5zdHJ1bWVudG9cUmVjZWJpbWVudG9Gb3JtLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Elielton Souza/Desktop/financeiro/Views/RecebimentosInstrumento/RelatorioGeral.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUmVjZWJpbWVudG9zSW5zdHJ1bWVudG9cUmVsYXRvcmlvR2VyYWwuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/Elielton Souza/Desktop/financeiro/Views/Shared/Error.cshtml]

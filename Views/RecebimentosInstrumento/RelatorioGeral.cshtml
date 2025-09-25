@@ -1,0 +1,61 @@
+@model IEnumerable<Financeiro.Models.ViewModels.RecebimentoViewModel>
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Relatório Geral de Recebimentos";
+    var br = new CultureInfo("pt-BR");
+    
+    // Agrupa todos os recebimentos pelo número do instrumento
+    var recebimentosAgrupados = Model.GroupBy(r => r.InstrumentoNumero).OrderBy(g => g.Key);
+}
+
+<h2 class="mb-4">@ViewData["Title"]</h2>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info text-center">
+        <i class='bx bx-info-circle fs-4 align-middle'></i>
+        Nenhum recebimento foi lançado no sistema ainda.
+    </div>
+}
+else
+{
+    foreach (var grupo in recebimentosAgrupados)
+    {
+        <div class="mb-4">
+            <h4 class="mb-3">
+                <i class='bx bx-book-content align-middle'></i>
+                Instrumento Nº: <strong>@grupo.Key</strong>
+            </h4>
+
+            <div class="row g-3">
+                @foreach (var recebimento in grupo.OrderByDescending(r => r.DataInicio))
+                {
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-success d-flex justify-content-between">
+                                    <span>
+                                        <i class='bx bxs-dollar-circle align-middle'></i>
+                                        @recebimento.Valor.ToString("C", br)
+                                    </span>
+                                    <span class="badge bg-secondary fw-normal">
+                                        ID: @recebimento.Id
+                                    </span>
+                                </h5>
+                                <h6 class="card-subtitle mb-2 text-muted">
+                                    <i class='bx bx-calendar align-middle'></i>
+                                    @recebimento.DataInicio.ToString("dd/MM/yy") a @recebimento.DataFim.ToString("dd/MM/yy")
+                                </h6>
+                                <p class="card-text small">
+                                    @recebimento.Observacao
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+        <hr class="my-4"/>
+    }
+}

@@ -1,12 +1,15 @@
+using System;
+
 namespace Financeiro.Models
 {
-    public class LancamentoInstrumento
+    public class RecebimentoInstrumento
     {
         public int Id { get; set; }
         public int InstrumentoId { get; set; }
-        public DateTime Competencia { get; set; }   // 1º dia do mês
         public decimal Valor { get; set; }
+        public DateTime DataInicio { get; set; }
+        public DateTime DataFim { get; set; }
         public string? Observacao { get; set; }
-        public DateTime DataLancamento { get; set; }
+        public DateTime DataCriacao { get; set; }
     }
 }

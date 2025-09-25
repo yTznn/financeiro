@@ -203,70 +203,32 @@ namespace Financeiro.Repositorios
             var lista = await conn.QueryAsync<InstrumentoResumoViewModel>(sql);
             return lista ?? Enumerable.Empty<InstrumentoResumoViewModel>();
         }
-
         public async Task<InstrumentoResumoViewModel?> ObterResumoAsync(int instrumentoId)
         {
+            // Esta primeira parte, que chama o ListarResumoAsync, continua correta.
+            var resumo = (await ListarResumoAsync()).FirstOrDefault(r => r.InstrumentoId == instrumentoId);
+            if (resumo == null) return null;
+
+            // A correção está na consulta SQL abaixo.
             using var conn = _connectionFactory.CreateConnection();
+            const string sqlMes = @"
+                -- Declara as variáveis para o início e fim do mês atual
+                DECLARE @InicioMesAtual DATE = DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1);
+                DECLARE @FimMesAtual DATE = EOMONTH(GETDATE());
 
-            const string sql = @"
-        DECLARE @comp DATE = DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1);
+                -- Soma os valores dos recebimentos cujo período cruza com o mês atual
+                SELECT SUM(Valor) 
+                FROM dbo.RecebimentoInstrumento
+                WHERE InstrumentoId = @instrumentoId 
+                AND DataInicio <= @FimMesAtual 
+                AND DataFim >= @InicioMesAtual;";
+            
+            var totalRecebidoMes = await conn.QuerySingleOrDefaultAsync<decimal?>(sqlMes, new { instrumentoId });
 
-        WITH UltVersao AS (
-            SELECT TOP 1 iv.Valor, iv.VigenciaInicio, iv.VigenciaFim
-            FROM dbo.InstrumentoVersao iv
-            WHERE iv.InstrumentoId = @id
-            ORDER BY 
-                CASE WHEN iv.VigenciaFim IS NULL THEN 1 ELSE 0 END DESC,
-                iv.Versao DESC,
-                iv.DataRegistro DESC
-        ),
-        Dados AS (
-            SELECT
-                i.Id                                         AS InstrumentoId,
-                i.Numero                                     AS Numero,
-                i.Objeto                                     AS Descricao,
-                COALESCE(uv.VigenciaInicio, i.DataInicio)    AS VigenciaInicio,
-                COALESCE(uv.VigenciaFim,    i.DataFim)       AS VigenciaFimAtual,
-                CAST(COALESCE(uv.Valor, i.Valor) AS DECIMAL(18,2)) AS ValorTotalAtual
-            FROM dbo.Instrumento i
-            OUTER APPLY (SELECT * FROM UltVersao) uv
-            WHERE i.Id = @id
-        ),
-        Calc AS (
-            SELECT
-                d.*,
-                DATEDIFF(MONTH, d.VigenciaInicio, d.VigenciaFimAtual) + 1 AS MesesVigentesAtuais,
-                CAST(d.ValorTotalAtual / NULLIF(DATEDIFF(MONTH, d.VigenciaInicio, d.VigenciaFimAtual) + 1, 0)
-                    AS DECIMAL(18,2)) AS ValorMensalAtual
-            FROM Dados d
-        )
-        SELECT
-            c.InstrumentoId,
-            c.Numero,
-            c.Descricao,
-            c.VigenciaInicio,
-            c.VigenciaFimAtual,
-            c.MesesVigentesAtuais,
-            c.ValorTotalAtual,
-            c.ValorMensalAtual,
-            -- Lançado no mês atual:
-            CAST(ISNULL((
-                SELECT SUM(li.Valor)
-                FROM dbo.LancamentoInstrumento li
-                WHERE li.InstrumentoId = c.InstrumentoId
-                AND li.Competencia   = @comp
-            ), 0) AS DECIMAL(18,2)) AS TotalLancadoNoMes,
-            -- Saldo do mês = planejado - lançado
-            CAST(c.ValorMensalAtual - ISNULL((
-                SELECT SUM(li.Valor)
-                FROM dbo.LancamentoInstrumento li
-                WHERE li.InstrumentoId = c.InstrumentoId
-                AND li.Competencia   = @comp
-            ), 0) AS DECIMAL(18,2)) AS SaldoDoMesAtual
-        FROM Calc c;";
+            resumo.TotalLancadoNoMes = totalRecebidoMes ?? 0;
+            resumo.SaldoDoMesAtual = resumo.ValorMensalAtual - resumo.TotalLancadoNoMes;
 
-            return await conn.QueryFirstOrDefaultAsync<InstrumentoResumoViewModel>(sql, new { id = instrumentoId });
+            return resumo;
         }
-
     }
 }
