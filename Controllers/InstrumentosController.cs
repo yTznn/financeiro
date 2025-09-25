@@ -80,40 +80,82 @@ namespace Financeiro.Controllers
             return only.Trim('/');
         }
 
+        // DATEDIFF(MONTH) + 1 (inclui mês de início e de fim)
+        private static int CalcularMeses(DateTime inicio, DateTime fim)
+        {
+            return ((fim.Year - inicio.Year) * 12) + (fim.Month - inicio.Month) + 1;
+        }
         /* ---------- LISTAR ---------- */
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            var lista = await _repo.ListarAsync();
+            // Resumo consolidado (valor total/mensal atual, vigência atual e saldo)
+            var listaResumo = await _repo.ListarResumoAsync();
 
-            // Carrega versões vigentes em paralelo (evita N+1 sequencial)
-            var tasks = lista.Select(async it => new
+            // Dicionários para a View:
+            // - Último texto de aditivo de prazo
+            // - Valor vigente (da versão atual)
+            var ultimosPrazo    = new Dictionary<int, string>();
+            var valoresVigentes = new Dictionary<int, decimal>();
+
+            foreach (var r in listaResumo)
             {
-                it.Id,
-                Versao = await _versaoRepo.ObterVersaoAtualAsync(it.Id),
-                Base = it
-            }).ToList();
+                // Valor vigente: usa a versão vigente (se existir)
+                var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(r.InstrumentoId);
+                if (versaoAtual != null)
+                    valoresVigentes[r.InstrumentoId] = versaoAtual.Valor;
 
-            await Task.WhenAll(tasks);
+                // Detecta o último aditivo que alterou o PRAZO comparando fim de vigência com a versão anterior
+                var historico = (await _versaoRepo.ListarPorInstrumentoAsync(r.InstrumentoId))
+                                .OrderByDescending(v => v.Versao)
+                                .ToList();
 
-            var vigentes = new Dictionary<int, (decimal valor, DateTime inicio, DateTime? fim)>();
-            foreach (var t in tasks.Select(x => x.Result))
-            {
-                var v = t.Versao;
-                var it = t.Base;
+                for (int i = 0; i < historico.Count - 1; i++)
+                {
+                    var atual    = historico[i];
+                    var anterior = historico[i + 1];
 
-                var valor = v?.Valor ?? it.Valor;
-                var inicio = v?.VigenciaInicio ?? it.DataInicio;
-                // se houver versão vigente, mostramos FIM = v.VigenciaFim (pode ser null => "atual");
-                // se NÃO houver versão, usamos o DataFim do instrumento.
-                DateTime? fim = v != null ? v.VigenciaFim : it.DataFim;
+                    // Considera mudança de prazo se o FIM mudou (tratando null como "aberto")
+                    bool mudouPrazo = (atual.VigenciaFim ?? DateTime.MinValue) != (anterior.VigenciaFim ?? DateTime.MinValue);
+                    if (mudouPrazo)
+                    {
+                        string txtDelta;
 
-                vigentes[it.Id] = (valor, inicio, fim);
+                        if (atual.VigenciaFim.HasValue && anterior.VigenciaFim.HasValue)
+                        {
+                            int deltaMeses = ((atual.VigenciaFim.Value.Year  - anterior.VigenciaFim.Value.Year)  * 12)
+                                        +  (atual.VigenciaFim.Value.Month - anterior.VigenciaFim.Value.Month);
+                            var sinal   = deltaMeses > 0 ? "+" : (deltaMeses < 0 ? "−" : "±");
+                            txtDelta    = deltaMeses != 0 ? $"{sinal}{Math.Abs(deltaMeses)} mês(es)" : "ajuste de prazo";
+                        }
+                        else if (atual.VigenciaFim.HasValue && !anterior.VigenciaFim.HasValue)
+                        {
+                            // Antes era aberto, agora definiu fim
+                            txtDelta = $"definiu fim para {atual.VigenciaFim.Value:dd/MM/yyyy}";
+                        }
+                        else if (!atual.VigenciaFim.HasValue && anterior.VigenciaFim.HasValue)
+                        {
+                            // Antes tinha fim, agora ficou aberto
+                            txtDelta = "removeu fim (vigência aberta)";
+                        }
+                        else
+                        {
+                            txtDelta = "ajuste de prazo";
+                        }
+
+                        var quando = (atual.DataAssinatura ?? atual.VigenciaInicio).ToString("dd/MM/yyyy");
+                        ultimosPrazo[r.InstrumentoId] = $"{txtDelta} em {quando}";
+                        break; // já achamos o mais recente que mexeu no prazo
+                    }
+                }
             }
-            ViewBag.Vigentes = vigentes;
 
-            return View(lista);
+            ViewBag.UltimosPrazo    = ultimosPrazo;
+            ViewBag.ValoresVigentes = valoresVigentes;
+
+            return View(listaResumo);
         }
+
 
         /* ---------- NOVO ---------- */
         [HttpGet]
@@ -152,18 +194,44 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(InstrumentoViewModel vm)
         {
-            vm.Numero = NormalizarNumero(Sanitize(vm.Numero));
-            vm.Objeto = Sanitize(vm.Objeto);
+            vm.Numero     = NormalizarNumero(Sanitize(vm.Numero));
+            vm.Objeto     = Sanitize(vm.Objeto);
             vm.Observacao = Sanitize(vm.Observacao);
+
+            // Valida datas base
+            ValidarDatas(vm);
+
+            // Converte mensal ↔ total conforme seleção
+            var meses = CalcularMeses(vm.DataInicio.Date, vm.DataFim.Date);
+            if (meses <= 0)
+                ModelState.AddModelError(nameof(vm.DataFim), "Período inválido. Ajuste as datas de vigência.");
+
+            if (vm.UsarValorMensal)
+            {
+                if (!vm.ValorMensal.HasValue || vm.ValorMensal.Value <= 0)
+                    ModelState.AddModelError(nameof(vm.ValorMensal), "Informe um valor mensal maior que zero.");
+
+                if (meses > 0 && vm.ValorMensal.HasValue && vm.ValorMensal.Value > 0)
+                    vm.Valor = decimal.Round(vm.ValorMensal.Value * meses, 2, MidpointRounding.AwayFromZero);
+            }
+            else
+            {
+                if (vm.Valor <= 0)
+                    ModelState.AddModelError(nameof(vm.Valor), "Informe um valor total maior que zero.");
+
+                if (meses > 0 && vm.Valor > 0)
+                    vm.ValorMensal = decimal.Round(vm.Valor / meses, 2, MidpointRounding.AwayFromZero);
+            }
+
+            // ✅ Revalidação após conversão (evita erro de “Valor deve ser maior que zero” quando usa mensal)
+            ModelState.Remove(nameof(InstrumentoViewModel.Valor));
+            ModelState.Remove(nameof(InstrumentoViewModel.ValorMensal));
+            TryValidateModel(vm);
 
             if (string.IsNullOrWhiteSpace(vm.Numero))
                 ModelState.AddModelError(nameof(vm.Numero), "Informe o número do instrumento.");
             if (vm.EntidadeId == 0)
                 ModelState.AddModelError(nameof(vm.EntidadeId), "Selecione a Entidade.");
-            if (vm.Valor <= 0)
-                ModelState.AddModelError(nameof(vm.Valor), "Informe um valor maior que zero.");
-
-            ValidarDatas(vm);
 
             if (!ModelState.IsValid)
             {
@@ -190,6 +258,8 @@ namespace Financeiro.Controllers
                 {
                     vm.Numero,
                     vm.Valor,
+                    vm.ValorMensal,
+                    vm.UsarValorMensal,
                     vm.Objeto,
                     vm.DataInicio,
                     vm.DataFim,
@@ -205,37 +275,25 @@ namespace Financeiro.Controllers
             catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601)
             {
                 ModelState.AddModelError(nameof(vm.Numero), "Já existe um instrumento com este número.");
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Salvar";
-                ViewBag.VersaoAtual = null;
-                return View("InstrumentoForm", vm);
             }
             catch (SqlException ex) when (ex.Number == 8152)
             {
                 TempData["Erro"] = "Algum campo excedeu o limite permitido. Reduza o texto.";
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Salvar";
-                ViewBag.VersaoAtual = null;
-                return View("InstrumentoForm", vm);
             }
             catch (SqlException ex) when (ex.Number == 547)
             {
                 TempData["Erro"] = "Não foi possível concluir devido a vínculos relacionados.";
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Salvar";
-                ViewBag.VersaoAtual = null;
-                return View("InstrumentoForm", vm);
             }
-            catch (Exception)
+            catch
             {
                 TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Salvar";
-                ViewBag.VersaoAtual = null;
-                return View("InstrumentoForm", vm);
             }
-        }
 
+            await CarregarEntidadesAsync(vm.EntidadeId);
+            ViewBag.FormAction = "Salvar";
+            ViewBag.VersaoAtual = null;
+            return View("InstrumentoForm", vm);
+        }
         /* ---------- EDITAR ---------- */
         [HttpGet]
         public async Task<IActionResult> Editar(int id)
@@ -260,35 +318,64 @@ namespace Financeiro.Controllers
             await CarregarEntidadesAsync(vm.EntidadeId);
 
             var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
-            ViewBag.VersaoAtual = versaoAtual;
-            ViewBag.FormAction = "Atualizar";
+            ViewBag.VersaoAtual  = versaoAtual;
+            ViewBag.FormAction   = "Atualizar";
 
-            // Preenche "vigente" para a View (fallback para os campos do Instrumento)
-            ViewBag.ValorVigente = versaoAtual?.Valor ?? instrumento.Valor;
-            ViewBag.InicioVigente = versaoAtual?.VigenciaInicio ?? instrumento.DataInicio;            // DateTime
-            ViewBag.FimVigente = versaoAtual != null ? versaoAtual.VigenciaFim : (DateTime?)instrumento.DataFim; // DateTime?
+            // Vigência/valor (compatibilidade visual que você já usava)
+            ViewBag.ValorVigente  = versaoAtual?.Valor ?? instrumento.Valor;
+            ViewBag.InicioVigente = versaoAtual?.VigenciaInicio ?? instrumento.DataInicio;
+            ViewBag.FimVigente    = versaoAtual != null ? versaoAtual.VigenciaFim : (DateTime?)instrumento.DataFim;
+
+            // **NOVO**: resumo consolidado para card read-only no Form
+            var resumo = await _repo.ObterResumoAsync(id);
+            ViewBag.ResumoAtual = resumo;
 
             return View("InstrumentoForm", vm);
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(int id, InstrumentoViewModel vm)
         {
             if (id != vm.Id) return BadRequest();
 
-            vm.Numero = NormalizarNumero(Sanitize(vm.Numero));
-            vm.Objeto = Sanitize(vm.Objeto);
+            vm.Numero     = NormalizarNumero(Sanitize(vm.Numero));
+            vm.Objeto     = Sanitize(vm.Objeto);
             vm.Observacao = Sanitize(vm.Observacao);
+
+            // Valida datas base
+            ValidarDatas(vm);
+
+            // Converte mensal ↔ total conforme seleção
+            var meses = CalcularMeses(vm.DataInicio.Date, vm.DataFim.Date);
+            if (meses <= 0)
+                ModelState.AddModelError(nameof(vm.DataFim), "Período inválido. Ajuste as datas de vigência.");
+
+            if (vm.UsarValorMensal)
+            {
+                if (!vm.ValorMensal.HasValue || vm.ValorMensal.Value <= 0)
+                    ModelState.AddModelError(nameof(vm.ValorMensal), "Informe um valor mensal maior que zero.");
+
+                if (meses > 0 && vm.ValorMensal.HasValue && vm.ValorMensal.Value > 0)
+                    vm.Valor = decimal.Round(vm.ValorMensal.Value * meses, 2, MidpointRounding.AwayFromZero);
+            }
+            else
+            {
+                if (vm.Valor <= 0)
+                    ModelState.AddModelError(nameof(vm.Valor), "Informe um valor total maior que zero.");
+
+                if (meses > 0 && vm.Valor > 0)
+                    vm.ValorMensal = decimal.Round(vm.Valor / meses, 2, MidpointRounding.AwayFromZero);
+            }
+
+            // ✅ Revalidação após conversão
+            ModelState.Remove(nameof(InstrumentoViewModel.Valor));
+            ModelState.Remove(nameof(InstrumentoViewModel.ValorMensal));
+            TryValidateModel(vm);
 
             if (string.IsNullOrWhiteSpace(vm.Numero))
                 ModelState.AddModelError(nameof(vm.Numero), "Informe o número do instrumento.");
             if (vm.EntidadeId == 0)
                 ModelState.AddModelError(nameof(vm.EntidadeId), "Selecione a Entidade.");
-            if (vm.Valor <= 0)
-                ModelState.AddModelError(nameof(vm.Valor), "Informe um valor maior que zero.");
-
-            ValidarDatas(vm);
 
             if (!ModelState.IsValid)
             {
@@ -299,6 +386,7 @@ namespace Financeiro.Controllers
                 ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
                 ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
                 ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
+                ViewBag.ResumoAtual = await _repo.ObterResumoAsync(id);
                 return View("InstrumentoForm", vm);
             }
 
@@ -312,6 +400,7 @@ namespace Financeiro.Controllers
                 ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
                 ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
                 ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
+                ViewBag.ResumoAtual = await _repo.ObterResumoAsync(id);
                 return View("InstrumentoForm", vm);
             }
 
@@ -348,53 +437,30 @@ namespace Financeiro.Controllers
             catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601)
             {
                 ModelState.AddModelError(nameof(vm.Numero), "Já existe um instrumento com este número.");
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Atualizar";
-                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
-                ViewBag.VersaoAtual = v;
-                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
-                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
-                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
-                return View("InstrumentoForm", vm);
             }
             catch (SqlException ex) when (ex.Number == 8152)
             {
                 TempData["Erro"] = "Algum campo excedeu o limite permitido. Reduza o texto.";
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Atualizar";
-                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
-                ViewBag.VersaoAtual = v;
-                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
-                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
-                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
-                return View("InstrumentoForm", vm);
             }
             catch (SqlException ex) when (ex.Number == 547)
             {
                 TempData["Erro"] = "Não foi possível concluir devido a vínculos relacionados.";
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Atualizar";
-                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
-                ViewBag.VersaoAtual = v;
-                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
-                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
-                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
-                return View("InstrumentoForm", vm);
             }
-            catch (Exception)
+            catch
             {
                 TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
-                await CarregarEntidadesAsync(vm.EntidadeId);
-                ViewBag.FormAction = "Atualizar";
-                var v = await _versaoRepo.ObterVersaoAtualAsync(id);
-                ViewBag.VersaoAtual = v;
-                ViewBag.ValorVigente = v?.Valor ?? vm.Valor;
-                ViewBag.InicioVigente = v?.VigenciaInicio ?? vm.DataInicio;
-                ViewBag.FimVigente = v != null ? v.VigenciaFim : (DateTime?)vm.DataFim;
-                return View("InstrumentoForm", vm);
             }
-        }
 
+            await CarregarEntidadesAsync(vm.EntidadeId);
+            ViewBag.FormAction = "Atualizar";
+            var v2 = await _versaoRepo.ObterVersaoAtualAsync(id);
+            ViewBag.VersaoAtual = v2;
+            ViewBag.ValorVigente = v2?.Valor ?? vm.Valor;
+            ViewBag.InicioVigente = v2?.VigenciaInicio ?? vm.DataInicio;
+            ViewBag.FimVigente = v2 != null ? v2.VigenciaFim : (DateTime?)vm.DataFim;
+            ViewBag.ResumoAtual = await _repo.ObterResumoAsync(id);
+            return View("InstrumentoForm", vm);
+        }
         /* ---------- EXCLUIR ---------- */
         [HttpPost]
         [ValidateAntiForgeryToken]

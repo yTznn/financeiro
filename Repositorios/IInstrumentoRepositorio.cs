@@ -15,5 +15,7 @@ namespace Financeiro.Repositorios
 
         Task<bool> ExisteNumeroAsync(string numero, int? ignorarId = null);
         Task<string> SugerirProximoNumeroAsync(int ano);
+        Task<IEnumerable<InstrumentoResumoViewModel>> ListarResumoAsync();
+        Task<InstrumentoResumoViewModel?> ObterResumoAsync(int instrumentoId);
     }
 }

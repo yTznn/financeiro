@@ -1,5 +1,4 @@
 @model Financeiro.Models.ViewModels.InstrumentoViewModel
-
 @using System.Globalization
 
 @{
@@ -10,10 +9,13 @@
     // Tipagem forte para evitar RuntimeBinderException
     var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.InstrumentoVersao;
 
+    // Resumo atual consolidado (valor total/mensal atuais, vigência atual e saldo)
+    var resumo = ViewBag.ResumoAtual as Financeiro.Models.ViewModels.InstrumentoResumoViewModel;
+
     // Cálculo do "vigente" com fallback para os dados base do Instrumento
     decimal   valorVig = versaoAtual?.Valor ?? Model.Valor;
     DateTime  iniVig   = versaoAtual?.VigenciaInicio ?? Model.DataInicio;
-    DateTime? fimVig   = versaoAtual?.VigenciaFim ?? Model.DataFim; // DataFim é DateTime, pode usar como fallback
+    DateTime? fimVig   = versaoAtual?.VigenciaFim ?? Model.DataFim;
     string    fimVigTxt= fimVig.HasValue ? fimVig.Value.ToString("dd/MM/yyyy") : "atual";
 
     var br = new CultureInfo("pt-BR");
@@ -21,6 +23,55 @@
 
 <h2 class="mb-4">@ViewBag.Title</h2>
 
+<!-- ========== CARD RESUMO ATUAL (READ-ONLY) — passo 4 ========== -->
+@if (resumo != null)
+{
+  <div class="card shadow-sm border-0 mb-2">
+    <div class="card-header bg-light d-flex align-items-center justify-content-between">
+      <strong>Resumo Atual do Instrumento</strong>
+      @* Botão para ver lançamentos do mês *@
+      @if (Model.Id != 0 && ViewBag.ResumoAtual != null) {
+        var r = (Financeiro.Models.ViewModels.InstrumentoResumoViewModel)ViewBag.ResumoAtual;
+        <a class="btn btn-outline-secondary btn-sm"
+           asp-controller="LancamentosInstrumento"
+           asp-action="Index"
+           asp-route-instrumentoId="@r.InstrumentoId">
+           Ver lançamentos do mês
+        </a>
+      }
+    </div>
+    <div class="card-body p-3 p-md-4">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Valor Total (Atual)</label>
+          <input class="form-control" value="@resumo.ValorTotalAtual.ToString("C", br)" readonly />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Valor Mensal (Atual)</label>
+          <input class="form-control" value="@resumo.ValorMensalAtual.ToString("C", br)" readonly />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Vigência (Início)</label>
+          <input class="form-control" value="@resumo.VigenciaInicio.ToString("dd/MM/yyyy")" readonly />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Vigência (Fim Atual)</label>
+          <input class="form-control" value="@resumo.VigenciaFimAtual.ToString("dd/MM/yyyy")" readonly />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Meses Vigentes (Atuais)</label>
+          <input class="form-control" value="@resumo.MesesVigentesAtuais" readonly />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Saldo (Atual)</label>
+          <input class="form-control" value="@resumo.SaldoAtual.ToString("C", br)" readonly />
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== CARD CABEÇALHO ORIGINAL (mantido) ========== -->
 <div class="card shadow-sm border-0 mb-4">
   <div class="card-body p-3 p-md-4">
     <div class="d-flex flex-wrap align-items-center gap-3">
@@ -124,28 +175,70 @@
     <span asp-validation-for="Numero" class="text-danger"></span>
   </div>
 
-  <div class="col-md-3">
-    <label asp-for="Valor" class="form-label">Valor (base)</label>
-    <input asp-for="Valor" type="text" inputmode="decimal" class="form-control" id="Valor" />
-    <span asp-validation-for="Valor" class="text-danger"></span>
+  <!-- ========== BLOCO VALOR (MENSAL ↔ TOTAL) — passo 5.2 ========== -->
+  <div class="col-md-12">
+    <div class="card mb-3">
+      <div class="card-header">
+        <strong>Valor do Instrumento</strong>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 align-items-center">
+          <div class="col-md-4">
+            <div class="form-check mt-2">
+              <input class="form-check-input" asp-for="UsarValorMensal" id="usarMensal" />
+              <label class="form-check-label" for="usarMensal">
+                @Html.DisplayNameFor(m => m.UsarValorMensal)
+              </label>
+            </div>
+            <small class="text-muted d-block">
+              Se marcado, você informa o <strong>Valor Mensal</strong> e o sistema calcula o <strong>Total</strong> pela vigência.
+            </small>
+          </div>
+
+          <div class="col-md-4" id="grupoValorTotal">
+            <label asp-for="Valor" class="form-label"></label>
+            <input asp-for="Valor" class="form-control" id="Valor" />
+            <span asp-validation-for="Valor" class="text-danger"></span>
+            <small class="text-muted" id="hintTotal"></small>
+          </div>
+
+          <div class="col-md-4" id="grupoValorMensal">
+            <label asp-for="ValorMensal" class="form-label"></label>
+            <input asp-for="ValorMensal" class="form-control" id="ValorMensal" />
+            <span asp-validation-for="ValorMensal" class="text-danger"></span>
+            <small class="text-muted" id="hintMensal"></small>
+          </div>
+        </div>
+
+        <hr class="my-3" />
+
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label asp-for="DataInicio" class="form-label">Data de Início (base)</label>
+            <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio"/>
+            <span asp-validation-for="DataInicio" class="text-danger"></span>
+          </div>
+
+          <div class="col-md-3">
+            <label asp-for="DataFim" class="form-label">Data de Fim (base)</label>
+            <input asp-for="DataFim" type="date" class="form-control" id="DataFim"/>
+            <span asp-validation-for="DataFim" class="text-danger"></span>
+          </div>
+
+          <div class="col-md-3">
+            <div class="form-text">
+              A vigência influencia o cálculo entre <em>Total</em> e <em>Mensal</em>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="col-md-12">
     <label asp-for="Objeto" class="form-label">Objeto</label>
     <textarea asp-for="Objeto" class="form-control" rows="3" maxlength="4000" id="Objeto"></textarea>
     <span asp-validation-for="Objeto" class="text-danger"></span>
-  </div>
-
-  <div class="col-md-3">
-    <label asp-for="DataInicio" class="form-label">Data de Início (base)</label>
-    <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio"/>
-    <span asp-validation-for="DataInicio" class="text-danger"></span>
-  </div>
-
-  <div class="col-md-3">
-    <label asp-for="DataFim" class="form-label">Data de Fim (base)</label>
-    <input asp-for="DataFim" type="date" class="form-control" id="DataFim"/>
-    <span asp-validation-for="DataFim" class="text-danger"></span>
   </div>
 
   <div class="col-md-3">
@@ -213,27 +306,53 @@
     const resumoEntidade= document.getElementById('resumoEntidade');
     const resumoValor   = document.getElementById('resumoValor');
     const resumoPeriodo = document.getElementById('resumoPeriodo');
-    const inValor       = document.getElementById('Valor');
+
+    const inValor       = document.getElementById('Valor');        // total
+    const inValorMensal = document.getElementById('ValorMensal');  // mensal
+    const usarMensal    = document.getElementById('usarMensal');
+
     const di            = document.getElementById('DataInicio');
     const df            = document.getElementById('DataFim');
     const inNumero      = document.getElementById('Numero');
     const obs           = document.getElementById('Observacao');
     const objeto        = document.getElementById('Objeto');
 
-    function getValorDoInput(){
-      const raw = (inValor?.value ?? '').toString().trim();
+    const hintTotal     = document.getElementById('hintTotal');
+    const hintMensal    = document.getElementById('hintMensal');
+
+    const grpTotal      = document.getElementById('grupoValorTotal');
+    const grpMensal     = document.getElementById('grupoValorMensal');
+
+    function toNumberBR(raw) {
       if (!raw) return 0;
       const s = raw.replace(/\./g, '').replace(',', '.');
       const n = Number(s);
       return isFinite(n) ? n : 0;
     }
 
+    function getValorTotal(){ return toNumberBR(inValor?.value ?? ''); }
+    function getValorMensal(){ return toNumberBR(inValorMensal?.value ?? ''); }
+
+    function mesesEntre(inicio, fim) {
+        if (!inicio || !fim) return null;
+        const di = new Date(inicio);
+        const df = new Date(fim);
+        if (isNaN(di) || isNaN(df)) return null;
+        return (df.getFullYear() - di.getFullYear()) * 12 + (df.getMonth() - di.getMonth()) + 1;
+    }
+
+    function formatCurrency(n) {
+        if (isNaN(n)) return '';
+        try { return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+        catch { return n.toFixed(2); }
+    }
+
     function atualizarResumo(){
       const optText = selEntidade?.selectedOptions?.length ? selEntidade.selectedOptions[0].text : '(selecione)';
       resumoEntidade.textContent = 'Entidade: ' + (optText || '(selecione)');
 
-      // Valor (base)
-      const v = getValorDoInput();
+      // Valor (base) exibido no cabeçalho mantém o Total informado (não o mensal)
+      const v = getValorTotal();
       resumoValor.textContent = v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
       // Período (base)
@@ -241,6 +360,46 @@
       resumoPeriodo.textContent = (d1 && d2)
         ? new Date(d1).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) + ' → ' + new Date(d2).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
         : 'definir datas';
+
+      updateHints();
+    }
+
+    function updateHints() {
+        const m = mesesEntre(di?.value, df?.value);
+
+        if (usarMensal?.checked) {
+            const vm = getValorMensal();
+            if (m && vm) {
+                const total = vm * m;
+                hintMensal.textContent = `Vigência atual: ${m} mês(es). Total estimado = ValorMensal × meses = ${formatCurrency(total)}.`;
+                hintTotal.textContent = '';
+            } else {
+                hintMensal.textContent = m ? `Vigência atual: ${m} mês(es).` : '';
+                hintTotal.textContent = '';
+            }
+        } else {
+            const vt = getValorTotal();
+            if (m && vt) {
+                const mensal = vt / m;
+                hintTotal.textContent = `Vigência atual: ${m} mês(es). Mensal estimado = Total ÷ meses = ${formatCurrency(mensal)}.`;
+                hintMensal.textContent = '';
+            } else {
+                hintTotal.textContent = m ? `Vigência atual: ${m} mês(es).` : '';
+                hintMensal.textContent = '';
+            }
+        }
+    }
+
+    function toggleModo() {
+        const usandoMensal = !!usarMensal?.checked;
+
+        grpMensal.style.display = usandoMensal ? '' : 'none';
+        grpTotal.style.display  = usandoMensal ? 'none' : '';
+
+        if (inValorMensal) inValorMensal.required = usandoMensal;
+        if (inValor)       inValor.required       = !usandoMensal;
+
+        updateHints();
     }
 
     // impede colagem de emojis/caracteres indesejados
@@ -253,24 +412,44 @@
 
     selEntidade?.addEventListener('change', atualizarResumo);
     if (window.jQuery && selEntidade) { try { $(selEntidade).on('select2:select select2:clear', atualizarResumo); } catch {} }
+
     inValor?.addEventListener('input', atualizarResumo);
     inValor?.addEventListener('keyup', atualizarResumo);
     inValor?.addEventListener('change', atualizarResumo);
+
+    inValorMensal?.addEventListener('input', updateHints);
+    inValorMensal?.addEventListener('keyup', updateHints);
+    inValorMensal?.addEventListener('change', updateHints);
+
     di?.addEventListener('change', atualizarResumo);
     df?.addEventListener('change', atualizarResumo);
+
+    usarMensal?.addEventListener('change', toggleModo);
+
+    // Estado inicial (considera valores vindos do servidor)
+    toggleModo();
     setTimeout(atualizarResumo, 100);
 
-    // ====== SUBMIT ======
+    // ====== SUBMIT (ajustado para mensal ↔ total) ======
     const form = document.getElementById('formInstrumento');
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
+
       if (!selEntidade.value){
         return Swal.fire({ icon:'warning', title:'Selecione a Entidade', text:'O instrumento precisa estar vinculado a uma Entidade.' });
       }
-      const v = getValorDoInput();
-      if (v <= 0){
-        return Swal.fire({ icon:'warning', title:'Valor inválido', text:'Informe um valor maior que zero.' });
+
+      const usandoMensal = !!usarMensal?.checked;
+      const vTotal   = getValorTotal();
+      const vMensal  = getValorMensal();
+
+      if (!usandoMensal && vTotal <= 0){
+        return Swal.fire({ icon:'warning', title:'Valor inválido', text:'Informe um valor total maior que zero.' });
       }
+      if (usandoMensal && vMensal <= 0){
+        return Swal.fire({ icon:'warning', title:'Valor mensal inválido', text:'Informe um valor mensal maior que zero.' });
+      }
+
       const confirm = await Swal.fire({
         icon:'question',
         title:'@(Model.Id == 0 ? "Confirmar criação do instrumento?" : "Confirmar atualização do instrumento?")',
@@ -278,10 +457,13 @@
         confirmButtonText:'@(Model.Id == 0 ? "Salvar" : "Atualizar")',
         cancelButtonText:'Cancelar'
       });
-      if (confirm.isConfirmed) {
-        if (inValor) inValor.value = getValorDoInput();
-        form.submit();
-      }
+      if (!confirm.isConfirmed) return;
+
+      // Normaliza o Valor total quando não estiver usando mensal (mantém seu comportamento anterior)
+      if (!usandoMensal && inValor) inValor.value = vTotal;
+
+      // Submete
+      form.submit();
     });
 
     // ====== CANCELAR ÚLTIMO ADITIVO ======

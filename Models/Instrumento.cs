@@ -3,7 +3,7 @@ using System;
 namespace Financeiro.Models
 {
     /// <summary>
-    /// Instrumento (antes: TipoAcordo).
+    /// Instrumento.
     /// </summary>
     public class Instrumento
     {

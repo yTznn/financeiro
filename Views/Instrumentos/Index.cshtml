@@ -1,4 +1,4 @@
-@model IEnumerable<Financeiro.Models.Instrumento>
+@model IEnumerable<Financeiro.Models.ViewModels.InstrumentoResumoViewModel>
 
 @using System.Globalization
 @using System.Collections.Generic
@@ -6,12 +6,13 @@
 @{
     ViewBag.Title = "Instrumentos";
     Layout = "_Layout";
-
-    // Dicionário que veio do controller: Id → (valor vigente, início vigente, fim vigente?)
-    var vig = ViewBag.Vigentes as IDictionary<int, (decimal valor, DateTime inicio, DateTime? fim)>
-              ?? new Dictionary<int, (decimal, DateTime, DateTime?)>();
-
     var br = new CultureInfo("pt-BR");
+
+    // Dicionários opcionais preenchidos no controller
+    var ultPrazo = ViewBag.UltimosPrazo as IDictionary<int, string>
+                   ?? new Dictionary<int, string>();
+    var valoresVig = ViewBag.ValoresVigentes as IDictionary<int, decimal>
+                     ?? new Dictionary<int, decimal>();
 }
 
 <h2 class="mb-4 d-flex align-items-center justify-content-between">
@@ -25,11 +26,13 @@
             <thead class="table-light">
                 <tr class="text-center">
                     <th style="width:130px">Número</th>
-                    <th style="width:160px">Valor vigente</th>
-                    <th>Objeto</th>
-                    <th style="width:240px">Vigência</th>
-                    <th style="width:180px">Entidade</th>
-                    <th style="width:100px">Status</th>
+                    <th>Descrição</th>
+                    <th style="width:220px">Vigência (atual)</th>
+                    <th style="width:210px">Últ. Aditivo (prazo)</th>
+                    <th style="width:100px">Meses</th>
+                    <th class="text-end" style="width:150px">Valor vigente</th>
+                    <th class="text-end" style="width:150px">Valor Mensal</th>
+                    <th class="text-end" style="width:140px">Saldo</th>
                     <th style="width:180px">Ações</th>
                 </tr>
             </thead>
@@ -37,94 +40,70 @@
             @if (!Model?.Any() ?? true)
             {
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">Nenhum instrumento cadastrado.</td>
+                    <td colspan="9" class="text-center text-muted py-4">Nenhum instrumento cadastrado.</td>
                 </tr>
             }
             else
             {
-                foreach (var item in Model)
+                foreach (var x in Model)
                 {
-                    var alvoId = $"obj-{item.Id}";
+                    var alvoId = $"obj-{x.InstrumentoId}";
+                    var saldoClass = x.SaldoAtual < 0 ? "text-danger fw-semibold" : "text-body";
+
+                    // valor vigente vindo das versões (se não vier, usa o total atual já calculado)
+                    var valorVig = valoresVig.TryGetValue(x.InstrumentoId, out var vv) ? vv : x.ValorTotalAtual;
+
                     <tr>
-                        <td class="text-center fw-semibold">@item.Numero</td>
+                        <td class="text-center fw-semibold">@x.Numero</td>
 
-                        <!-- VALOR VIGENTE (com “orig.” se diferente do base) -->
-                        <td class="text-end fw-semibold">
-                            @{
-                                if (vig.TryGetValue(item.Id, out var vinfo))
-                                {
-                                    var (valorVig, _, _) = vinfo;
-                                    @valorVig.ToString("C", br)
-
-                                    if (valorVig != item.Valor)
-                                    {
-                                        <div class="small text-muted">orig.: @item.Valor.ToString("C", br)</div>
-                                    }
-                                }
-                                else
-                                {
-                                    @item.Valor.ToString("C", br)
-                                }
-                            }
-                        </td>
-
-                        <!-- OBJETO: clamp + ver mais -->
+                        <!-- DESCRIÇÃO (clamp + ver mais) -->
                         <td>
-                            <div class="obj-cell" id="@alvoId" title="@item.Objeto">
-                                @item.Objeto
+                            <div class="obj-cell" id="@alvoId" title="@x.Descricao">
+                                @x.Descricao
                             </div>
                             <button type="button"
                                     class="btn btn-link p-0 small mt-1 js-toggle-obj"
                                     data-target="@alvoId">ver mais</button>
                         </td>
 
-                        <!-- VIGÊNCIA VIGENTE (com “base:” se diferente do instrumento) -->
+                        <!-- VIGÊNCIA ATUAL -->
                         <td class="text-center">
-                            @{
-                                if (vig.TryGetValue(item.Id, out var vper))
-                                {
-                                    var (_, inicioVig, fimVig) = vper;
-                                    var fimTxt = fimVig.HasValue ? fimVig.Value.ToString("dd/MM/yyyy") : "atual";
-                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary">
-                                        @inicioVig.ToString("dd/MM/yyyy") → @fimTxt
-                                    </span>
-
-                                    if (inicioVig != item.DataInicio || (fimVig ?? DateTime.MinValue) != item.DataFim)
-                                    {
-                                        <div class="small text-muted mt-1">
-                                            base: @item.DataInicio.ToString("dd/MM/yyyy") → @item.DataFim.ToString("dd/MM/yyyy")
-                                        </div>
-                                    }
-                                }
-                                else
-                                {
-                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary">
-                                        @item.DataInicio.ToString("dd/MM/yyyy") → @item.DataFim.ToString("dd/MM/yyyy")
-                                    </span>
-                                }
-                            }
-                        </td>
-
-                        <td class="text-center">
-                            <span class="badge bg-info-subtle text-info">Entidade #@item.EntidadeId</span>
-                        </td>
-
-                        <td class="text-center">
-                            <span class="badge @(item.Ativo ? "bg-success" : "bg-secondary")">
-                                @(item.Ativo ? "Ativo" : "Inativo")
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary">
+                                @x.VigenciaInicio.ToString("dd/MM/yyyy") → @x.VigenciaFimAtual.ToString("dd/MM/yyyy")
                             </span>
                         </td>
 
+                        <!-- ÚLTIMO ADITIVO DE PRAZO (texto pronto vindo do controller) -->
+                        <td class="text-center">
+                            @{
+                                var temPrazo = ultPrazo.TryGetValue(x.InstrumentoId, out var prazoTxt);
+                            }
+                            <span class="small @(temPrazo ? "" : "text-muted")">
+                                @(temPrazo ? prazoTxt : "—")
+                            </span>
+                        </td>
+
+                        <!-- MESES ATUAIS -->
+                        <td class="text-center">
+                            @x.MesesVigentesAtuais
+                        </td>
+
+                        <!-- VALORES -->
+                        <td class="text-end">@valorVig.ToString("C", br)</td>
+                        <td class="text-end">@x.ValorMensalAtual.ToString("C", br)</td>
+                        <td class="text-end"><span class="@saldoClass">@x.SaldoAtual.ToString("C", br)</span></td>
+
+                        <!-- AÇÕES -->
                         <td class="text-center">
                             <div class="d-inline-flex gap-1">
                                 <a class="btn btn-sm btn-outline-primary"
                                    asp-action="Editar"
-                                   asp-route-id="@item.Id">Editar</a>
+                                   asp-route-id="@x.InstrumentoId">Editar</a>
                                 <form asp-action="Excluir"
-                                      asp-route-id="@item.Id"
+                                      asp-route-id="@x.InstrumentoId"
                                       method="post"
                                       class="d-inline js-delete"
-                                      data-nome="@item.Numero">
+                                      data-nome="@x.Numero">
                                     @Html.AntiForgeryToken()
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
                                 </form>
@@ -180,7 +159,7 @@
             });
         }
 
-        // Ver mais / ver menos no Objeto
+        // Ver mais / ver menos no campo Descrição
         function isClamped(el) { return el.scrollHeight > el.clientHeight + 1; }
         function refreshToggleButtons(scope) {
             (scope || document).querySelectorAll('.obj-cell').forEach(div => {
@@ -292,7 +271,6 @@
         #t-instrumentos { table-layout: fixed; }
         #t-instrumentos th, #t-instrumentos td { vertical-align: middle; }
 
-        .bg-info-subtle { background: #e6f4ff !important; color: #0b6bcb !important; }
         .bg-secondary-subtle { background: #f1f3f5 !important; color: #65717c !important; }
 
         .obj-cell {

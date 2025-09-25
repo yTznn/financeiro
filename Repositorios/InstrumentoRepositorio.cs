@@ -23,29 +23,47 @@ namespace Financeiro.Repositorios
         public async Task InserirAsync(InstrumentoViewModel vm)
         {
             using var conn = _connectionFactory.CreateConnection();
+
             const string sql = @"
                 INSERT INTO dbo.Instrumento
-                    (Numero, Valor, Objeto, DataInicio, DataFim, Ativo, Observacao, DataAssinatura, EntidadeId)
+                    (Numero, Valor, Objeto, DataInicio, DataFim, Ativo, Observacao, DataAssinatura, EntidadeId, Saldo)
                 VALUES
-                    (@Numero, @Valor, @Objeto, @DataInicio, @DataFim, @Ativo, @Observacao, @DataAssinatura, @EntidadeId)";
-            await conn.ExecuteAsync(sql, vm);
-        }
+                    (@Numero, @Valor, @Objeto, @DataInicio, @DataFim, @Ativo, @Observacao, @DataAssinatura, @EntidadeId, @Saldo);";
 
+            // Saldo inicial = Valor total (já calculado no controller conforme mensal ↔ total)
+            var parametros = new
+            {
+                vm.Numero,
+                vm.Valor,
+                vm.Objeto,
+                vm.DataInicio,
+                vm.DataFim,
+                vm.Ativo,
+                vm.Observacao,
+                vm.DataAssinatura,
+                vm.EntidadeId,
+                Saldo = vm.Valor
+            };
+
+            await conn.ExecuteAsync(sql, parametros);
+        }
         public async Task AtualizarAsync(int id, InstrumentoViewModel vm)
         {
             using var conn = _connectionFactory.CreateConnection();
+
             const string sql = @"
                 UPDATE dbo.Instrumento
-                SET Numero         = @Numero,
-                    Valor          = @Valor,
-                    Objeto         = @Objeto,
-                    DataInicio     = @DataInicio,
-                    DataFim        = @DataFim,
-                    Ativo          = @Ativo,
-                    Observacao     = @Observacao,
-                    DataAssinatura = @DataAssinatura,
-                    EntidadeId     = @EntidadeId
-                WHERE Id = @Id";
+                   SET Numero         = @Numero,
+                       Valor          = @Valor,
+                       Objeto         = @Objeto,
+                       DataInicio     = @DataInicio,
+                       DataFim        = @DataFim,
+                       Ativo          = @Ativo,
+                       Observacao     = @Observacao,
+                       DataAssinatura = @DataAssinatura,
+                       EntidadeId     = @EntidadeId
+                 WHERE Id = @Id;";
+
             await conn.ExecuteAsync(sql, new
             {
                 vm.Numero,
@@ -64,14 +82,24 @@ namespace Financeiro.Repositorios
         public async Task<Instrumento?> ObterPorIdAsync(int id)
         {
             using var conn = _connectionFactory.CreateConnection();
-            const string sql = "SELECT * FROM dbo.Instrumento WHERE Id = @id";
+
+            const string sql = @"
+                SELECT *
+                  FROM dbo.Instrumento
+                 WHERE Id = @id;";
+
             return await conn.QueryFirstOrDefaultAsync<Instrumento>(sql, new { id });
         }
 
         public async Task<IEnumerable<Instrumento>> ListarAsync()
         {
             using var conn = _connectionFactory.CreateConnection();
-            const string sql = "SELECT * FROM dbo.Instrumento ORDER BY DataInicio DESC";
+
+            const string sql = @"
+                SELECT *
+                  FROM dbo.Instrumento
+              ORDER BY DataInicio DESC;";
+
             return await conn.QueryAsync<Instrumento>(sql);
         }
 
@@ -81,44 +109,69 @@ namespace Financeiro.Repositorios
         public async Task ExcluirAsync(int id)
         {
             using var conn = _connectionFactory.CreateConnection();
-            if (conn.State != ConnectionState.Open) conn.Open();
+            if (conn.State != System.Data.ConnectionState.Open) conn.Open();
+
             using var tx = conn.BeginTransaction();
+            try
+            {
+                // 1) Lançamentos do instrumento
+                const string delLanc = @"
+                    DELETE FROM dbo.LancamentoInstrumento
+                    WHERE InstrumentoId = @id;";
 
-            // Se o seu schema mantiver vínculo de orçamento com instrumento:
-            const string delOrcDet = @"
-                DELETE od
-                FROM dbo.OrcamentoDetalhe od
-                INNER JOIN dbo.Orcamento o ON o.Id = od.OrcamentoId
-                WHERE o.InstrumentoId = @id;";
+                // 2) (Opcional/Legado) Aditivos antigos, se a tabela ainda existir
+                const string delAditivoLegado = @"
+                    IF OBJECT_ID('dbo.Aditivo', 'U') IS NOT NULL
+                    DELETE FROM dbo.Aditivo WHERE InstrumentoId = @id;";
 
-            const string delOrc = @"
-                DELETE FROM dbo.Orcamento
-                WHERE InstrumentoId = @id;";
+                // 3) Detalhes de orçamento vinculados ao instrumento
+                const string delOrcDet = @"
+                    DELETE od
+                    FROM dbo.OrcamentoDetalhe od
+                    JOIN dbo.Orcamento o ON o.Id = od.OrcamentoId
+                    WHERE o.InstrumentoId = @id;";
 
-            const string delVersao = @"
-                DELETE FROM dbo.InstrumentoVersao
-                WHERE InstrumentoId = @id;";
+                // 4) Orçamentos do instrumento
+                const string delOrc = @"
+                    DELETE FROM dbo.Orcamento
+                    WHERE InstrumentoId = @id;";
 
-            const string delInstrumento = @"
-                DELETE FROM dbo.Instrumento
-                WHERE Id = @id;";
+                // 5) Versões (aditivos novos) do instrumento
+                const string delVersao = @"
+                    DELETE FROM dbo.InstrumentoVersao
+                    WHERE InstrumentoId = @id;";
 
-            await conn.ExecuteAsync(delOrcDet, new { id }, tx);
-            await conn.ExecuteAsync(delOrc, new { id }, tx);
-            await conn.ExecuteAsync(delVersao, new { id }, tx);
-            await conn.ExecuteAsync(delInstrumento, new { id }, tx);
+                // 6) Por último, o Instrumento
+                const string delInstrumento = @"
+                    DELETE FROM dbo.Instrumento
+                    WHERE Id = @id;";
 
-            tx.Commit();
+                await conn.ExecuteAsync(delLanc, new { id }, tx);
+                await conn.ExecuteAsync(delAditivoLegado, new { id }, tx);
+                await conn.ExecuteAsync(delOrcDet, new { id }, tx);
+                await conn.ExecuteAsync(delOrc, new { id }, tx);
+                await conn.ExecuteAsync(delVersao, new { id }, tx);
+                await conn.ExecuteAsync(delInstrumento, new { id }, tx);
+
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
 
         public async Task<bool> ExisteNumeroAsync(string numero, int? ignorarId = null)
         {
             using var conn = _connectionFactory.CreateConnection();
+
             const string sql = @"
                 SELECT 1
-                FROM dbo.Instrumento
-                WHERE Numero = @numero
-                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+                  FROM dbo.Instrumento
+                 WHERE Numero = @numero
+                   AND (@ignorarId IS NULL OR Id <> @ignorarId);";
+
             var existe = await conn.QueryFirstOrDefaultAsync<int?>(sql, new { numero, ignorarId });
             return existe.HasValue;
         }
@@ -129,19 +182,122 @@ namespace Financeiro.Repositorios
 
             // ex.: pega o maior 'X' do padrão 'X/ANO'
             const string sqlPadraoAno = @"
-                SELECT MAX(TRY_CONVERT(int, LEFT(Numero, NULLIF(CHARINDEX('/', Numero),0)-1)))
-                FROM dbo.Instrumento
-                WHERE Numero LIKE '%/' + CAST(@ano AS varchar(4))";
+                SELECT MAX(TRY_CONVERT(int, LEFT(Numero, NULLIF(CHARINDEX('/', Numero), 0) - 1)))
+                  FROM dbo.Instrumento
+                 WHERE Numero LIKE '%/' + CAST(@ano AS varchar(4));";
+
             var maxComAno = await conn.QueryFirstOrDefaultAsync<int?>(sqlPadraoAno, new { ano });
 
             if (maxComAno.HasValue)
                 return $"{maxComAno.Value + 1}/{ano}";
 
             // fallback: se não há padrão com ano, tenta inteiro puro
-            const string sqlInteiro = @"SELECT MAX(TRY_CONVERT(int, Numero)) FROM dbo.Instrumento";
+            const string sqlInteiro = @"
+                SELECT MAX(TRY_CONVERT(int, Numero))
+                  FROM dbo.Instrumento;";
+
             var maxInteiro = await conn.QueryFirstOrDefaultAsync<int?>(sqlInteiro);
 
             return maxInteiro.HasValue ? (maxInteiro.Value + 1).ToString() : $"1/{ano}";
         }
+
+        public async Task<IEnumerable<InstrumentoResumoViewModel>> ListarResumoAsync()
+        {
+            using var conn = _connectionFactory.CreateConnection();
+
+            const string sql = @"
+        SELECT
+            i.Id                                AS InstrumentoId,
+            i.Numero                            AS Numero,
+            i.Objeto                            AS Descricao,
+            COALESCE(v.VigenciaInicio, i.DataInicio) AS VigenciaInicio,
+            COALESCE(v.VigenciaFim,    i.DataFim)    AS VigenciaFimAtual,
+            CAST(COALESCE(v.Valor, i.Valor) AS DECIMAL(18,2)) AS ValorTotalAtual,
+            DATEDIFF(MONTH, COALESCE(v.VigenciaInicio, i.DataInicio), COALESCE(v.VigenciaFim, i.DataFim)) + 1 AS MesesVigentesAtuais,
+            CAST(
+                COALESCE(v.Valor, i.Valor) / NULLIF(DATEDIFF(MONTH, COALESCE(v.VigenciaInicio, i.DataInicio), COALESCE(v.VigenciaFim, i.DataFim)) + 1, 0)
+                AS DECIMAL(18,2)
+            ) AS ValorMensalAtual,
+            CAST(i.Saldo AS DECIMAL(18,2))     AS SaldoAtual
+        FROM dbo.Instrumento i
+        OUTER APPLY (
+            SELECT TOP 1 iv.Valor, iv.VigenciaInicio, iv.VigenciaFim
+            FROM dbo.InstrumentoVersao iv
+            WHERE iv.InstrumentoId = i.Id
+            ORDER BY 
+                CASE WHEN iv.VigenciaFim IS NULL THEN 1 ELSE 0 END DESC,
+                iv.Versao DESC,
+                iv.DataRegistro DESC
+        ) v
+        ORDER BY i.Id DESC;";
+
+            var lista = await conn.QueryAsync<InstrumentoResumoViewModel>(sql);
+            return lista ?? Enumerable.Empty<InstrumentoResumoViewModel>();
+        }
+
+        public async Task<InstrumentoResumoViewModel?> ObterResumoAsync(int instrumentoId)
+        {
+            using var conn = _connectionFactory.CreateConnection();
+
+            const string sql = @"
+        DECLARE @comp DATE = DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1);
+
+        WITH UltVersao AS (
+            SELECT TOP 1 iv.Valor, iv.VigenciaInicio, iv.VigenciaFim
+            FROM dbo.InstrumentoVersao iv
+            WHERE iv.InstrumentoId = @id
+            ORDER BY 
+                CASE WHEN iv.VigenciaFim IS NULL THEN 1 ELSE 0 END DESC,
+                iv.Versao DESC,
+                iv.DataRegistro DESC
+        ),
+        Dados AS (
+            SELECT
+                i.Id                                         AS InstrumentoId,
+                i.Numero                                     AS Numero,
+                i.Objeto                                     AS Descricao,
+                COALESCE(uv.VigenciaInicio, i.DataInicio)    AS VigenciaInicio,
+                COALESCE(uv.VigenciaFim,    i.DataFim)       AS VigenciaFimAtual,
+                CAST(COALESCE(uv.Valor, i.Valor) AS DECIMAL(18,2)) AS ValorTotalAtual
+            FROM dbo.Instrumento i
+            OUTER APPLY (SELECT * FROM UltVersao) uv
+            WHERE i.Id = @id
+        ),
+        Calc AS (
+            SELECT
+                d.*,
+                DATEDIFF(MONTH, d.VigenciaInicio, d.VigenciaFimAtual) + 1 AS MesesVigentesAtuais,
+                CAST(d.ValorTotalAtual / NULLIF(DATEDIFF(MONTH, d.VigenciaInicio, d.VigenciaFimAtual) + 1, 0)
+                    AS DECIMAL(18,2)) AS ValorMensalAtual
+            FROM Dados d
+        )
+        SELECT
+            c.InstrumentoId,
+            c.Numero,
+            c.Descricao,
+            c.VigenciaInicio,
+            c.VigenciaFimAtual,
+            c.MesesVigentesAtuais,
+            c.ValorTotalAtual,
+            c.ValorMensalAtual,
+            -- Lançado no mês atual:
+            CAST(ISNULL((
+                SELECT SUM(li.Valor)
+                FROM dbo.LancamentoInstrumento li
+                WHERE li.InstrumentoId = c.InstrumentoId
+                AND li.Competencia   = @comp
+            ), 0) AS DECIMAL(18,2)) AS TotalLancadoNoMes,
+            -- Saldo do mês = planejado - lançado
+            CAST(c.ValorMensalAtual - ISNULL((
+                SELECT SUM(li.Valor)
+                FROM dbo.LancamentoInstrumento li
+                WHERE li.InstrumentoId = c.InstrumentoId
+                AND li.Competencia   = @comp
+            ), 0) AS DECIMAL(18,2)) AS SaldoDoMesAtual
+        FROM Calc c;";
+
+            return await conn.QueryFirstOrDefaultAsync<InstrumentoResumoViewModel>(sql, new { id = instrumentoId });
+        }
+
     }
 }

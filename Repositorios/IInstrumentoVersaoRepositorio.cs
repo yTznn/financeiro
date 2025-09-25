@@ -32,5 +32,7 @@ namespace Financeiro.Repositorios
 
         /// <summary>Atualiza detalhes de uma versão existente (ex.: aditivo no mesmo dia).</summary>
         Task AtualizarDetalhesAsync(int versaoId, decimal novoValor, TipoAditivo tipoAditivo, string? observacao, DateTime? dataAssinatura);
+        Task<InstrumentoVersao?> ObterPorIdAsync(int versaoId);
+
     }
 }

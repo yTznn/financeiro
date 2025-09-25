@@ -109,6 +109,10 @@ builder.Services.AddScoped<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepos
 builder.Services.AddScoped<IInstrumentoVersaoService, InstrumentoVersaoService>();
 #endregion
 
+#region ✅ NOVO – Lançamentos de Instrumento (CRUD mensal)
+builder.Services.AddScoped<ILancamentoInstrumentoRepositorio, LancamentoInstrumentoRepositorio>();
+#endregion
+
 var app = builder.Build();
 
 // Pipeline
