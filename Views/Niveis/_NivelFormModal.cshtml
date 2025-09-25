@@ -1,12 +1,11 @@
 @model Financeiro.Models.Dto.NivelDto
 
 @{
-    // Gera IDs únicos para o modal e o formulário para evitar conflitos
-    var modalId = $"modal-nivel-cadastro-{Model.GetHashCode()}";
-    var formId = $"nivel-form-{Model.GetHashCode()}";
+    // Gera um ID único para o formulário para evitar conflitos
+    var formId = $"nivel-form-{Guid.NewGuid()}";
 }
 
-<div class="modal fade" id="@modalId" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+<div class="modal fade" id="modal-nivel-cadastro" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -14,8 +13,39 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                @* Esta linha é a mágica: ela renderiza o formulário que ajustamos no passo anterior *@
-                <partial name="NivelForm" model="Model" />
+                
+                <form id="@formId" asp-controller="Niveis" asp-action="SalvarNivelAjax" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="Id" />
+
+                    <div class="mb-3">
+                        <label asp-for="Nome" class="form-label"></label>
+                        <input asp-for="Nome" class="form-control" />
+                        <span asp-validation-for="Nome" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label d-block">Aplicável aos seguintes níveis:</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" asp-for="IsNivel1" />
+                            <label class="form-check-label" asp-for="IsNivel1">Nível 1</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" asp-for="IsNivel2" />
+                            <label class="form-check-label" asp-for="IsNivel2">Nível 2</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" asp-for="IsNivel3" />
+                            <label class="form-check-label" asp-for="IsNivel3">Nível 3</label>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" asp-for="Ativo" />
+                        <label class="form-check-label" asp-for="Ativo">Ativo</label>
+                    </div>
+                </form>
+
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -24,54 +54,3 @@
         </div>
     </div>
 </div>
-
-<script>
-    $(document).ready(function () {
-        const modalElement = $('#@modalId');
-        const formElement = $('#@formId');
-
-        // Garante que a validação do JQuery funcione no conteúdo carregado via AJAX
-        $.validator.unobtrusive.parse(formElement);
-
-        // Lida com a submissão do formulário via AJAX
-        formElement.on('submit', function (e) {
-            e.preventDefault(); // Impede o refresh da página
-
-            if (!formElement.valid()) {
-                return;
-            }
-
-            $.ajax({
-                url: formElement.attr('action'),
-                type: formElement.attr('method'),
-                data: formElement.serialize(),
-                success: function (response) {
-                    // Fecha o modal de cadastro
-                    modalElement.modal('hide');
-                    
-                    // Exibe uma notificação de sucesso
-                    alert('Nível salvo com sucesso!');
-
-                    // Recarrega a árvore de detalhamento para refletir a mudança
-                    renderizarArvore(); 
-                },
-                error: function (jqXHR) {
-                    // Se o servidor retornar um erro com o formulário (ex: nome já existe),
-                    // ele atualiza apenas o conteúdo do modal com as novas mensagens de erro.
-                    var newBody = $(jqXHR.responseText).find('.modal-body').html();
-                    modalElement.find('.modal-body').html(newBody);
-                    // Re-aplica a validação do JQuery ao novo conteúdo
-                    $.validator.unobtrusive.parse(formElement);
-                }
-            });
-        });
-
-        // Limpa o conteúdo do placeholder quando o modal é fechado, para não acumular
-        modalElement.on('hidden.bs.modal', function () {
-            $(this).remove();
-        });
-
-        // Finalmente, mostra o modal que acabamos de carregar
-        modalElement.modal('show');
-    });
-</script>

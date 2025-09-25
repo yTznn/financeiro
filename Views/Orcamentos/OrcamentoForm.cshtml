@@ -453,6 +453,7 @@
             atualizarReadonlyValores();
         });
 
+        // ***** CÓDIGO CORRIGIDO E COMPLETO PARA O MODAL 'CADASTRAR NOVO NÍVEL' *****
         let ultimoNivelFocado = 1;
         arvoreContainer.addEventListener('focusin', e => {
             const select = e.target.closest('.select2-niveis');
@@ -461,45 +462,68 @@
 
         btnAbrirNovoNivel.addEventListener('click', () => {
             const nivel = ultimoNivelFocado || 1;
-            const $ph = $('#modal-nivel-placeholder');
+            const $placeholder = $('#modal-nivel-placeholder');
+
             $.get('/Niveis/NovoNivelPartial', { nivel })
                 .done(html => {
-                    $ph.empty().append(html);
-                    const $modal = $ph.find('.modal').last();
-                    if (!$modal.length) { if (hasSwal) Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível abrir o formulário de nível.' }); else alert('Não foi possível abrir o formulário de nível.'); return; }
-                    const $form = $modal.find('form');
-                    if ($.validator && $.validator.unobtrusive) $.validator.unobtrusive.parse($form);
-                    $form.on('submit', function (ev) {
-                        ev.preventDefault();
-                        if ($.validator && $.validator.unobtrusive && !$form.valid()) return;
-                        const $chk = $form.find('input[type="checkbox"][name="Ativo"]');
-                        const ativo = $chk.prop('checked') ? 'true' : 'false';
-                        $form.find('input[type="hidden"][name="Ativo"]').remove();
-                        let $field = $form.find('input[name="Ativo"]');
-                        if ($field.length === 0) { $field = $('<input>', { type: 'hidden', name: 'Ativo' }).appendTo($form); }
-                        $field.val(ativo);
-                        const payload = $form.serialize();
-                        $.ajax({ url: $form.attr('action'), type: $form.attr('method') || 'POST', data: payload })
-                            .done(() => {
-                                const modal = bootstrap.Modal.getInstance($modal[0]) || new bootstrap.Modal($modal[0]);
-                                modal.hide();
-                                if (hasSwal) Swal.fire({ icon: 'success', title: 'Nível', text: 'Nível salvo com sucesso!' }); else alert('Nível salvo com sucesso!');
-                                if (window.renderizarArvore) window.renderizarArvore();
-                            })
-                            .fail(xhr => {
-                                const txt = (xhr.responseText || '').toString();
-                                const isDup = txt.includes('UX_Nivel_Nome') || txt.includes('2601') || xhr.status === 409;
-                                const msg = isDup ? 'Já existe um nível com esse nome neste nível hierárquico.' : 'Falha ao salvar o nível. Verifique os campos.';
-                                if (hasSwal) Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: msg }); else alert(msg);
-                            });
+                    $placeholder.html(html);
+                    const $modal = $placeholder.find('.modal');
+                    const $form = $placeholder.find('form');
+
+                    if ($.validator && $.validator.unobtrusive) {
+                        $.validator.unobtrusive.parse($form);
+                    }
+
+                    $form.on('submit', function (e) {
+                        e.preventDefault();
+
+                        if (!$form.valid()) {
+                            return;
+                        }
+
+                        $.ajax({
+                            url: $form.attr('action'),
+                            type: $form.attr('method'),
+                            data: $form.serialize(),
+                            success: function (response) {
+                                const modalInstance = bootstrap.Modal.getInstance($modal[0]);
+                                modalInstance.hide();
+                                
+                                Swal.fire({ icon: 'success', title: 'Sucesso!', text: response.message });
+                            },
+                            error: function (xhr) {
+                                let mensagemErro = "Ocorreu uma falha ao salvar.";
+                                if (xhr.status === 409) { // Conflito (Duplicado)
+                                    mensagemErro = xhr.responseText;
+                                    Swal.fire({ icon: 'error', title: 'Item duplicado', text: mensagemErro });
+                                } else if (xhr.status === 400) { // Erro de validação do servidor
+                                    $form.find(".text-danger").text("");
+                                    const errorData = xhr.responseJSON;
+                                    for (const key in errorData) {
+                                        if (errorData.hasOwnProperty(key)) {
+                                            const normalizedKey = key.charAt(0).toUpperCase() + key.slice(1);
+                                            $form.find(`span[data-valmsg-for="${normalizedKey}"]`).text(errorData[key][0]);
+                                        }
+                                    }
+                                } else {
+                                    Swal.fire({ icon: 'error', title: 'Ops...', text: mensagemErro });
+                                }
+                            }
+                        });
                     });
-                    $modal.on('hidden.bs.modal', function () { $(this).remove(); });
-                    const modal = new bootstrap.Modal($modal[0]); modal.show();
+
+                    $modal.on('hidden.bs.modal', function () {
+                        $(this).remove();
+                    });
+
+                    const modal = new bootstrap.Modal($modal[0]);
+                    modal.show();
                 })
                 .fail(() => {
-                    if (hasSwal) Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha ao carregar o cadastro de nível.' }); else alert('Falha ao carregar o cadastro de nível.');
+                    Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha ao carregar o formulário de cadastro de nível.' });
                 });
         });
+
 
         btnSalvarDetalhamento.addEventListener('click', () => {
             document.querySelectorAll('.select2-niveis.is-invalid').forEach(el => clearInvalidVisual(el));

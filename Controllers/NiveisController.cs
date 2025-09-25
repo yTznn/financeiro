@@ -1,6 +1,7 @@
 using Financeiro.Models.Dto;
 using Financeiro.Repositorios;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,7 +13,7 @@ namespace Financeiro.Controllers
         private readonly INivelRepositorio _repo;
         public NiveisController(INivelRepositorio repo) => _repo = repo;
 
-        // --- MÉTODOS CRUD PARA PÁGINAS ---
+        // --- MÉTODOS CRUD PARA PÁGINAS (sem alterações) ---
         [HttpGet("")]
         public async Task<IActionResult> Index()
         {
@@ -68,34 +69,20 @@ namespace Financeiro.Controllers
             TempData["MensagemSucesso"] = "Nível inativado!";
             return RedirectToAction(nameof(Index));
         }
+        
         [HttpGet("Search")]
         public async Task<IActionResult> Search(string term, int? nivel)
         {
             var niveis = await _repo.BuscarAsync(term ?? string.Empty, nivel);
-
-            // A LINHA ABAIXO É A "TRADUTORA" QUE ESTAVA FALTANDO OU INCORRETA.
-            // Ela transforma a lista de NivelDto para uma lista com os campos 'id' e 'text'.
             var resultadoParaSelect2 = niveis.Select(n => new
             {
-                id = n.Nome,    // A propriedade 'id' do resultado será o Nome do nível
-                text = n.Nome   // A propriedade 'text' (o que aparece na tela) também será o Nome
+                id = n.Nome,
+                text = n.Nome
             });
-
             return Ok(new { results = resultadoParaSelect2 });
         }
 
-        [HttpPost("Create")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([FromBody] NivelDto dto)
-        {
-            if (dto == null || string.IsNullOrWhiteSpace(dto.Nome)) return BadRequest("O nome do nível é obrigatório.");
-            if (await _repo.ExisteNomeAsync(dto.Nome)) return Conflict("Já existe um nível com este nome.");
-            var novoId = await _repo.InserirAsync(dto);
-            var nivelCriado = await _repo.ObterPorIdAsync(novoId);
-            return Ok(new { id = nivelCriado.Nome, text = nivelCriado.Nome });
-        }
-        // NiveisController.cs
-
+        // --- MÉTODO PARA CARREGAR O MODAL (sem alterações) ---
         [HttpGet("NovoNivelPartial")]
         public IActionResult NovoNivelPartial(int nivel)
         {
@@ -104,8 +91,47 @@ namespace Financeiro.Controllers
             if (nivel == 2) dto.IsNivel2 = true;
             if (nivel == 3) dto.IsNivel3 = true;
 
-            // Retorna uma PartialView que contém o modal e o formulário
+            // Retorna a PartialView que contém o modal e o formulário
             return PartialView("_NivelFormModal", dto);
+        }
+        
+        // --- NOVA ACTION [HttpPost] EXCLUSIVA PARA O MODAL ---
+        [HttpPost("SalvarNivelAjax")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SalvarNivelAjax(NivelDto dto)
+        {
+            // Validação 1: O modelo de dados é válido?
+            if (!ModelState.IsValid)
+            {
+                // Retorna 400 Bad Request com os detalhes do erro para o JavaScript tratar
+                return BadRequest(ModelState);
+            }
+
+            // Validação 2: Já existe um nível com este nome?
+            if (await _repo.ExisteNomeAsync(dto.Nome))
+            {
+                // Retorna 409 Conflict, que é o código HTTP ideal para "recurso já existe"
+                return Conflict($"Já existe um nível com o nome '{dto.Nome}'.");
+            }
+
+            try
+            {
+                // Se tudo estiver OK, salva no banco
+                var novoId = await _repo.InserirAsync(dto);
+                var nivelCriado = await _repo.ObterPorIdAsync(novoId);
+
+                // Retorna 200 OK com uma mensagem e os dados do objeto criado, para o JavaScript usar
+                return Ok(new
+                {
+                    message = "Nível salvo com sucesso!",
+                    novoNivel = new { id = nivelCriado.Id, text = nivelCriado.Nome }
+                });
+            }
+            catch (Exception)
+            {
+                // Em caso de erro inesperado no banco, retorna um erro 500
+                return StatusCode(500, "Ocorreu um erro inesperado ao salvar o nível.");
+            }
         }
     }
 }
