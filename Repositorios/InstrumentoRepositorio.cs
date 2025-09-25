@@ -114,42 +114,11 @@ namespace Financeiro.Repositorios
             using var tx = conn.BeginTransaction();
             try
             {
-                // 1) Lançamentos do instrumento
-                const string delLanc = @"
-                    DELETE FROM dbo.LancamentoInstrumento
-                    WHERE InstrumentoId = @id;";
-
-                // 2) (Opcional/Legado) Aditivos antigos, se a tabela ainda existir
-                const string delAditivoLegado = @"
-                    IF OBJECT_ID('dbo.Aditivo', 'U') IS NOT NULL
-                    DELETE FROM dbo.Aditivo WHERE InstrumentoId = @id;";
-
-                // 3) Detalhes de orçamento vinculados ao instrumento
-                const string delOrcDet = @"
-                    DELETE od
-                    FROM dbo.OrcamentoDetalhe od
-                    JOIN dbo.Orcamento o ON o.Id = od.OrcamentoId
-                    WHERE o.InstrumentoId = @id;";
-
-                // 4) Orçamentos do instrumento
-                const string delOrc = @"
-                    DELETE FROM dbo.Orcamento
-                    WHERE InstrumentoId = @id;";
-
-                // 5) Versões (aditivos novos) do instrumento
-                const string delVersao = @"
-                    DELETE FROM dbo.InstrumentoVersao
-                    WHERE InstrumentoId = @id;";
-
-                // 6) Por último, o Instrumento
-                const string delInstrumento = @"
-                    DELETE FROM dbo.Instrumento
-                    WHERE Id = @id;";
+                const string delLanc = "DELETE FROM dbo.LancamentoInstrumento WHERE InstrumentoId = @id;";
+                const string delVersao = "DELETE FROM dbo.InstrumentoVersao WHERE InstrumentoId = @id;";
+                const string delInstrumento = "DELETE FROM dbo.Instrumento WHERE Id = @id;";
 
                 await conn.ExecuteAsync(delLanc, new { id }, tx);
-                await conn.ExecuteAsync(delAditivoLegado, new { id }, tx);
-                await conn.ExecuteAsync(delOrcDet, new { id }, tx);
-                await conn.ExecuteAsync(delOrc, new { id }, tx);
                 await conn.ExecuteAsync(delVersao, new { id }, tx);
                 await conn.ExecuteAsync(delInstrumento, new { id }, tx);
 

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🛠️ Configurações por ambiente
+// Configurações por ambiente
 builder.Configuration
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -49,7 +49,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 // 4) Connection-string
-builder.Services.AddSingleton<IDbConnectionFactory>(sp =>
+// ALTERAÇÃO 1: Trocado de AddSingleton para AddScoped.
+// Isso garante que cada requisição web tenha seu próprio escopo de conexão com o banco,
+// eliminando o gargalo de performance.
+builder.Services.AddScoped<IDbConnectionFactory>(sp =>
 {
     var conn = builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("ConnString 'DefaultConnection' não encontrada.");
@@ -57,22 +60,26 @@ builder.Services.AddSingleton<IDbConnectionFactory>(sp =>
     return new DbConnectionFactory(conn, log);
 });
 
+// ALTERAÇÃO 2: Padronizado todos os registros de Transient para Scoped.
+// Isso otimiza a reutilização de serviços e repositórios dentro de uma mesma requisição.
 #region Repositórios / Serviços já existentes
-builder.Services.AddTransient<IPessoaJuridicaRepositorio, PessoaJuridicaRepositorio>();
-builder.Services.AddTransient<PessoaJuridicaValidacoes>();
+builder.Services.AddScoped<IPessoaJuridicaRepositorio, PessoaJuridicaRepositorio>();
+builder.Services.AddScoped<PessoaJuridicaValidacoes>();
 
-builder.Services.AddTransient<IPessoaFisicaRepositorio, PessoaFisicaRepositorio>();
-builder.Services.AddTransient<PessoaFisicaValidacoes>();
+builder.Services.AddScoped<IPessoaFisicaRepositorio, PessoaFisicaRepositorio>();
+builder.Services.AddScoped<PessoaFisicaValidacoes>();
 
-builder.Services.AddTransient<IEnderecoRepositorio, EnderecoRepositorio>();
-builder.Services.AddTransient<IContaBancariaRepositorio, ContaBancariaRepositorio>();
+builder.Services.AddScoped<IEnderecoRepositorio, EnderecoRepositorio>();
+builder.Services.AddScoped<IContaBancariaRepositorio, ContaBancariaRepositorio>();
 
-builder.Services.AddTransient<INaturezaRepositorio, NaturezaRepositorio>();
-builder.Services.AddTransient<IOrcamentoRepositorio, OrcamentoRepositorio>();
-builder.Services.AddTransient<IContratoRepositorio, ContratoRepositorio>();
-builder.Services.AddTransient<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
-builder.Services.AddTransient<IContratoVersaoService, ContratoVersaoService>();
+builder.Services.AddScoped<INaturezaRepositorio, NaturezaRepositorio>();
+builder.Services.AddScoped<IOrcamentoRepositorio, OrcamentoRepositorio>();
+builder.Services.AddScoped<IContratoRepositorio, ContratoRepositorio>();
+builder.Services.AddScoped<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
+builder.Services.AddScoped<IContratoVersaoService, ContratoVersaoService>();
+#endregion
 
+#region Repositórios e Serviços que já estavam corretos (Scoped)
 builder.Services.AddScoped<INivelRepositorio, NivelRepositorio>();
 builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
 builder.Services.AddScoped<IAnexoService, AnexoService>();
@@ -81,35 +88,24 @@ builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
 builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
 builder.Services.AddScoped<ILogRepositorio, LogRepositorio>();
 builder.Services.AddScoped<IEntidadeEnderecoRepositorio, EntidadeEnderecoRepositorio>();
-#endregion
 
-#region Novos – Entidade e vínculo Usuário↔Entidade
 builder.Services.AddScoped<IEntidadeRepositorio, EntidadeRepositorio>();
 builder.Services.AddScoped<IEntidadeService, EntidadeService>();
 builder.Services.AddScoped<IUsuarioEntidadeRepositorio, UsuarioEntidadeRepositorio>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
-#endregion
 
-#region 🚀 Novos – Serviços de Endereço, Logs e Justificativas
-// Serviços de Endereço
 builder.Services.AddScoped<IEntidadeEnderecoService, EntidadeEnderecoService>();
 builder.Services.AddScoped<IEnderecoService, EnderecoService>();
 
-// Logs
 builder.Services.AddScoped<ILogService, LogService>();
-builder.Services.AddHttpContextAccessor(); // necessário para obter dados do usuário logado
+builder.Services.AddHttpContextAccessor(); 
 
-// 💬 Justificativas
 builder.Services.AddScoped<IJustificativaService, JustificativaService>();
-#endregion
 
-#region ✅ NOVO – Faixa de Instrumento (com lifetimes Scoped)
 builder.Services.AddScoped<IInstrumentoRepositorio, InstrumentoRepositorio>();
 builder.Services.AddScoped<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepositorio>();
 builder.Services.AddScoped<IInstrumentoVersaoService, InstrumentoVersaoService>();
-#endregion
 
-#region ✅ NOVO – Lançamentos de Instrumento (CRUD mensal)
 builder.Services.AddScoped<ILancamentoInstrumentoRepositorio, LancamentoInstrumentoRepositorio>();
 #endregion
 
@@ -125,7 +121,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// 🌎 Localização no pipeline (garante pt-BR no model binding)
+// Localização no pipeline (garante pt-BR no model binding)
 var supportedCultures = new[] { new CultureInfo("pt-BR") };
 app.UseRequestLocalization(new RequestLocalizationOptions
 {
