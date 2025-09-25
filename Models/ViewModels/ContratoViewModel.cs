@@ -61,6 +61,8 @@ namespace Financeiro.Models.ViewModels
         [Required(ErrorMessage = "Selecione ao menos uma natureza para o contrato.")]
         [Display(Name = "Naturezas do Contrato")]
         public List<int> NaturezasIds { get; set; } = new List<int>();
+        [Display(Name = "Orçamento")]
+        public int? OrcamentoId { get; set; }
 
         // Validação customizada para garantir que a data final é maior que a inicial
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

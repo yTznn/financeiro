@@ -19,5 +19,6 @@ namespace Financeiro.Models
         public decimal ValorContrato { get; set; }
         public string? Observacao { get; set; }
         public bool Ativo { get; set; }
+        public int? OrcamentoId { get; set; }
     }
 }

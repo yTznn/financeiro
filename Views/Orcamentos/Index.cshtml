@@ -1,4 +1,4 @@
-@model IEnumerable<Financeiro.Models.Orcamento>
+@model IEnumerable<Financeiro.Models.ViewModels.OrcamentoListViewModel>
 @using System.Globalization;
 
 @{
@@ -15,9 +15,10 @@
     <thead class="table-dark">
         <tr>
             <th>Nome</th>
-            <th>Observação</th>
             <th>Vigência</th>
-            <th>Valor Total</th>
+            <th>Valor Orçado</th>
+            <th>Comprometido</th>
+            <th>Saldo Disponível</th>
             <th>Status</th>
             <th></th>
         </tr>
@@ -29,9 +30,12 @@
             {
                 <tr>
                     <td>@item.Nome</td>
-                    <td>@item.Observacao</td>
                     <td>@item.VigenciaInicio.ToShortDateString() a @item.VigenciaFim.ToShortDateString()</td>
                     <td>@item.ValorPrevistoTotal.ToString("C", culturaBrasileira)</td>
+                    <td>@item.ValorComprometido.ToString("C", culturaBrasileira)</td>
+                    <td class="@(item.SaldoDisponivel < 0 ? "text-danger fw-bold" : "")">
+                        @item.SaldoDisponivel.ToString("C", culturaBrasileira)
+                    </td>
                     <td>
                         @if (item.Ativo)
                         {
@@ -59,13 +63,12 @@
         else
         {
             <tr>
-                <td colspan="6" class="text-center">Nenhum orçamento cadastrado.</td>
+                <td colspan="7" class="text-center">Nenhum orçamento cadastrado.</td>
             </tr>
         }
     </tbody>
 </table>
 
-<!-- ✅ Formulário oculto para POST da exclusão com AntiForgery -->
 <form id="form-exclusao" asp-action="Excluir" method="post" class="d-none">
     @Html.AntiForgeryToken()
     <input type="hidden" name="id" id="orcamentoIdExcluir" />

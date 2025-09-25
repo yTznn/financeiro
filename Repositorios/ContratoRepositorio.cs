@@ -18,10 +18,6 @@ namespace Financeiro.Repositorios
         {
             _factory = factory;
         }
-
-        // ... SEUS OUTROS MÉTODOS (InserirAsync, AtualizarAsync, etc.) FICAM AQUI EXATAMENTE COMO ERAM ...
-        // Vou omiti-los aqui para focar na mudança, mas eles devem permanecer no seu arquivo.
-        
         public async Task InserirAsync(ContratoViewModel vm)
         {
             using var conn = _factory.CreateConnection();
@@ -43,15 +39,20 @@ namespace Financeiro.Repositorios
                     DataFim = vm.DataFim,
                     ValorContrato = vm.ValorContrato,
                     Observacao = vm.Observacao,
-                    Ativo = vm.Ativo
+                    Ativo = vm.Ativo,
+                    OrcamentoId = vm.OrcamentoId
                 };
 
                 const string sqlInsertContrato = @"
-                    INSERT INTO Contrato (PessoaJuridicaId, PessoaFisicaId, NumeroContrato, AnoContrato, ObjetoContrato, DataAssinatura, DataInicio, DataFim, ValorContrato, Observacao, Ativo)
-                    VALUES (@PessoaJuridicaId, @PessoaFisicaId, @NumeroContrato, @AnoContrato, @ObjetoContrato, @DataAssinatura, @DataInicio, @DataFim, @ValorContrato, @Observacao, @Ativo);
+                    INSERT INTO Contrato 
+                        (PessoaJuridicaId, PessoaFisicaId, NumeroContrato, AnoContrato, ObjetoContrato, DataAssinatura, DataInicio, DataFim, ValorContrato, Observacao, Ativo, OrcamentoId)
+                    VALUES 
+                        (@PessoaJuridicaId, @PessoaFisicaId, @NumeroContrato, @AnoContrato, @ObjetoContrato, @DataAssinatura, @DataInicio, @DataFim, @ValorContrato, @Observacao, @Ativo, @OrcamentoId);
                     SELECT CAST(SCOPE_IDENTITY() as int);";
                 
                 var contratoId = await conn.QuerySingleAsync<int>(sqlInsertContrato, contrato, transaction);
+                vm.Id = contratoId; // Importante: Mantemos isso para ter o ID do novo contrato
+
                 await InserirContratoNaturezasAsync(conn, transaction, contratoId, vm.NaturezasIds);
                 transaction.Commit();
             }
@@ -61,6 +62,7 @@ namespace Financeiro.Repositorios
                 throw;
             }
         }
+        // Financeiro/Repositorios/ContratoRepositorio.cs
 
         public async Task AtualizarAsync(ContratoViewModel vm)
         {
@@ -84,20 +86,33 @@ namespace Financeiro.Repositorios
                     DataFim = vm.DataFim,
                     ValorContrato = vm.ValorContrato,
                     Observacao = vm.Observacao,
-                    Ativo = vm.Ativo
+                    Ativo = vm.Ativo,
+                    OrcamentoId = vm.OrcamentoId // <-- MELHORIA APLICADA
                 };
 
                 const string sqlUpdateContrato = @"
                     UPDATE Contrato SET
-                        PessoaJuridicaId = @PessoaJuridicaId, PessoaFisicaId = @PessoaFisicaId, NumeroContrato = @NumeroContrato,
-                        AnoContrato = @AnoContrato, ObjetoContrato = @ObjetoContrato, DataAssinatura = @DataAssinatura,
-                        DataInicio = @DataInicio, DataFim = @DataFim, ValorContrato = @ValorContrato, Observacao = @Observacao, Ativo = @Ativo
+                        PessoaJuridicaId = @PessoaJuridicaId, 
+                        PessoaFisicaId = @PessoaFisicaId, 
+                        NumeroContrato = @NumeroContrato,
+                        AnoContrato = @AnoContrato, 
+                        ObjetoContrato = @ObjetoContrato, 
+                        DataAssinatura = @DataAssinatura,
+                        DataInicio = @DataInicio, 
+                        DataFim = @DataFim, 
+                        ValorContrato = @ValorContrato, 
+                        Observacao = @Observacao, 
+                        Ativo = @Ativo,
+                        OrcamentoId = @OrcamentoId
                     WHERE Id = @Id;";
                 
                 await conn.ExecuteAsync(sqlUpdateContrato, contrato, transaction);
+                
                 const string sqlDeleteNaturezas = "DELETE FROM ContratoNatureza WHERE ContratoId = @ContratoId;";
                 await conn.ExecuteAsync(sqlDeleteNaturezas, new { ContratoId = vm.Id }, transaction);
+                
                 await InserirContratoNaturezasAsync(conn, transaction, vm.Id, vm.NaturezasIds);
+                
                 transaction.Commit();
             }
             catch (Exception)
@@ -106,7 +121,6 @@ namespace Financeiro.Repositorios
                 throw;
             }
         }
-
         public async Task ExcluirAsync(int id)
         {
             const string sql = "DELETE FROM Contrato WHERE Id = @id;";

@@ -30,15 +30,15 @@ namespace Financeiro.Servicos
 
                 versaoAtual = new ContratoVersao
                 {
-                    ContratoId      = contratoOriginal.Id,
-                    Versao          = 1,
-                    ObjetoContrato  = contratoOriginal.ObjetoContrato,
-                    DataInicio      = contratoOriginal.DataInicio,
-                    DataFim         = contratoOriginal.DataFim,
-                    ValorContrato   = contratoOriginal.ValorContrato,
-                    TipoAditivo     = null,
-                    Observacao      = "Versão original do contrato.",
-                    DataRegistro    = DateTime.Now,
+                    ContratoId = contratoOriginal.Id,
+                    Versao = 1,
+                    ObjetoContrato = contratoOriginal.ObjetoContrato,
+                    DataInicio = contratoOriginal.DataInicio,
+                    DataFim = contratoOriginal.DataFim,
+                    ValorContrato = contratoOriginal.ValorContrato,
+                    TipoAditivo = null,
+                    Observacao = "Versão original do contrato.",
+                    DataRegistro = DateTime.Now,
                     DataInicioAditivo = null
                 };
                 await _versaoRepo.InserirAsync(versaoAtual);
@@ -80,17 +80,17 @@ namespace Financeiro.Servicos
             // 4) Criar nova versão
             var novaVersao = new ContratoVersao
             {
-                ContratoId       = vm.ContratoId,
-                Versao           = versaoAtual.Versao + 1,
-                TipoAditivo      = vm.TipoAditivo,
-                Observacao       = vm.Observacao,
-                DataRegistro     = DateTime.Now,
-                DataInicioAditivo= vm.DataInicioAditivo,
+                ContratoId = vm.ContratoId,
+                Versao = versaoAtual.Versao + 1,
+                TipoAditivo = vm.TipoAditivo,
+                Observacao = vm.Observacao,
+                DataRegistro = DateTime.Now,
+                DataInicioAditivo = vm.DataInicioAditivo,
 
-                ObjetoContrato   = vm.NovoObjeto ?? versaoAtual.ObjetoContrato,
-                ValorContrato    = valorFinal,
-                DataInicio       = versaoAtual.DataInicio,
-                DataFim          = novaDataFim
+                ObjetoContrato = vm.NovoObjeto ?? versaoAtual.ObjetoContrato,
+                ValorContrato = valorFinal,
+                DataInicio = versaoAtual.DataInicio,
+                DataFim = novaDataFim
             };
 
             await _versaoRepo.InserirAsync(novaVersao);
@@ -100,10 +100,31 @@ namespace Financeiro.Servicos
                            ?? throw new Exception("Contrato não encontrado para atualizar.");
 
             contrato.ObjetoContrato = novaVersao.ObjetoContrato;
-            contrato.ValorContrato  = novaVersao.ValorContrato;
-            contrato.DataFim        = novaVersao.DataFim;
+            contrato.ValorContrato = novaVersao.ValorContrato;
+            contrato.DataFim = novaVersao.DataFim;
 
             await _contratoRepo.AtualizarAsync(contrato);
+        }
+        public async Task CriarVersaoInicialAsync(ContratoViewModel vm)
+        {
+            if (vm == null || vm.Id == 0)
+                throw new ArgumentException("Dados do contrato inválidos para criar a versão inicial.");
+
+            var versaoInicial = new ContratoVersao
+            {
+                ContratoId = vm.Id,
+                Versao = 1, // Sempre será a versão 1
+                ObjetoContrato = vm.ObjetoContrato,
+                DataInicio = vm.DataInicio,
+                DataFim = vm.DataFim,
+                ValorContrato = vm.ValorContrato,
+                TipoAditivo = null, // Não é um aditivo
+                Observacao = "Versão original do contrato.",
+                DataRegistro = DateTime.Now,
+                DataInicioAditivo = null
+            };
+
+            await _versaoRepo.InserirAsync(versaoInicial);
         }
     }
 }

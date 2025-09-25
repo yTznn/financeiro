@@ -11,7 +11,7 @@ namespace Financeiro.Repositorios
         Task AtualizarAsync(int id, OrcamentoViewModel vm);
         Task<Orcamento?> ObterHeaderPorIdAsync(int id);
         Task<IEnumerable<OrcamentoDetalhe>> ObterDetalhesPorOrcamentoIdAsync(int orcamentoId);
-        Task<IEnumerable<Orcamento>> ListarAsync();
+        Task<IEnumerable<OrcamentoListViewModel>> ListarAsync();
         Task ExcluirAsync(int id);
     }
 }

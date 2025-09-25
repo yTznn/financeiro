@@ -12,10 +12,6 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Nome do Orçamento")]
         public string Nome { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "É obrigatório vincular um Instrumento.")]
-        [Display(Name = "Instrumento")]
-        public int TipoAcordoId { get; set; }
-
         [Required]
         [DataType(DataType.Date)]
         [Display(Name = "Início da Vigência")]

@@ -14,28 +14,37 @@ namespace Financeiro.Controllers
         private readonly IContratoVersaoRepositorio _versaoRepo;
         private readonly ILogService _logService;
         private readonly IJustificativaService _justificativaService;
+        private readonly IOrcamentoRepositorio _orcamentoRepo;
+        private readonly IContratoVersaoService _versaoService;
 
+        // ***** CONSTRUTOR CORRIGIDO *****
         public ContratosController(
             IContratoRepositorio contratoRepo,
             IContratoVersaoRepositorio versaoRepo,
             ILogService logService,
-            IJustificativaService justificativaService)
+            IJustificativaService justificativaService,
+            IOrcamentoRepositorio orcamentoRepo,
+            IContratoVersaoService versaoService)
         {
             _contratoRepo = contratoRepo;
             _versaoRepo = versaoRepo;
             _logService = logService;
             _justificativaService = justificativaService;
+            _orcamentoRepo = orcamentoRepo;
+            _versaoService = versaoService;
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(ContratoViewModel vm, string justificativa = null)
         {
+            // Validação de unicidade (número/ano)
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato))
             {
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número para o ano selecionado.");
             }
 
+            // Validação geral do model
             if (!ModelState.IsValid)
             {
                 var todosErros = ModelState.Values.SelectMany(v => v.Errors)
@@ -46,9 +55,19 @@ namespace Financeiro.Controllers
                 return View("ContratoForm", vm);
             }
             
+            // --- INÍCIO DA LÓGICA DE SALVAMENTO ORQUESTRADA ---
+
+            // 1. Salva o contrato principal no banco. 
+            //    O repositório preenche o vm.Id com o ID do novo contrato.
             await _contratoRepo.InserirAsync(vm);
+
+            // 2. Com o ID em mãos, chama o serviço para criar a Versão 1 (original) no histórico.
+            await _versaoService.CriarVersaoInicialAsync(vm);
+
+            // 3. Registra o log da criação do contrato.
             await _logService.RegistrarCriacaoAsync("Contrato", vm, vm.Id);
 
+            // 4. Se houver justificativa, registra-a.
             if (!string.IsNullOrWhiteSpace(justificativa))
             {
                 await _justificativaService.RegistrarAsync(
@@ -58,10 +77,11 @@ namespace Financeiro.Controllers
                     justificativa);
             }
 
+            // --- FIM DA LÓGICA ---
+
             TempData["Sucesso"] = "Contrato salvo com sucesso!";
             return RedirectToAction(nameof(Index));
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(ContratoViewModel vm, string justificativa = null)
@@ -131,7 +151,6 @@ namespace Financeiro.Controllers
             return View("ContratoForm", vm);
         }
 
-        // MÉTODO EXCLUIR MANTIDO, POIS ESTÁ FUNCIONANDO CORRETAMENTE
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Excluir(int id, string justificativa)
@@ -195,10 +214,14 @@ namespace Financeiro.Controllers
 
             return PartialView("_HistoricoContrato", itens);
         }
-
+        
+        // ***** MÉTODO HELPER CORRIGIDO E NO LUGAR CERTO *****
         private async Task PrepararViewBagParaFormulario(ContratoViewModel vm)
         {
             ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
+            
+            // LINHA QUE BUSCA OS ORÇAMENTOS
+            ViewBag.Orcamentos = await _orcamentoRepo.ListarAsync(); 
 
             if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto))
             {

@@ -12,5 +12,7 @@ namespace Financeiro.Servicos
         /// Orquestra a criação de um aditivo, incluindo a criação da versão original se necessário.
         /// </summary>
         Task CriarAditivoAsync(AditivoContratoViewModel vm);
+        Task CriarVersaoInicialAsync(ContratoViewModel vm);
+
     }
 }

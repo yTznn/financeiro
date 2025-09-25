@@ -10,7 +10,7 @@
 <form id="orcamento-form"
       asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
       method="post">
-    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
@@ -25,35 +25,12 @@
         </div>
     </div>
 
-    <div class="row align-items-end">
-        <div class="col-md-6 mb-3">
-            <label asp-for="TipoAcordoId" class="form-label"></label>
-            <select id="TipoAcordoId"
-                    asp-for="TipoAcordoId"
-                    class="form-select"
-                    asp-items="@(new SelectList(ViewBag.TiposDeAcordo, "Id", "Numero", Model?.TipoAcordoId))">
-                <option value="">Selecione um Instrumento</option>
-            </select>
-            <span asp-validation-for="TipoAcordoId" class="text-danger"></span>
-        </div>
-
-        <div class="col-md-6 mb-3">
+    <div class="row">
+        <div class="col-12 mb-3">
             <label asp-for="ValorPrevistoTotal" class="form-label"></label>
             <input asp-for="ValorPrevistoTotal" id="ValorPrevistoTotal" class="form-control" readonly />
             <span asp-validation-for="ValorPrevistoTotal" class="text-danger"></span>
         </div>
-    </div>
-
-    <!-- Painel informativo do Instrumento -->
-    <div id="painel-instrumento" class="alert alert-info d-none py-2 px-3 mb-3">
-        <div class="d-flex flex-wrap gap-3 align-items-center">
-            <div><strong>Nº Instrumento:</strong> <span id="info-numero">—</span></div>
-            <div><strong>Valor do Instrumento:</strong> R$ <span id="info-valor">0,00</span></div>
-            <div><strong>Saldo estimado:</strong> R$ <span id="info-saldo">0,00</span></div>
-        </div>
-        <small id="info-alerta" class="text-danger fw-semibold d-none">
-            O total do orçamento excede o valor do instrumento. Uma justificativa será solicitada ao salvar.
-        </small>
     </div>
 
     <div class="row">
@@ -100,7 +77,6 @@
     </div>
 </form>
 
-<!-- Modal Detalhamento -->
 <div class="modal"
      id="modalDetalhamento"
      tabindex="-1"
@@ -142,578 +118,408 @@
 </div>
 
 @section Scripts {
-    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
 
-    @* --- Injeta o mapa de instrumentos: esperar ViewBag.InstrumentosMeta = [{ Id, Numero, Valor | ValorVigente }] --- *@
-    @{
-        var instrumentosMeta = ViewBag.InstrumentosMeta ?? new object[0];
-    }
-    <script>
-      // Converte a lista vinda do server em um mapa { [id]: { numero, valor } }
-      (function(){
-        let arr = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(instrumentosMeta));
-        let map = {};
-        if (Array.isArray(arr)) {
-          for (const it of arr) {
-            const id     = (it.id ?? it.Id);
-            if (id === undefined || id === null) continue;
-            const numero = (it.numero ?? it.Numero ?? '');
-            const raw    = (it.valor ?? it.Valor ?? it.ValorVigente ?? it.ValorAtual ?? 0);
-            const val    = (typeof raw === 'string')
-                            ? parseFloat(raw.replace(/\./g,'').replace(',','.'))
-                            : parseFloat(raw);
-            // --- CORREÇÃO: Usar o ID como string para a chave do mapa
-            map[id] = { numero: numero || '', valor: isNaN(val) ? 0 : val };
-          }
-        }
-        window.instrumentosMap = map; // usado pelo getInstrumentoSelecionado()
-      })();
-    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const hasSwal = typeof window.Swal !== 'undefined';
 
-    <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const hasSwal = typeof window.Swal !== 'undefined';
+        // ---------- VARIÁVEIS ----------
+        let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Detalhamento ?? new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+        const form = document.getElementById('orcamento-form');
+        const arvoreContainer = document.getElementById('arvore-container');
+        const btnAdicionarNivel = document.getElementById('btn-adicionar-nivel');
+        const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
+        const btnAbrirNovoNivel = document.getElementById('btn-abrir-modal-nivel');
+        const valorTotalInput = document.getElementById('ValorPrevistoTotal');
+        const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
+        const justificativaHidden = document.getElementById('justificativa');
 
-        // ---------- VARIÁVEIS ----------
-        let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
-                                Model.Detalhamento ??
-                                new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));
+        // ---------- SWEETALERT: TempData ----------
+        const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"]));
+        const msgErro = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
+        const msgAlerta = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Alerta"]));
+        if (hasSwal) {
+            if (msgSucesso) Swal.fire({ icon: 'success', title: 'Sucesso', text: msgSucesso });
+            if (msgErro) Swal.fire({ icon: 'error', title: 'Ops', text: msgErro });
+            if (msgAlerta) Swal.fire({ icon: 'warning', title: 'Atenção', text: msgAlerta });
+        }
 
-        const form                  = document.getElementById('orcamento-form');
-        const arvoreContainer       = document.getElementById('arvore-container');
-        const btnAdicionarNivel     = document.getElementById('btn-adicionar-nivel');
-        const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
-        const btnAbrirNovoNivel     = document.getElementById('btn-abrir-modal-nivel');
-        const valorTotalInput       = document.getElementById('ValorPrevistoTotal');
-        const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
-        const justificativaHidden   = document.getElementById('justificativa');
+        // ---------- FUNÇÕES -----------
+        const norm = s => (s ?? '').toString().trim().toLowerCase();
 
-        const selectInstrumento     = document.getElementById('TipoAcordoId');
-        const painelInstrumento     = document.getElementById('painel-instrumento');
-        const infoNumero            = document.getElementById('info-numero');
-        const infoValor             = document.getElementById('info-valor');
-        const infoSaldo             = document.getElementById('info-saldo');
-        const infoAlerta            = document.getElementById('info-alerta');
+        function toBR(n) {
+            return (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
 
-        // ---------- SWEETALERT: TempData ----------
-        const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"]));
-        const msgErro    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
-        const msgAlerta  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Alerta"]));
-        if (hasSwal) {
-            if (msgSucesso) Swal.fire({ icon:'success', title:'Sucesso', text: msgSucesso });
-            if (msgErro)    Swal.fire({ icon:'error',   title:'Ops',     text: msgErro });
-            if (msgAlerta)  Swal.fire({ icon:'warning', title:'Atenção', text: msgAlerta });
-        }
+        function calcularTotaisNosDados() {
+            function subtotal(node) {
+                if (!node.Filhos || node.Filhos.length === 0)
+                    return parseFloat(node.ValorPrevisto) || 0;
+                let soma = 0;
+                node.Filhos.forEach(c => soma += subtotal(c));
+                node.ValorPrevisto = soma;
+                return soma;
+            }
+            const total = detalhamento.reduce((a, n) => a + subtotal(n), 0);
+            valorTotalInput.value = total.toFixed(2);
+            if (!valorTotalInput.value) valorTotalInput.value = "0.00";
+            return total;
+        }
 
-        // ---------- FUNÇÕES -----------
-        const norm = s => (s ?? '').toString().trim().toLowerCase();
+        function escapeHtml(s) {
+            return (s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
 
-        function toBR(n) {
-            return (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
+        function criarNodeElemento(node, path) {
+            const indent = (path.length - 1) * 25;
+            const div = document.createElement('div');
+            div.className = 'orcamento-node';
+            div.style.marginLeft = `${indent}px`;
+            div.dataset.path = path.join('-');
 
-        // Lê do instrumentosMap; fallback: data-* da option selecionada
-        function getInstrumentoSelecionado() {
-            const idStr = selectInstrumento.value;
-            if (!idStr) return null;
-            // const id = parseInt(idStr, 10); // LINHA REMOVIDA
-            let numero = '';
-            let valor  = 0;
+            const isParent = node.Filhos && node.Filhos.length > 0;
+            const isL3 = path.length >= 3;
+            const nivelHierarquico = path.length;
 
-            // --- CORREÇÃO: Usar o ID como string para buscar no mapa
-            if (window.instrumentosMap && window.instrumentosMap[idStr]) {
-                numero = window.instrumentosMap[idStr].numero || '';
-                valor  = parseFloat(window.instrumentosMap[idStr].valor || 0);
-            } else {
-                const opt = selectInstrumento.selectedOptions && selectInstrumento.selectedOptions[0];
-                if (opt) {
-                    numero = opt.dataset.numero || (opt.textContent || '').trim();
-                    const raw = opt.dataset.valor || '0';
-                    valor = parseFloat((typeof raw === 'string') ? raw.replace(/\./g,'').replace(',','.') : raw);
-                }
-            }
-            // --- CORREÇÃO: Retornar o ID como string
-            return { id: idStr, valor: isNaN(valor) ? 0 : valor, numero };
-        }
+            let initialOption = '';
+            const optVal = (node.NivelId ?? '').toString().trim();
+            if (optVal) {
+                initialOption = `<option value="${escapeHtml(optVal)}" selected>${escapeHtml(node.Nome || '')}</option>`;
+            } else if (node.Nome) {
+                initialOption = `<option value="${escapeHtml(node.Nome)}" selected>${escapeHtml(node.Nome)}</option>`;
+            }
 
-        function atualizarPainelInstrumento() {
-            const inst = getInstrumentoSelecionado();
-            const total = parseFloat(valorTotalInput.value || '0');
-            if (!inst) { painelInstrumento.classList.add('d-none'); return; }
-            painelInstrumento.classList.remove('d-none');
-            infoNumero.textContent = inst.numero || '—';
-            infoValor.textContent  = toBR(inst.valor);
-            const saldo = inst.valor - total;
-            infoSaldo.textContent  = toBR(saldo);
-            if (saldo < 0) { infoSaldo.parentElement.classList.add('text-danger'); infoAlerta.classList.remove('d-none'); }
-            else           { infoSaldo.parentElement.classList.remove('text-danger'); infoAlerta.classList.add('d-none'); }
-        }
+            div.innerHTML = `
+                <div class="d-flex align-items-center mb-1 p-2 border rounded">
+                    <div class="flex-grow-1">
+                        <select class="form-control form-control-sm mb-1 select2-niveis"
+                                data-prop="Nome"
+                                data-nivel="${nivelHierarquico}">
+                            ${initialOption}
+                        </select>
+                        <input type="number"
+                               class="form-control form-control-sm"
+                               data-prop="ValorPrevisto"
+                               value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}"
+                               step="0.01"
+                               placeholder="Valor"
+                               ${isParent ? 'readonly style="background-color:#e9ecef;"' : ''}>
+                    </div>
+                    <div class="ms-2">
+                        ${!isL3 ? `<button type="button" class="btn btn-sm btn-success" data-action="add-child" title="Adicionar Filho">+</button>` : ''}
+                        <button type="button" class="btn btn-sm btn-danger" data-action="remove" title="Remover">x</button>
+                    </div>
+                </div>`;
+            if (isParent) {
+                const filhosDiv = document.createElement('div');
+                filhosDiv.className = 'orcamento-node-children';
+                node.Filhos.forEach((c, i) =>
+                    filhosDiv.appendChild(criarNodeElemento(c, [...path, i])));
+                div.appendChild(filhosDiv);
+            }
+            return div;
+        }
 
-        function calcularTotaisNosDados() {
-            function subtotal(node) {
-                if (!node.Filhos || node.Filhos.length === 0)
-                    return parseFloat(node.ValorPrevisto) || 0;
-                let soma = 0;
-                node.Filhos.forEach(c => soma += subtotal(c));
-                node.ValorPrevisto = soma;
-                return soma;
-            }
-            const total = detalhamento.reduce((a,n) => a + subtotal(n), 0);
-            valorTotalInput.value = total.toFixed(2);
-            if (!valorTotalInput.value) valorTotalInput.value = "0.00";
-            return total;
-        }
+        function inicializarSelect2ParaElemento($select) {
+            const nivel = $select.data('nivel');
+            $select.select2({
+                theme: 'bootstrap-5',
+                dropdownParent: $('#modalDetalhamento'),
+                placeholder: 'Digite para buscar um nível...',
+                minimumInputLength: 1,
+                allowClear: true,
+                ajax: {
+                    url: '/Niveis/Search',
+                    dataType: 'json',
+                    delay: 250,
+                    cache: false,
+                    data: params => ({ term: params.term, nivel }),
+                    processResults: data => ({ results: data.results })
+                }
+            });
+        }
 
-        function escapeHtml(s) {
-            return (s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-        }
+        function inicializarSelect2() {
+            $('.select2-niveis').each(function () { inicializarSelect2ParaElemento($(this)); });
+        }
 
-        function criarNodeElemento(node, path) {
-            const indent = (path.length - 1) * 25;
-            const div = document.createElement('div');
-            div.className = 'orcamento-node';
-            div.style.marginLeft = `${indent}px`;
-            div.dataset.path = path.join('-');
+        function renderizarArvore() {
+            arvoreContainer.innerHTML = '';
+            detalhamento.forEach((n, i) =>
+                arvoreContainer.appendChild(criarNodeElemento(n, [i])));
+            inicializarSelect2();
+        }
+        window.renderizarArvore = renderizarArvore;
 
-            const isParent = node.Filhos && node.Filhos.length > 0;
-            const isL3 = path.length >= 3;
-            const nivelHierarquico = path.length;
+        function getNode(pathArr) {
+            let n = { Filhos: detalhamento };
+            for (const i of pathArr) {
+                if (!n.Filhos || !n.Filhos[i]) return null;
+                n = n.Filhos[i];
+            }
+            return n;
+        }
 
-            // Option inicial usa NivelId quando houver; senão, Nome
-            let initialOption = '';
-            const optVal = (node.NivelId ?? '').toString().trim();
-            if (optVal) {
-                initialOption = `<option value="${escapeHtml(optVal)}" selected>${escapeHtml(node.Nome || '')}</option>`;
-            } else if (node.Nome) {
-                initialOption = `<option value="${escapeHtml(node.Nome)}" selected>${escapeHtml(node.Nome)}</option>`;
-            }
+        function atualizarReadonlyValores() {
+            document.querySelectorAll('.orcamento-node input[data-prop="ValorPrevisto"][readonly]')
+            .forEach(inp => {
+                const path = inp.closest('.orcamento-node').dataset.path.split('-').map(Number);
+                const n = getNode(path);
+                if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
+            });
+        }
 
-            div.innerHTML = `
-                <div class="d-flex align-items-center mb-1 p-2 border rounded">
-                    <div class="flex-grow-1">
-                        <select class="form-control form-control-sm mb-1 select2-niveis"
-                                data-prop="Nome"
-                                data-nivel="${nivelHierarquico}">
-                            ${initialOption}
-                        </select>
-                        <input type="number"
-                               class="form-control form-control-sm"
-                               data-prop="ValorPrevisto"
-                               value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}"
-                               step="0.01"
-                               placeholder="Valor"
-                               ${isParent ? 'readonly style="background-color:#e9ecef;"' : ''}>
-                    </div>
-                    <div class="ms-2">
-                        ${!isL3 ? `<button type="button" class="btn btn-sm btn-success" data-action="add-child" title="Adicionar Filho">+</button>` : ''}
-                        <button type="button" class="btn btn-sm btn-danger" data-action="remove" title="Remover">x</button>
-                    </div>
-                </div>`;
-            if (isParent) {
-                const filhosDiv = document.createElement('div');
-                filhosDiv.className = 'orcamento-node-children';
-                node.Filhos.forEach((c,i) =>
-                    filhosDiv.appendChild(criarNodeElemento(c,[...path,i])));
-                div.appendChild(filhosDiv);
-            }
-            return div;
-        }
+        function clearInvalidVisual(selectEl) {
+            selectEl.classList.remove('is-invalid');
+            const $cont = $(selectEl).next('.select2-container');
+            $cont.find('.select2-selection').removeClass('border border-danger');
+        }
 
-        function inicializarSelect2ParaElemento($select) {
-            const nivel = $select.data('nivel');
-            $select.select2({
-                theme: 'bootstrap-5',
-                dropdownParent: $('#modalDetalhamento'),
-                placeholder: 'Digite para buscar um nível...',
-                minimumInputLength: 1,
-                allowClear: true,
-                ajax: {
-                    url: '/Niveis/Search',
-                    dataType: 'json',
-                    delay: 250,
-                    cache: false,
-                    data: params => ({ term: params.term, nivel }),
-                    processResults: data => ({ results: data.results })
-                }
-            });
-        }
+        function markInvalidByPath(pathStr) {
+            const el = arvoreContainer.querySelector(`.orcamento-node[data-path="${pathStr}"] select[data-prop="Nome"]`);
+            if (!el) return;
+            el.classList.add('is-invalid');
+            const $cont = $(el).next('.select2-container');
+            $cont.find('.select2-selection').addClass('border border-danger');
+        }
 
-        function inicializarSelect2() {
-            $('.select2-niveis').each(function () { inicializarSelect2ParaElemento($(this)); });
-        }
+        function sameLevelKey(n) {
+            const idStr = (n?.NivelId ?? '').toString().trim();
+            if (idStr) return `id:${idStr.toLowerCase()}`;
+            const nm = norm(n?.Nome);
+            return nm ? `nm:${nm}` : '';
+        }
 
-        function renderizarArvore() {
-            arvoreContainer.innerHTML = '';
-            detalhamento.forEach((n,i) =>
-                arvoreContainer.appendChild(criarNodeElemento(n,[i])));
-            inicializarSelect2();
-        }
-        window.renderizarArvore = renderizarArvore;
+        function keyFromSelect(id, text) {
+            const idStr = (id ?? '').toString().trim();
+            return idStr ? `id:${idStr.toLowerCase()}` : `nm:${norm(text)}`;
+        }
 
-        function getNode(pathArr) {
-            let n = { Filhos: detalhamento };
-            for (const i of pathArr) {
-                if (!n.Filhos || !n.Filhos[i]) return null;
-                n = n.Filhos[i];
-            }
-            return n;
-        }
+        function syncSelectionsIntoData() {
+            document.querySelectorAll('.orcamento-node select[data-prop="Nome"]').forEach(sel => {
+                const path = sel.closest('.orcamento-node').dataset.path.split('-').map(Number);
+                const node = getNode(path);
+                if (!node) return;
+                const data = $(sel).select2('data') || [];
+                if (data.length) {
+                    const id = (data[0].id ?? '').toString().trim();
+                    const txt = (data[0].text ?? '').toString().trim();
+                    node.NivelId = id;
+                    node.Nome = txt;
+                }
+            });
+        }
 
-        function atualizarReadonlyValores() {
-            document.querySelectorAll('.orcamento-node input[data-prop="ValorPrevisto"][readonly]')
-            .forEach(inp => {
-                const path = inp.closest('.orcamento-node').dataset.path.split('-').map(Number);
-                const n = getNode(path);
-                if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
-            });
-        }
+        function validateAllSelected() {
+            const faltantes = [];
+            function walk(arr, prefix) {
+                arr.forEach((n, i) => {
+                    const path = (prefix ? prefix + '-' : '') + i;
+                    const hasId = n && n.NivelId !== undefined && n.NivelId !== null && String(n.NivelId).trim() !== '';
+                    const hasName = n && (n.Nome ?? '').toString().trim() !== '';
+                    const ok = hasId || hasName;
+                    if (!ok) faltantes.push(path);
+                    if (n?.Filhos?.length) walk(n.Filhos, path);
+                });
+            }
+            walk(detalhamento, '');
 
-        // ---- helpers de validação ----
-        function clearInvalidVisual(selectEl) {
-            selectEl.classList.remove('is-invalid');
-            const $cont = $(selectEl).next('.select2-container');
-            $cont.find('.select2-selection').removeClass('border border-danger');
-        }
+            if (faltantes.length) {
+                faltantes.forEach(markInvalidByPath);
+                const msg = 'Obrigatório selecionar todos os níveis (incluindo subníveis).';
+                if (hasSwal) Swal.fire({ icon: 'warning', title: 'Atenção', text: msg });
+                else alert(msg);
+                const first = faltantes[0];
+                const el = arvoreContainer.querySelector(`.orcamento-node[data-path="${first}"] select[data-prop="Nome"]`);
+                if (el) $(el).select2('open');
+                return false;
+            }
+            return true;
+        }
 
-        function markInvalidByPath(pathStr) {
-            const el = arvoreContainer.querySelector(`.orcamento-node[data-path="${pathStr}"] select[data-prop="Nome"]`);
-            if (!el) return;
-            el.classList.add('is-invalid');
-            const $cont = $(el).next('.select2-container');
-            $cont.find('.select2-selection').addClass('border border-danger');
-        }
+        function validateGlobalDuplicates() {
+            const mapDepth = new Map();
+            const dups = [];
+            function walk(arr, depth, prefix) {
+                arr.forEach((n, i) => {
+                    const key = sameLevelKey(n);
+                    if (key) {
+                        if (!mapDepth.has(depth)) mapDepth.set(depth, new Set());
+                        const set = mapDepth.get(depth);
+                        const path = (prefix ? prefix + '-' : '') + i;
+                        if (set.has(key)) dups.push({ depth, name: n.Nome, path });
+                        else set.add(key);
+                    }
+                    if (n?.Filhos?.length) walk(n.Filhos, depth + 1, (prefix ? prefix + '-' : '') + i);
+                });
+            }
+            walk(detalhamento, 1, '');
+            if (dups.length) {
+                dups.forEach(d => markInvalidByPath(d.path));
+                const msg = `Não é permitido repetir o mesmo nível no mesmo nível hierárquico. Ex.: ${dups[0].name} (nível ${dups[0].depth}).`;
+                if (hasSwal) Swal.fire({ icon: 'error', title: 'Duplicidade de nível', text: msg });
+                else alert(msg);
+                return false;
+            }
+            return true;
+        }
 
-        // chave para comparar itens no MESMO nível hierárquico
-        function sameLevelKey(n) {
-            const idStr = (n?.NivelId ?? '').toString().trim();
-            if (idStr) return `id:${idStr.toLowerCase()}`;
-            const nm = norm(n?.Nome);
-            return nm ? `nm:${nm}` : '';
-        }
-        // chave a partir de (id, texto) do select2
-        function keyFromSelect(id, text) {
-            const idStr = (id ?? '').toString().trim();
-            return idStr ? `id:${idStr.toLowerCase()}` : `nm:${norm(text)}`;
-        }
+        // ---------- EVENTOS -----------
+        btnAdicionarNivel.addEventListener('click', () => {
+            detalhamento.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
+            renderizarArvore();
+        });
 
-        // --------- sincronizar selects -> dados ---------
-        function syncSelectionsIntoData() {
-            document.querySelectorAll('.orcamento-node select[data-prop="Nome"]').forEach(sel => {
-                const path = sel.closest('.orcamento-node').dataset.path.split('-').map(Number);
-                const node = getNode(path);
-                if (!node) return;
-                const data = $(sel).select2('data') || [];
-                if (data.length) {
-                    const id  = (data[0].id   ?? '').toString().trim();
-                    const txt = (data[0].text ?? '').toString().trim();
-                    node.NivelId = id;
-                    node.Nome    = txt;
-                }
-            });
-        }
+        arvoreContainer.addEventListener('click', e => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const elem = btn.closest('.orcamento-node');
+            const path = elem.dataset.path.split('-').map(Number);
+            const act = btn.dataset.action;
+            if (act === 'add-child') {
+                const pNode = getNode(path); if (!pNode) return;
+                pNode.Filhos = pNode.Filhos || [];
+                pNode.Filhos.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
+                renderizarArvore();
+            } else if (act === 'remove') {
+                const parentPath = path.slice(0, -1);
+                const idx = path[path.length - 1];
+                if (parentPath.length === 0) detalhamento.splice(idx, 1);
+                else {
+                    const p = getNode(parentPath);
+                    if (p) p.Filhos.splice(idx, 1);
+                }
+                renderizarArvore();
+            }
+            calcularTotaisNosDados();
+            atualizarReadonlyValores();
+        });
 
-        // --------- validações ---------
-        function validateAllSelected() {
-            const faltantes = [];
-            function walk(arr, prefix) {
-                arr.forEach((n, i) => {
-                    const path = (prefix ? prefix + '-' : '') + i;
-                    const hasId   = n && n.NivelId !== undefined && n.NivelId !== null && String(n.NivelId).trim() !== '';
-                    const hasName = n && (n.Nome ?? '').toString().trim() !== '';
-                    const ok = hasId || hasName;
-                    if (!ok) faltantes.push(path);
-                    if (n?.Filhos?.length) walk(n.Filhos, path);
-                });
-            }
-            walk(detalhamento, '');
+        arvoreContainer.addEventListener('change', e => {
+            const select = e.target.closest('select[data-prop="Nome"]');
+            if (!select) return;
+            clearInvalidVisual(select);
+            const data = $(select).select2('data');
+            const idRaw = data && data.length ? data[0].id : null;
+            const txt = data && data.length ? (data[0].text || '').trim() : '';
+            const idStr = (idRaw ?? '').toString().trim();
+            const currentPath = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const currentNode = getNode(currentPath);
+            const depth = currentPath.length;
+            if (!idStr) { if (currentNode) { currentNode.NivelId = ''; currentNode.Nome = ''; } return; }
+            const currentIndex = currentPath[currentPath.length - 1];
+            const parentPath = currentPath.slice(0, -1);
+            let siblings;
+            if (parentPath.length === 0) siblings = detalhamento;
+            else { const parentNode = getNode(parentPath); siblings = parentNode ? parentNode.Filhos : []; }
+            const keyNew = keyFromSelect(idStr, txt);
+            const isDuplicateSibling = siblings.some((sibling, index) => index !== currentIndex && sameLevelKey(sibling) === keyNew);
+            if (isDuplicateSibling) {
+                const msg = 'Este nível já foi adicionado neste agrupamento. Por favor, escolha outro.';
+                if (hasSwal) Swal.fire({ icon: 'warning', title: 'Duplicado no mesmo pai', text: msg }); else alert(msg);
+                $(select).val(null).trigger('change.select2');
+                if (currentNode) { currentNode.NivelId = ''; currentNode.Nome = ''; }
+                return;
+            }
+            const pathStr = currentPath.join('-');
+            let found = 0;
+            (function walk(arr, d, prefix) {
+                arr.forEach((n, i) => {
+                    const p = (prefix ? prefix + '-' : '') + i;
+                    if (d === depth && p !== pathStr && sameLevelKey(n) === keyNew) found++;
+                    if (n?.Filhos?.length) walk(n.Filhos, d + 1, p);
+                });
+            })(detalhamento, 1, '');
+            if (found > 0) {
+                const msg = `O nível "${txt}" já foi usado no nível ${depth} deste orçamento.`;
+                if (hasSwal) Swal.fire({ icon: 'error', title: 'Duplicidade de nível', text: msg }); else alert(msg);
+                $(select).val(null).trigger('change.select2');
+                if (currentNode) { currentNode.NivelId = ''; currentNode.Nome = ''; }
+                return;
+            }
+            if (currentNode) { currentNode.NivelId = idStr; currentNode.Nome = txt; }
+        });
 
-            if (faltantes.length) {
-                faltantes.forEach(markInvalidByPath);
-                const msg = 'Obrigatório selecionar todos os níveis (incluindo subníveis).';
-                if (hasSwal) Swal.fire({ icon:'warning', title:'Atenção', text: msg });
-                else alert(msg);
-                const first = faltantes[0];
-                const el = arvoreContainer.querySelector(`.orcamento-node[data-path="${first}"] select[data-prop="Nome"]`);
-                if (el) $(el).select2('open');
-                return false;
-            }
-            return true;
-        }
+        arvoreContainer.addEventListener('input', e => {
+            const inputValor = e.target.closest('input[data-prop="ValorPrevisto"]');
+            if (!inputValor) return;
+            const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
+            const node = getNode(path);
+            if (node) node.ValorPrevisto = parseFloat(inputValor.value) || 0;
+            calcularTotaisNosDados();
+            atualizarReadonlyValores();
+        });
 
-        function validateGlobalDuplicates() {
-            const mapDepth = new Map(); // depth -> Set(keys)
-            const dups = [];
-            function walk(arr, depth, prefix) {
-                arr.forEach((n, i) => {
-                    const key = sameLevelKey(n);
-                    if (key) {
-                        if (!mapDepth.has(depth)) mapDepth.set(depth, new Set());
-                        const set = mapDepth.get(depth);
-                        const path = (prefix ? prefix + '-' : '') + i;
-                        if (set.has(key)) dups.push({ depth, name: n.Nome, path });
-                        else set.add(key);
-                    }
-                    if (n?.Filhos?.length) walk(n.Filhos, depth + 1, (prefix ? prefix + '-' : '') + i);
-                });
-            }
-            walk(detalhamento, 1, '');
-            if (dups.length) {
-                dups.forEach(d => markInvalidByPath(d.path));
-                const msg = `Não é permitido repetir o mesmo nível no mesmo nível hierárquico. Ex.: ${dups[0].name} (nível ${dups[0].depth}).`;
-                if (hasSwal) Swal.fire({ icon:'error', title:'Duplicidade de nível', text: msg });
-                else alert(msg);
-                return false;
-            }
-            return true;
-        }
+        let ultimoNivelFocado = 1;
+        arvoreContainer.addEventListener('focusin', e => {
+            const select = e.target.closest('.select2-niveis');
+            if (select) ultimoNivelFocado = parseInt(select.dataset.nivel) || 1;
+        });
 
-        // ---------- EVENTOS -----------
-        btnAdicionarNivel.addEventListener('click', () => {
-            detalhamento.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
-            renderizarArvore();
-        });
+        btnAbrirNovoNivel.addEventListener('click', () => {
+            const nivel = ultimoNivelFocado || 1;
+            const $ph = $('#modal-nivel-placeholder');
+            $.get('/Niveis/NovoNivelPartial', { nivel })
+                .done(html => {
+                    $ph.empty().append(html);
+                    const $modal = $ph.find('.modal').last();
+                    if (!$modal.length) { if (hasSwal) Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível abrir o formulário de nível.' }); else alert('Não foi possível abrir o formulário de nível.'); return; }
+                    const $form = $modal.find('form');
+                    if ($.validator && $.validator.unobtrusive) $.validator.unobtrusive.parse($form);
+                    $form.on('submit', function (ev) {
+                        ev.preventDefault();
+                        if ($.validator && $.validator.unobtrusive && !$form.valid()) return;
+                        const $chk = $form.find('input[type="checkbox"][name="Ativo"]');
+                        const ativo = $chk.prop('checked') ? 'true' : 'false';
+                        $form.find('input[type="hidden"][name="Ativo"]').remove();
+                        let $field = $form.find('input[name="Ativo"]');
+                        if ($field.length === 0) { $field = $('<input>', { type: 'hidden', name: 'Ativo' }).appendTo($form); }
+                        $field.val(ativo);
+                        const payload = $form.serialize();
+                        $.ajax({ url: $form.attr('action'), type: $form.attr('method') || 'POST', data: payload })
+                            .done(() => {
+                                const modal = bootstrap.Modal.getInstance($modal[0]) || new bootstrap.Modal($modal[0]);
+                                modal.hide();
+                                if (hasSwal) Swal.fire({ icon: 'success', title: 'Nível', text: 'Nível salvo com sucesso!' }); else alert('Nível salvo com sucesso!');
+                                if (window.renderizarArvore) window.renderizarArvore();
+                            })
+                            .fail(xhr => {
+                                const txt = (xhr.responseText || '').toString();
+                                const isDup = txt.includes('UX_Nivel_Nome') || txt.includes('2601') || xhr.status === 409;
+                                const msg = isDup ? 'Já existe um nível com esse nome neste nível hierárquico.' : 'Falha ao salvar o nível. Verifique os campos.';
+                                if (hasSwal) Swal.fire({ icon: 'error', title: 'Erro ao salvar', text: msg }); else alert(msg);
+                            });
+                    });
+                    $modal.on('hidden.bs.modal', function () { $(this).remove(); });
+                    const modal = new bootstrap.Modal($modal[0]); modal.show();
+                })
+                .fail(() => {
+                    if (hasSwal) Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha ao carregar o cadastro de nível.' }); else alert('Falha ao carregar o cadastro de nível.');
+                });
+        });
 
-        arvoreContainer.addEventListener('click', e => {
-            const btn = e.target.closest('button[data-action]');
-            if (!btn) return;
+        btnSalvarDetalhamento.addEventListener('click', () => {
+            document.querySelectorAll('.select2-niveis.is-invalid').forEach(el => clearInvalidVisual(el));
+            syncSelectionsIntoData();
+            if (!validateAllSelected()) return;
+            if (!validateGlobalDuplicates()) return;
 
-            const elem = btn.closest('.orcamento-node');
-            const path = elem.dataset.path.split('-').map(Number);
-            const act  = btn.dataset.action;
+            calcularTotaisNosDados();
+            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+            const mElem = document.getElementById('modalDetalhamento');
+            const inst = bootstrap.Modal.getInstance(mElem);
+            if (inst) inst.hide();
+        });
 
-            if (act === 'add-child') {
-                const pNode = getNode(path);
-                if (!pNode) return;
-                pNode.Filhos = pNode.Filhos || [];
-                pNode.Filhos.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
-
-                let childrenContainer = elem.querySelector('.orcamento-node-children');
-                if (!childrenContainer) {
-                    childrenContainer = document.createElement('div');
-                    childrenContainer.className = 'orcamento-node-children';
-                    elem.appendChild(childrenContainer);
-                }
-
-                const novoFilhoIndex = pNode.Filhos.length - 1;
-                const novoFilhoPath = [...path, novoFilhoIndex];
-                const novoFilhoData = pNode.Filhos[novoFilhoIndex];
-                const novoFilhoElemento = criarNodeElemento(novoFilhoData, novoFilhoPath);
-
-                childrenContainer.appendChild(novoFilhoElemento);
-                $(novoFilhoElemento).find('.select2-niveis').each(function(){ inicializarSelect2ParaElemento($(this)); });
-
-                const parentInput = elem.querySelector('input[data-prop="ValorPrevisto"]');
-                parentInput.readOnly = true;
-                parentInput.style.backgroundColor = '#e9ecef';
-
-                calcularTotaisNosDados();
-                atualizarReadonlyValores();
-                atualizarPainelInstrumento();
-
-            } else if (act === 'remove') {
-                const parentPath = path.slice(0, -1);
-                const idx = path[path.length - 1];
-                if (parentPath.length === 0) detalhamento.splice(idx, 1);
-                else {
-                    const p = getNode(parentPath);
-                    if (p) p.Filhos.splice(idx, 1);
-                }
-                renderizarArvore();
-                calcularTotaisNosDados();
-                atualizarReadonlyValores();
-                atualizarPainelInstrumento();
-            }
-        });
-
-        // Change: salva ID (string) + TEXTO no node e valida duplicidades
-        arvoreContainer.addEventListener('change', e => {
-            const select = e.target.closest('select[data-prop="Nome"]');
-            if (!select) return;
-
-            clearInvalidVisual(select);
-
-            const data = $(select).select2('data');
-            const idRaw = data && data.length ? data[0].id : null;
-            const txt   = data && data.length ? (data[0].text || '').trim() : '';
-
-            const idStr = (idRaw ?? '').toString().trim();
-
-            const currentPath = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
-            const currentNode = getNode(currentPath);
-            const depth = currentPath.length;
-
-            if (!idStr) {
-                if (currentNode) { currentNode.NivelId = ''; currentNode.Nome = ''; }
-                return;
-            }
-
-            // 1) irmãos
-            const currentIndex = currentPath[currentPath.length - 1];
-            const parentPath = currentPath.slice(0, -1);
-            let siblings;
-            if (parentPath.length === 0) siblings = detalhamento;
-            else {
-                const parentNode = getNode(parentPath);
-                siblings = parentNode ? parentNode.Filhos : [];
-            }
-            const keyNew = keyFromSelect(idStr, txt);
-            const isDuplicateSibling = siblings.some((sibling, index) =>
-                index !== currentIndex && sameLevelKey(sibling) === keyNew
-            );
-            if (isDuplicateSibling) {
-                const msg = 'Este nível já foi adicionado neste agrupamento. Por favor, escolha outro.';
-                if (hasSwal) Swal.fire({ icon:'warning', title:'Duplicado no mesmo pai', text: msg }); else alert(msg);
-                $(select).val(null).trigger('change.select2');
-                if (currentNode) { currentNode.NivelId = ''; currentNode.Nome = ''; }
-                return;
-            }
-
-            // 2) global por nível (mesma profundidade)
-            const pathStr = currentPath.join('-');
-            let found = 0;
-            (function walk(arr, d, prefix){
-                arr.forEach((n,i)=>{
-                    const p = (prefix ? prefix+'-':'')+i;
-                    if (d===depth && p!==pathStr && sameLevelKey(n) === keyNew) found++;
-                    if (n?.Filhos?.length) walk(n.Filhos, d+1, p);
-                });
-            })(detalhamento, 1, '');
-            if (found>0) {
-                const msg = `O nível "${txt}" já foi usado no nível ${depth} deste orçamento.`;
-                if (hasSwal) Swal.fire({ icon:'error', title:'Duplicidade de nível', text: msg }); else alert(msg);
-                $(select).val(null).trigger('change.select2');
-                if (currentNode) { currentNode.NivelId = ''; currentNode.Nome = ''; }
-                return;
-            }
-
-            if (currentNode) { currentNode.NivelId = idStr; currentNode.Nome = txt; }
-        });
-
-        arvoreContainer.addEventListener('input', e => {
-            const inputValor = e.target.closest('input[data-prop="ValorPrevisto"]');
-            if (!inputValor) return;
-            const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
-            const node = getNode(path);
-            if (node) node.ValorPrevisto = parseFloat(inputValor.value) || 0;
-            calcularTotaisNosDados(); atualizarReadonlyValores(); atualizarPainelInstrumento();
-        });
-
-        let ultimoNivelFocado = 1;
-        arvoreContainer.addEventListener('focusin', e => {
-            const select = e.target.closest('.select2-niveis');
-            if (select) ultimoNivelFocado = parseInt(select.dataset.nivel) || 1;
-        });
-
-        // Cadastrar Novo Nível (corrigido "Ativo")
-        btnAbrirNovoNivel.addEventListener('click', () => {
-            const nivel = ultimoNivelFocado || 1;
-            const $ph = $('#modal-nivel-placeholder');
-            $.get('/Niveis/NovoNivelPartial', { nivel })
-             .done(html => {
-                 $ph.empty().append(html);
-                 const $modal = $ph.find('.modal').last();
-                 if (!$modal.length) {
-                    if (hasSwal) Swal.fire({icon:'error', title:'Erro', text:'Não foi possível abrir o formulário de nível.'});
-                    else alert('Não foi possível abrir o formulário de nível.');
-                    return;
-                 }
-                 const $form = $modal.find('form');
-                 if ($.validator && $.validator.unobtrusive) $.validator.unobtrusive.parse($form);
-
-                 $form.on('submit', function(ev){
-                     ev.preventDefault();
-                     if ($.validator && $.validator.unobtrusive && !$form.valid()) return;
-
-                     // >>> NORMALIZA O CHECKBOX "Ativo" (envia um único valor) <<<
-                     const $chk = $form.find('input[type="checkbox"][name="Ativo"]');
-                     const ativo = $chk.prop('checked') ? 'true' : 'false';
-                     $form.find('input[type="hidden"][name="Ativo"]').remove(); // remove hidden gerado pelo TagHelper
-                     let $field = $form.find('input[name="Ativo"]');
-                     if ($field.length === 0) {
-                       $field = $('<input>', { type: 'hidden', name: 'Ativo' }).appendTo($form);
-                     }
-                     $field.val(ativo);
-
-                     const payload = $form.serialize();
-                     $.ajax({ url:$form.attr('action'), type:$form.attr('method')||'POST', data: payload })
-                     .done(() => {
-                        const modal = bootstrap.Modal.getInstance($modal[0]) || new bootstrap.Modal($modal[0]);
-                        modal.hide();
-                        if (hasSwal) Swal.fire({icon:'success', title:'Nível', text:'Nível salvo com sucesso!'}); else alert('Nível salvo com sucesso!');
-                        if (window.renderizarArvore) window.renderizarArvore();
-                     })
-                     .fail(xhr => {
-                        const txt = (xhr.responseText || '').toString();
-                        const isDup = txt.includes('UX_Nivel_Nome') || txt.includes('2601') || xhr.status === 409;
-                        const msg = isDup
-                          ? 'Já existe um nível com esse nome neste nível hierárquico.'
-                          : 'Falha ao salvar o nível. Verifique os campos.';
-                        if (hasSwal) Swal.fire({icon:'error', title:'Erro ao salvar', text: msg});
-                        else alert(msg);
-                     });
-                 });
-
-                 $modal.on('hidden.bs.modal', function(){ $(this).remove(); });
-                 const modal = new bootstrap.Modal($modal[0]); modal.show();
-             })
-             .fail(() => {
-                if (hasSwal) Swal.fire({icon:'error', title:'Erro', text:'Falha ao carregar o cadastro de nível.'});
-                else alert('Falha ao carregar o cadastro de nível.');
-             });
-        });
-
-        // Confirmar Detalhes
-        btnSalvarDetalhamento.addEventListener('click', () => {
-            document.querySelectorAll('.select2-niveis.is-invalid').forEach(el => clearInvalidVisual(el));
-            syncSelectionsIntoData();
-            if (!validateAllSelected()) return;
-            if (!validateGlobalDuplicates()) return;
-
-            calcularTotaisNosDados();
-            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-            const mElem = document.getElementById('modalDetalhamento');
-            const inst = bootstrap.Modal.getInstance(mElem);
-            if (inst) inst.hide();
-            atualizarPainelInstrumento();
-        });
-
-        selectInstrumento.addEventListener('change', atualizarPainelInstrumento);
-
-        // ---------- SUBMIT COM JUSTIFICATIVA ----------
-        form.addEventListener('submit', async (e) => {
-            syncSelectionsIntoData();
-            detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-
-            const inst = getInstrumentoSelecionado();
-            if (!inst) return;
-
-            const total = parseFloat(valorTotalInput.value || '0');
-            if (total > inst.valor && !justificativaHidden.value) {
-                e.preventDefault();
-                if (!hasSwal) {
-                    const j = prompt('O total excede o valor do instrumento. Informe justificativa:');
-                    if (!j) return; justificativaHidden.value = j; form.submit(); return;
-                }
-                const { value: text, isConfirmed } = await Swal.fire({
-                    icon:'warning',
-                    title:'Justificativa necessária',
-                    html:`<p>O total do orçamento <strong>(R$ ${toBR(total)})</strong> excede o valor do instrumento <strong>(R$ ${toBR(inst.valor)})</strong>.</p><p>Descreva a justificativa:</p>`,
-                    input:'textarea', inputPlaceholder:'Motivo do excedente...',
-                    inputValidator: v => !v ? 'Por favor, descreva a justificativa.' : undefined,
-                    showCancelButton:true, confirmButtonText:'Confirmar e salvar', cancelButtonText:'Cancelar'
-                });
-                if (isConfirmed && text) { justificativaHidden.value = text; form.submit(); }
-            }
-        });
-
-        // ---------- INICIALIZAÇÃO ----------
-        calcularTotaisNosDados();
-        detalhamentoJsonInput.value = JSON.stringify(detalhamento);
-        renderizarArvore();
-        // sincroniza seleções pré-renderizadas
-        syncSelectionsIntoData();
-        atualizarReadonlyValores();
-        atualizarPainelInstrumento();
-    });
-    </script>
+        // ---------- INICIALIZAÇÃO ----------
+        calcularTotaisNosDados();
+        detalhamentoJsonInput.value = JSON.stringify(detalhamento);
+        renderizarArvore();
+        syncSelectionsIntoData();
+        atualizarReadonlyValores();
+    });
+    </script>
 }

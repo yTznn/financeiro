@@ -4,7 +4,6 @@ namespace Financeiro.Models
     {
         public int Id { get; set; }
         public string Nome { get; set; } = string.Empty;
-        public int TipoAcordoId { get; set; }
         public DateTime VigenciaInicio { get; set; }
         public DateTime VigenciaFim { get; set; }
         public decimal ValorPrevistoTotal { get; set; }

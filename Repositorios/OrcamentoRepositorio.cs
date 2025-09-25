@@ -19,11 +19,25 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
-        public async Task<IEnumerable<Orcamento>> ListarAsync()
+        public async Task<IEnumerable<OrcamentoListViewModel>> ListarAsync()
         {
-            const string sql = "SELECT * FROM Orcamento ORDER BY VigenciaInicio DESC;";
+            const string sql = @"
+                SELECT
+                    o.Id, o.Nome, o.Observacao, o.VigenciaInicio, o.VigenciaFim,
+                    o.ValorPrevistoTotal, o.Ativo,
+                    ISNULL(c.TotalComprometido, 0) AS ValorComprometido,
+                    (o.ValorPrevistoTotal - ISNULL(c.TotalComprometido, 0)) AS SaldoDisponivel
+                FROM [dbo].[Orcamento] o
+                LEFT JOIN (
+                     SELECT OrcamentoId, SUM(ValorContrato) AS TotalComprometido
+                     FROM [dbo].[Contrato]
+                     WHERE OrcamentoId IS NOT NULL
+                     GROUP BY OrcamentoId
+                ) c ON o.Id = c.OrcamentoId
+                ORDER BY o.Nome;";
+
             using var conn = _factory.CreateConnection();
-            return await conn.QueryAsync<Orcamento>(sql);
+            return await conn.QueryAsync<OrcamentoListViewModel>(sql);
         }
 
         public async Task<Orcamento?> ObterHeaderPorIdAsync(int id)
@@ -32,17 +46,10 @@ namespace Financeiro.Repositorios
             using var conn = _factory.CreateConnection();
             return await conn.QuerySingleOrDefaultAsync<Orcamento>(sql, new { id });
         }
-
+        
         public async Task<IEnumerable<OrcamentoDetalhe>> ObterDetalhesPorOrcamentoIdAsync(int orcamentoId)
         {
-            const string sql = @"
-                WITH DetalhesHierarquia AS (
-                    SELECT * FROM OrcamentoDetalhe WHERE OrcamentoId = @orcamentoId AND ParentId IS NULL
-                    UNION ALL
-                    SELECT d.* FROM OrcamentoDetalhe d
-                    INNER JOIN DetalhesHierarquia h ON d.ParentId = h.Id
-                )
-                SELECT * FROM DetalhesHierarquia;";
+            const string sql = "SELECT * FROM OrcamentoDetalhe WHERE OrcamentoId = @orcamentoId;";
             using var conn = _factory.CreateConnection();
             return await conn.QueryAsync<OrcamentoDetalhe>(sql, new { orcamentoId });
         }
@@ -55,12 +62,24 @@ namespace Financeiro.Repositorios
 
             try
             {
+                // CORREÇÃO: Removida a coluna 'TipoAcordoId' da query
                 const string sqlHeader = @"
-                    INSERT INTO Orcamento (Nome, TipoAcordoId, VigenciaInicio, VigenciaFim, ValorPrevistoTotal, Ativo, Observacao)
-                    VALUES (@Nome, @TipoAcordoId, @VigenciaInicio, @VigenciaFim, @ValorPrevistoTotal, @Ativo, @Observacao);
+                    INSERT INTO Orcamento (Nome, VigenciaInicio, VigenciaFim, ValorPrevistoTotal, Ativo, DataCriacao, Observacao)
+                    VALUES (@Nome, @VigenciaInicio, @VigenciaFim, @ValorPrevistoTotal, @Ativo, @DataCriacao, @Observacao);
                     SELECT CAST(SCOPE_IDENTITY() AS INT);";
-                var orcamentoId = await conn.QuerySingleAsync<int>(sqlHeader, vm, transaction);
+                
+                var orcamentoId = await conn.QuerySingleAsync<int>(sqlHeader, new 
+                {
+                    vm.Nome,
+                    vm.VigenciaInicio,
+                    vm.VigenciaFim,
+                    vm.ValorPrevistoTotal,
+                    vm.Ativo,
+                    DataCriacao = DateTime.Now,
+                    vm.Observacao
+                }, transaction);
 
+                vm.Id = orcamentoId;
                 await InserirDetalhesRecursivo(conn, transaction, orcamentoId, null, vm.Detalhamento);
 
                 transaction.Commit();
@@ -89,7 +108,7 @@ namespace Financeiro.Repositorios
                     ParentId = parentId,
                     detalhe.Nome,
                     detalhe.ValorPrevisto,
-                    detalhe.PermiteLancamento
+                    PermiteLancamento = (detalhe.Filhos == null || !detalhe.Filhos.Any())
                 }, transaction);
                 
                 if (detalhe.Filhos != null && detalhe.Filhos.Any())
@@ -107,10 +126,10 @@ namespace Financeiro.Repositorios
 
             try
             {
+                // CORREÇÃO: Removida a coluna 'TipoAcordoId' da query
                 const string sqlHeader = @"
                     UPDATE Orcamento SET
                         Nome = @Nome,
-                        TipoAcordoId = @TipoAcordoId,
                         VigenciaInicio = @VigenciaInicio,
                         VigenciaFim = @VigenciaFim,
                         ValorPrevistoTotal = @ValorPrevistoTotal,
@@ -121,7 +140,6 @@ namespace Financeiro.Repositorios
                 await conn.ExecuteAsync(sqlHeader, new 
                 { 
                     vm.Nome,
-                    vm.TipoAcordoId,
                     vm.VigenciaInicio,
                     vm.VigenciaFim,
                     vm.ValorPrevistoTotal,
