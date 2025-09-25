@@ -179,11 +179,9 @@
             div.className = 'orcamento-node';
             div.style.marginLeft = `${indent}px`;
             div.dataset.path = path.join('-');
-
             const isParent = node.Filhos && node.Filhos.length > 0;
             const isL3 = path.length >= 3;
             const nivelHierarquico = path.length;
-
             let initialOption = '';
             const optVal = (node.NivelId ?? '').toString().trim();
             if (optVal) {
@@ -191,7 +189,6 @@
             } else if (node.Nome) {
                 initialOption = `<option value="${escapeHtml(node.Nome)}" selected>${escapeHtml(node.Nome)}</option>`;
             }
-
             div.innerHTML = `
                 <div class="d-flex align-items-center mb-1 p-2 border rounded">
                     <div class="flex-grow-1">
@@ -368,32 +365,58 @@
         }
 
         // ---------- EVENTOS -----------
+        
+        // CORRIGIDO: Adiciona apenas o novo elemento sem redesenhar a árvore inteira.
         btnAdicionarNivel.addEventListener('click', () => {
-            detalhamento.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
-            renderizarArvore();
+            const novoNodeData = { NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] };
+            detalhamento.push(novoNodeData);
+            
+            const novoNodePath = [detalhamento.length - 1];
+            const novoElemento = criarNodeElemento(novoNodeData, novoNodePath);
+            
+            arvoreContainer.appendChild(novoElemento);
+            inicializarSelect2ParaElemento($(novoElemento).find('.select2-niveis'));
         });
 
+        // CORRIGIDO: Adiciona/Remove elementos específicos sem redesenhar a árvore inteira.
         arvoreContainer.addEventListener('click', e => {
             const btn = e.target.closest('button[data-action]');
             if (!btn) return;
             const elem = btn.closest('.orcamento-node');
             const path = elem.dataset.path.split('-').map(Number);
             const act = btn.dataset.action;
+
             if (act === 'add-child') {
-                const pNode = getNode(path); if (!pNode) return;
+                const pNode = getNode(path);
+                if (!pNode) return;
                 pNode.Filhos = pNode.Filhos || [];
-                pNode.Filhos.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
-                renderizarArvore();
+                const novoFilhoData = { NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] };
+                pNode.Filhos.push(novoFilhoData);
+                const novoFilhoPath = [...path, pNode.Filhos.length - 1];
+                const novoElemento = criarNodeElemento(novoFilhoData, novoFilhoPath);
+                let childrenContainer = elem.querySelector('.orcamento-node-children');
+                if (!childrenContainer) {
+                    childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'orcamento-node-children';
+                    elem.appendChild(childrenContainer);
+                }
+                childrenContainer.appendChild(novoElemento);
+                inicializarSelect2ParaElemento($(novoElemento).find('.select2-niveis'));
+                const parentInput = elem.querySelector('input[data-prop="ValorPrevisto"]');
+                parentInput.readOnly = true;
+                parentInput.style.backgroundColor = '#e9ecef';
             } else if (act === 'remove') {
                 const parentPath = path.slice(0, -1);
                 const idx = path[path.length - 1];
-                if (parentPath.length === 0) detalhamento.splice(idx, 1);
-                else {
+                if (parentPath.length === 0) {
+                    detalhamento.splice(idx, 1);
+                } else {
                     const p = getNode(parentPath);
                     if (p) p.Filhos.splice(idx, 1);
                 }
-                renderizarArvore();
+                elem.remove();
             }
+            syncSelectionsIntoData();
             calcularTotaisNosDados();
             atualizarReadonlyValores();
         });
@@ -452,8 +475,7 @@
             calcularTotaisNosDados();
             atualizarReadonlyValores();
         });
-
-        // ***** CÓDIGO CORRIGIDO E COMPLETO PARA O MODAL 'CADASTRAR NOVO NÍVEL' *****
+        
         let ultimoNivelFocado = 1;
         arvoreContainer.addEventListener('focusin', e => {
             const select = e.target.closest('.select2-niveis');
@@ -463,24 +485,19 @@
         btnAbrirNovoNivel.addEventListener('click', () => {
             const nivel = ultimoNivelFocado || 1;
             const $placeholder = $('#modal-nivel-placeholder');
-
             $.get('/Niveis/NovoNivelPartial', { nivel })
                 .done(html => {
                     $placeholder.html(html);
                     const $modal = $placeholder.find('.modal');
                     const $form = $placeholder.find('form');
-
                     if ($.validator && $.validator.unobtrusive) {
                         $.validator.unobtrusive.parse($form);
                     }
-
                     $form.on('submit', function (e) {
                         e.preventDefault();
-
                         if (!$form.valid()) {
                             return;
                         }
-
                         $.ajax({
                             url: $form.attr('action'),
                             type: $form.attr('method'),
@@ -488,16 +505,15 @@
                             success: function (response) {
                                 const modalInstance = bootstrap.Modal.getInstance($modal[0]);
                                 modalInstance.hide();
-                                
                                 Swal.fire({ icon: 'success', title: 'Sucesso!', text: response.message });
                             },
                             error: function (xhr) {
                                 let mensagemErro = "Ocorreu uma falha ao salvar.";
-                                if (xhr.status === 409) { // Conflito (Duplicado)
+                                if (xhr.status === 409) {
                                     mensagemErro = xhr.responseText;
                                     Swal.fire({ icon: 'error', title: 'Item duplicado', text: mensagemErro });
-                                } else if (xhr.status === 400) { // Erro de validação do servidor
-                                    $form.find(".text-danger").text("");
+                                } else if (xhr.status === 400) {
+                                    $form.find(".field-validation-error").text("");
                                     const errorData = xhr.responseJSON;
                                     for (const key in errorData) {
                                         if (errorData.hasOwnProperty(key)) {
@@ -511,11 +527,9 @@
                             }
                         });
                     });
-
                     $modal.on('hidden.bs.modal', function () {
                         $(this).remove();
                     });
-
                     const modal = new bootstrap.Modal($modal[0]);
                     modal.show();
                 })
@@ -523,7 +537,6 @@
                     Swal.fire({ icon: 'error', title: 'Erro', text: 'Falha ao carregar o formulário de cadastro de nível.' });
                 });
         });
-
 
         btnSalvarDetalhamento.addEventListener('click', () => {
             document.querySelectorAll('.select2-niveis.is-invalid').forEach(el => clearInvalidVisual(el));
