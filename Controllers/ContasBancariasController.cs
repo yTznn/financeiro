@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Servicos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class ContasBancariasController : Controller
     {
         private readonly IContaBancariaRepositorio _repo;

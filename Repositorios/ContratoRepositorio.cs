@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Globalization; // Necessário para converter decimal para string PT-BR
 
 namespace Financeiro.Repositorios
 {
@@ -18,6 +19,22 @@ namespace Financeiro.Repositorios
         {
             _factory = factory;
         }
+
+        // [NOVO] Implementação do cálculo de saldo comprometido do orçamento
+        public async Task<decimal> ObterTotalComprometidoPorOrcamentoAsync(int orcamentoId, int? ignorarContratoId = null)
+        {
+            using var conn = _factory.CreateConnection();
+            const string sql = @"
+                SELECT SUM(ValorContrato) 
+                FROM Contrato 
+                WHERE OrcamentoId = @orcamentoId 
+                  AND Ativo = 1
+                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+
+            var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { orcamentoId, ignorarId = ignorarContratoId });
+            return total ?? 0m;
+        }
+
         public async Task InserirAsync(ContratoViewModel vm)
         {
             using var conn = _factory.CreateConnection();
@@ -51,18 +68,19 @@ namespace Financeiro.Repositorios
                     SELECT CAST(SCOPE_IDENTITY() as int);";
                 
                 var contratoId = await conn.QuerySingleAsync<int>(sqlInsertContrato, contrato, transaction);
-                vm.Id = contratoId; // Importante: Mantemos isso para ter o ID do novo contrato
+                vm.Id = contratoId;
 
-                await InserirContratoNaturezasAsync(conn, transaction, contratoId, vm.NaturezasIds);
+                // Passamos a lista completa de naturezas (com valor)
+                await InserirContratoNaturezasAsync(conn, transaction, contratoId, vm.Naturezas);
+                
                 transaction.Commit();
             }
-            catch (Exception)
+            catch
             {
                 transaction.Rollback();
                 throw;
             }
         }
-        // Financeiro/Repositorios/ContratoRepositorio.cs
 
         public async Task AtualizarAsync(ContratoViewModel vm)
         {
@@ -87,7 +105,7 @@ namespace Financeiro.Repositorios
                     ValorContrato = vm.ValorContrato,
                     Observacao = vm.Observacao,
                     Ativo = vm.Ativo,
-                    OrcamentoId = vm.OrcamentoId // <-- MELHORIA APLICADA
+                    OrcamentoId = vm.OrcamentoId
                 };
 
                 const string sqlUpdateContrato = @"
@@ -111,21 +129,37 @@ namespace Financeiro.Repositorios
                 const string sqlDeleteNaturezas = "DELETE FROM ContratoNatureza WHERE ContratoId = @ContratoId;";
                 await conn.ExecuteAsync(sqlDeleteNaturezas, new { ContratoId = vm.Id }, transaction);
                 
-                await InserirContratoNaturezasAsync(conn, transaction, vm.Id, vm.NaturezasIds);
+                // Passamos a lista completa de naturezas (com valor)
+                await InserirContratoNaturezasAsync(conn, transaction, vm.Id, vm.Naturezas);
                 
                 transaction.Commit();
             }
-            catch (Exception)
+            catch
             {
                 transaction.Rollback();
                 throw;
             }
         }
+
         public async Task ExcluirAsync(int id)
         {
-            const string sql = "DELETE FROM Contrato WHERE Id = @id;";
+            const string sqlNatureza = "DELETE FROM ContratoNatureza WHERE ContratoId = @id;";
+            const string sqlContrato = "DELETE FROM Contrato WHERE Id = @id;";
+            
             using var conn = _factory.CreateConnection();
-            await conn.ExecuteAsync(sql, new { id });
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            try
+            {
+                await conn.ExecuteAsync(sqlNatureza, new { id }, tx);
+                await conn.ExecuteAsync(sqlContrato, new { id }, tx);
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
 
         public async Task<ContratoViewModel?> ObterParaEdicaoAsync(int id)
@@ -136,8 +170,29 @@ namespace Financeiro.Repositorios
             var contrato = await conn.QuerySingleOrDefaultAsync<Contrato>(sqlContrato, new { id });
             if (contrato == null) return null;
 
-            const string sqlNaturezas = "SELECT NaturezaId FROM ContratoNatureza WHERE ContratoId = @id;";
-            var naturezasIds = await conn.QueryAsync<int>(sqlNaturezas, new { id });
+            // [ATUALIZADO] Busca NaturezaId + Valor e o Nome da Natureza (JOIN)
+            const string sqlNaturezas = @"
+                SELECT cn.NaturezaId, n.Nome AS NomeNatureza, cn.Valor
+                FROM ContratoNatureza cn
+                INNER JOIN Natureza n ON cn.NaturezaId = n.Id
+                WHERE cn.ContratoId = @id;";
+                
+            var naturezas = await conn.QueryAsync<ContratoNaturezaViewModel>(sqlNaturezas, new { id });
+
+            // Calcula o número de meses para reverter o valor TOTAL -> MENSAL
+            int mesesEdicao = 1;
+            if (contrato.DataFim >= contrato.DataInicio)
+            {
+                mesesEdicao = ((contrato.DataFim.Year - contrato.DataInicio.Year) * 12) + contrato.DataFim.Month - contrato.DataInicio.Month + 1;
+                if (mesesEdicao < 1) mesesEdicao = 1;
+            }
+
+            // Ajusta os valores das naturezas (Banco tem Total -> Tela quer Mensal)
+            var listaNaturezas = naturezas.ToList();
+            foreach (var n in listaNaturezas)
+            {
+                n.Valor = n.Valor / mesesEdicao;
+            }
 
             var vm = new ContratoViewModel
             {
@@ -152,19 +207,36 @@ namespace Financeiro.Repositorios
                 ValorContrato = contrato.ValorContrato,
                 Observacao = contrato.Observacao,
                 Ativo = contrato.Ativo,
-                NaturezasIds = naturezasIds.ToList()
+                OrcamentoId = contrato.OrcamentoId,
+                Naturezas = listaNaturezas
             };
 
-            if (vm.DataFim >= vm.DataInicio)
+            // [CORREÇÃO DO ERRO DE COMPILAÇÃO]
+            // Convertemos o cálculo decimal para string formatada em PT-BR
+            if (vm.ValorContrato > 0)
             {
-                int numeroDeMeses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
-                if (numeroDeMeses > 0 && vm.ValorContrato > 0)
-                {
-                    vm.ValorMensal = Math.Round(vm.ValorContrato / numeroDeMeses, 2);
-                }
+                decimal valorMensalCalc = vm.ValorContrato / mesesEdicao;
+                // "N2" formata com 2 casas decimais e separadores (ex: "25.000,00")
+                vm.ValorMensal = valorMensalCalc.ToString("N2", new CultureInfo("pt-BR"));
             }
 
             return vm;
+        }
+
+        // [MÉTODO ATUALIZADO] Grava o valor na tabela de ligação
+        private async Task InserirContratoNaturezasAsync(IDbConnection conn, IDbTransaction transaction, int contratoId, List<ContratoNaturezaViewModel> naturezas)
+        {
+            if (naturezas == null || !naturezas.Any()) return;
+
+            const string sql = "INSERT INTO ContratoNatureza (ContratoId, NaturezaId, Valor) VALUES (@ContratoId, @NaturezaId, @Valor);";
+            foreach (var item in naturezas)
+            {
+                // Salva apenas naturezas com valor > 0 ou salva zerado se quiser permitir
+                if (item.Valor >= 0) 
+                {
+                    await conn.ExecuteAsync(sql, new { ContratoId = contratoId, item.NaturezaId, item.Valor }, transaction);
+                }
+            }
         }
 
         public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int pagina, int tamanhoPagina = 10)
@@ -214,12 +286,8 @@ namespace Financeiro.Repositorios
             return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, idAtual });
         }
         
-        // =======================================================================================
-        // MÉTODO ALTERADO ABAIXO
-        // =======================================================================================
         public async Task<(IEnumerable<VwFornecedor> Itens, int TotalItens)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina)
         {
-            // Duas queries: a primeira busca os itens da página, a segunda conta o total de itens.
             const string sql = @"
                 SELECT * FROM Vw_Fornecedores
                 WHERE Nome LIKE @TermoBusca OR Documento LIKE @TermoBusca
@@ -231,7 +299,6 @@ namespace Financeiro.Repositorios
             
             using var conn = _factory.CreateConnection();
             
-            // Usamos QueryMultipleAsync para executar as duas queries de uma só vez
             using var multi = await conn.QueryMultipleAsync(sql, new 
             { 
                 TermoBusca = $"%{termoBusca}%",
@@ -239,17 +306,11 @@ namespace Financeiro.Repositorios
                 TamanhoPagina = tamanhoPagina
             });
 
-            // Lemos o resultado da primeira query (a lista de fornecedores)
             var itens = await multi.ReadAsync<VwFornecedor>();
-            // Lemos o resultado da segunda query (a contagem total)
             var totalItens = await multi.ReadSingleAsync<int>();
 
             return (itens, totalItens);
         }
-        // =======================================================================================
-        // FIM DO MÉTODO ALTERADO
-        // =======================================================================================
-
 
         public async Task<IEnumerable<Natureza>> ListarTodasNaturezasAsync()
         {
@@ -274,23 +335,9 @@ namespace Financeiro.Repositorios
             });
         }
 
-        private async Task InserirContratoNaturezasAsync(IDbConnection conn, IDbTransaction transaction, int contratoId, List<int> naturezasIds)
-        {
-            if (naturezasIds == null || !naturezasIds.Any()) return;
-
-            const string sql = "INSERT INTO ContratoNatureza (ContratoId, NaturezaId) VALUES (@ContratoId, @NaturezaId);";
-            foreach (var naturezaId in naturezasIds)
-            {
-                await conn.ExecuteAsync(sql, new { ContratoId = contratoId, NaturezaId = naturezaId }, transaction);
-            }
-        }
-
         private (int? pfId, int? pjId) ParseFornecedorId(string fornecedorIdCompleto)
         {
-            if (string.IsNullOrEmpty(fornecedorIdCompleto))
-            {
-                return (null, null);
-            }
+            if (string.IsNullOrEmpty(fornecedorIdCompleto)) return (null, null);
 
             var partes = fornecedorIdCompleto.Split('-');
             if (partes.Length != 2) throw new ArgumentException("FornecedorId inválido.");

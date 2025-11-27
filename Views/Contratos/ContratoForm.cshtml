@@ -1,12 +1,15 @@
 @model Financeiro.Models.ViewModels.ContratoViewModel
 @using Financeiro.Models
 @using System.Linq
+@using System.Globalization
 
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
     var naturezas = ViewBag.Naturezas as IEnumerable<Natureza> ?? Enumerable.Empty<Natureza>();
     var fornecedorAtual = ViewBag.FornecedorAtual as VwFornecedor;
-    var selecionadas = Model.NaturezasIds ?? new List<int>();
+    
+    // Serializa as naturezas já salvas para recriar a tabela no JS
+    var naturezasJson = Json.Serialize(Model.Naturezas);
 }
 
 <div id="pageFlags"
@@ -25,8 +28,6 @@
     <input type="hidden" asp-for="Id" />
     <input type="hidden" name="justificativa" id="justificativa-hidden" />
 
-    @* ... (outros campos do formulário - sem alterações) ... *@
-    
     <div class="col-12">
         <label asp-for="FornecedorIdCompleto" class="form-label fw-semibold"></label>
         <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-select w-100">
@@ -56,24 +57,27 @@
         <textarea asp-for="ObjetoContrato" class="form-control" rows="3"></textarea>
         <span asp-validation-for="ObjetoContrato" class="text-danger"></span>
     </div>
-    <div class="row"></div>
+
     <div class="col-12 mb-3">
-            <label asp-for="OrcamentoId" class="form-label"></label>
-            <select asp-for="OrcamentoId" 
-                    class="form-select" 
-                    asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
-                <option value="">Nenhum (não vincular)</option>
-            </select>
-        </div>
+        <label asp-for="OrcamentoId" class="form-label fw-bold text-primary"></label>
+        <select asp-for="OrcamentoId" 
+                class="form-select" 
+                id="OrcamentoId"
+                asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
+            <option value="">-- Selecione o Orçamento --</option>
+        </select>
+        <div class="form-text">O contrato será abatido do saldo deste orçamento.</div>
+        <span asp-validation-for="OrcamentoId" class="text-danger"></span>
     </div>
+
     <div class="col-12 col-md-4">
         <label asp-for="DataInicio" class="form-label fw-semibold"></label>
-        <input asp-for="DataInicio" type="date" class="form-control" />
+        <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio" />
         <span asp-validation-for="DataInicio" class="text-danger"></span>
     </div>
     <div class="col-12 col-md-4">
         <label asp-for="DataFim" class="form-label fw-semibold"></label>
-        <input asp-for="DataFim" type="date" class="form-control" />
+        <input asp-for="DataFim" type="date" class="form-control" id="DataFim" />
         <span asp-validation-for="DataFim" class="text-danger"></span>
     </div>
     <div class="col-12 col-md-4">
@@ -85,36 +89,65 @@
         <label asp-for="ValorMensal" class="form-label fw-semibold"></label>
         <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input asp-for="ValorMensal" type="text" class="form-control money"/>
+            <input asp-for="ValorMensal" type="text" class="form-control money" id="ValorMensal" />
         </div>
         <span asp-validation-for="ValorMensal" class="text-danger"></span>
     </div>
 
     <div class="col-12 col-md-4">
-        <label asp-for="ValorContrato" class="form-label fw-semibold"></label>
+        <label asp-for="ValorContrato" class="form-label fw-semibold">Valor Total (Calculado)</label>
         <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input asp-for="ValorContrato" type="text" class="form-control money"/>
+            <input asp-for="ValorContrato" type="text" class="form-control money" id="ValorContrato" readonly style="background-color: #e9ecef;" />
         </div>
         <span asp-validation-for="ValorContrato" class="text-danger"></span>
     </div>
-    
-    @* --- CAMPO DE NATUREZAS COM O NOVO ALERTA --- *@
-    <div class="col-12">
-        <label asp-for="NaturezasIds" class="form-label fw-semibold"></label>
-        <select asp-for="NaturezasIds" id="naturezas-select" multiple class="form-select w-100">
-            @foreach (var n in naturezas)
-            {
-                var isSel = selecionadas.Contains(n.Id);
-                <option value="@n.Id" selected="@(isSel ? "selected" : null)">@n.Nome</option>
-            }
-        </select>
-        <span asp-validation-for="NaturezasIds" class="text-danger"></span>
 
-        <div id="alerta-multiplas-naturezas" class="alert alert-warning mt-2 d-none" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <strong>Atenção:</strong> Ao selecionar múltiplas naturezas, será necessário especificar em qual delas cada lançamento de consumo mensal será alocado.
+    <div class="col-12 mt-4">
+        <div class="card border-secondary mb-3">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-secondary"><i class="bi bi-pie-chart-fill me-2"></i>Rateio por Natureza</h5>
+                <button type="button" class="btn btn-sm btn-outline-success" id="btn-add-natureza">
+                    <i class="bi bi-plus-lg"></i> Adicionar Natureza
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle" id="tb-naturezas">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 60%;">Natureza / Especialidade</th>
+                                <th style="width: 30%;">Valor Mensal (R$)</th>
+                                <th style="width: 10%;" class="text-center">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lista-naturezas">
+                            </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td class="text-end">Total Rateado (Mensal):</td>
+                                <td id="total-rateado-display">R$ 0,00</td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td class="text-end">Meta Mensal do Contrato:</td>
+                                <td id="meta-mensal-display" class="text-primary">R$ 0,00</td>
+                                <td></td>
+                            </tr>
+                            <tr id="linha-diferenca" class="d-none table-warning">
+                                <td class="text-end text-danger">Diferença Mensal:</td>
+                                <td id="diferenca-display" class="text-danger">R$ 0,00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-muted small">
+                A soma dos valores mensais das naturezas deve ser igual ao <strong>Valor Mensal</strong> do contrato.
+            </div>
         </div>
+        <span asp-validation-for="Naturezas" class="text-danger d-block mt-1"></span>
     </div>
 
     <div class="col-12">
@@ -129,8 +162,8 @@
         </div>
     </div>
 
-    <div class="col-12 mt-4">
-        <button type="submit" class="btn btn-primary">
+    <div class="col-12 mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary" id="btn-salvar">
             <i class="bi bi-check-circle me-1"></i> Salvar Alterações
         </button>
 
@@ -155,214 +188,209 @@
 }
 
 @section Scripts {
-    @{
-        await Html.RenderPartialAsync("_ValidationScriptsPartial");
-    }
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-        // ... (Funções globais e configuração do JQuery Validate - sem alterações) ...
+        // --- CONFIGURAÇÃO GLOBAL DO VALIDATOR ---
+        // Aceita formato com ponto ou vírgula
+        $.validator.methods.number = function (value, element) {
+            return this.optional(element) || 
+                   /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value) || 
+                   /^-?\d+(?:[\.,]\d+)?$/.test(value);
+        }
+        
+        $.validator.setDefaults({ onkeyup: false, onclick: false });
+
+        // --- FUNÇÕES AUXILIARES ---
         function parseCurrency(value) {
-            if (value === null || value === undefined) return 0;
-            const s = String(value).trim();
-            if (!s) return 0;
+            if (!value) return 0;
+            let s = String(value).trim();
+            // Se formato americano
+            if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+            // Formato PT-BR
             const normalized = s.replace(/\./g, '').replace(',', '.');
             const n = parseFloat(normalized);
             return isNaN(n) ? 0 : n;
         }
+        
         function formatCurrency(value) {
-            let v = Number(value);
-            if (isNaN(v)) v = 0;
-            return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-        if ($.validator) {
-            $.validator.setDefaults({
-                onkeyup: false,
-                onfocusout: function (element) { $(element).valid(); }
-            });
-            $.validator.methods.number = function (value, element) {
-                return this.optional(element) || !isNaN(parseCurrency(value));
-            };
-            $.validator.methods.min = function (value, element, param) {
-                const v = parseCurrency(value);
-                const p = typeof param === "string" ? parseFloat(param.replace(",", ".")) : param;
-                return this.optional(element) || (!isNaN(v) && v >= p);
-            };
-            $.validator.methods.max = function (value, element, param) {
-                const v = parseCurrency(value);
-                const p = typeof param === "string" ? parseFloat(param.replace(",", ".")) : param;
-                return this.optional(element) || (!isNaN(v) && v <= p);
-            };
-            $.validator.methods.range = function (value, element, params) {
-                const v = parseCurrency(value);
-                const min = typeof params[0] === "string" ? parseFloat(params[0].replace(",", ".")) : params[0];
-                const max = typeof params[1] === "string" ? parseFloat(params[1].replace(",", ".")) : params[1];
-                return this.optional(element) || (!isNaN(v) && v >= min && v <= max);
-            };
+
+        function formatCurrencyBRL(value) {
+            return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
+
+        // Dados Backend
+        const naturezasDisponiveis = @Html.Raw(Json.Serialize(naturezas.Select(n => new { id = n.Id, text = n.Nome })));
+        let naturezasAtuais = @Html.Raw(Json.Serialize(Model.Naturezas));
 
         $(document).ready(function () {
             const isEdit = @((Model.Id > 0).ToString().ToLower());
             const form = $('#form-contrato');
-            let originalFormData = form.serialize();
+            const listaNaturezas = $('#lista-naturezas');
+            const valorTotalInput = $('#ValorContrato');
+            const valorMensalInput = $('#ValorMensal'); 
 
-            // ... (Cálculo bidirecional, alertas, etc. - sem alterações) ...
-            const dataInicioInput  = $('#DataInicio');
-            const dataFimInput     = $('#DataFim');
-            const valorMensalInput = $('#ValorMensal');
-            const valorTotalInput  = $('#ValorContrato');
-            let lastChanged = 'mensal'; 
-            function calcularValores() {
-                const dataInicioStr = dataInicioInput.val();
-                const dataFimStr    = dataFimInput.val();
-                if (!dataInicioStr || !dataFimStr) return;
-                const dataInicio = new Date(dataInicioStr + 'T00:00:00');
-                const dataFim    = new Date(dataFimStr + 'T00:00:00');
-                if (dataFim < dataInicio) return;
-                const meses = (dataFim.getFullYear() - dataInicio.getFullYear()) * 12 + (dataFim.getMonth() - dataInicio.getMonth()) + 1;
-                const numeroDeMeses = meses > 0 ? meses : 1;
-                if (lastChanged === 'mensal') {
-                    const valorMensal = parseCurrency(valorMensalInput.val());
-                    const valorTotalCalculado = valorMensal * numeroDeMeses;
-                    valorTotalInput.val(formatCurrency(valorTotalCalculado));
-                } else if (lastChanged === 'total') {
-                    const valorTotal = parseCurrency(valorTotalInput.val());
-                    const valorMensalCalculado = valorTotal / numeroDeMeses;
-                    valorMensalInput.val(formatCurrency(valorMensalCalculado));
-                }
-            }
-            valorMensalInput.on('input', function () { lastChanged = 'mensal'; calcularValores(); });
-            valorTotalInput .on('input', function () { lastChanged = 'total';  calcularValores(); });
-            dataInicioInput .on('change', calcularValores);
-            dataFimInput    .on('change', calcularValores);
-            valorMensalInput.val(formatCurrency(parseCurrency(valorMensalInput.val())));
-            valorTotalInput .val(formatCurrency(parseCurrency(valorTotalInput.val())));
-            const flags = document.getElementById("pageFlags");
-            if (flags) {
-                const ok  = (flags.dataset.success || "").trim();
-                const err = (flags.dataset.error   || "").trim();
-                if (ok) Swal.fire({ icon: "success", text: ok });
-                if (err) Swal.fire({ icon: "error", title: "Ocorreram erros de validação", html: err });
+            // --- TABELA DE NATUREZAS ---
+            function adicionarLinhaNatureza(id = "", valor = 0) {
+                const index = listaNaturezas.children('tr').length;
+                
+                const tr = $(`
+                    <tr class="linha-natureza">
+                        <td>
+                            <select name="Naturezas[${index}].NaturezaId" class="form-select select2-natureza" required>
+                                <option value="">Selecione...</option>
+                            </select>
+                            <input type="hidden" name="Naturezas[${index}].NomeNatureza" class="nome-hidden" />
+                        </td>
+                        <td>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="Naturezas[${index}].Valor" 
+                                       class="form-control money valor-natureza" 
+                                       value="${formatCurrency(valor)}" required />
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-row" title="Remover">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `);
+
+                listaNaturezas.append(tr);
+
+                const select = tr.find('.select2-natureza');
+                naturezasDisponiveis.forEach(n => {
+                    const option = new Option(n.text, n.id, false, n.id == id);
+                    select.append(option);
+                });
+
+                select.select2({ theme: 'bootstrap-5', width: '100%', dropdownParent: tr });
+                select.on('change', function() { tr.find('.nome-hidden').val($(this).find("option:selected").text()); });
+                if(id) select.trigger('change');
+
+                tr.find('.money').on('blur', function() {
+                    const v = parseCurrency($(this).val());
+                    $(this).val(formatCurrency(v));
+                    recalcularTotais();
+                });
+
+                recalcularTotais();
             }
 
-            // --- SELECT2 ---
-            $('#fornecedor-select').select2({
-                theme: 'bootstrap-5',
-                width: '100%',
-                minimumInputLength: 1,
-                ajax: {
-                    url: '@Url.Action("BuscarFornecedores","Contratos")',
-                    dataType: 'json',
-                    delay: 250,
-                    data: p => ({ term: p.term, page: p.page || 1 }),
-                    processResults: (d, p) => ({ results: d.results, pagination: { more: d.pagination.more } })
-                }
+            listaNaturezas.on('click', '.btn-remove-row', function() {
+                $(this).closest('tr').remove();
+                reindexarNaturezas();
+                recalcularTotais();
             });
-            $('#naturezas-select').select2({ theme: 'bootstrap-5', width: '100%' });
 
-            // --- NOVA LÓGICA PARA EXIBIR/OCULTAR O ALERTA ---
-            const naturezasSelect = $('#naturezas-select');
-            const alertaNaturezas = $('#alerta-multiplas-naturezas');
+            $('#btn-add-natureza').click(function() { adicionarLinhaNatureza(); });
 
-            function toggleAlertaNaturezas() {
-                const qtdSelecionadas = naturezasSelect.val()?.length || 0;
-                if (qtdSelecionadas > 1) {
-                    alertaNaturezas.removeClass('d-none');
+            listaNaturezas.on('input', '.valor-natureza', function() {
+                recalcularTotais();
+            });
+
+            function reindexarNaturezas() {
+                listaNaturezas.children('tr').each(function(i) {
+                    $(this).find('select').attr('name', `Naturezas[${i}].NaturezaId`);
+                    $(this).find('.nome-hidden').attr('name', `Naturezas[${i}].NomeNatureza`);
+                    $(this).find('input.valor-natureza').attr('name', `Naturezas[${i}].Valor`);
+                });
+            }
+
+            // --- CÁLCULO VISUAL ---
+            function recalcularTotais() {
+                let somaRateio = 0;
+                $('.valor-natureza').each(function() {
+                    somaRateio += parseCurrency($(this).val());
+                });
+
+                const valorMensalMeta = parseCurrency(valorMensalInput.val());
+                const diferenca = valorMensalMeta - somaRateio;
+
+                $('#total-rateado-display').text(formatCurrencyBRL(somaRateio));
+                $('#meta-mensal-display').text(formatCurrencyBRL(valorMensalMeta));
+                
+                const linhaDif = $('#linha-diferenca');
+                const displayDif = $('#diferenca-display');
+
+                if (Math.abs(diferenca) > 0.05) {
+                    linhaDif.removeClass('d-none');
+                    displayDif.text(formatCurrencyBRL(diferenca));
+                    $('#btn-salvar').addClass('btn-danger').removeClass('btn-primary').html('<i class="bi bi-exclamation-octagon me-1"></i> Corrija o Rateio');
                 } else {
-                    alertaNaturezas.addClass('d-none');
+                    linhaDif.addClass('d-none');
+                    $('#btn-salvar').addClass('btn-primary').removeClass('btn-danger').html('<i class="bi bi-check-circle me-1"></i> Salvar Alterações');
                 }
             }
 
-            // Verifica no carregamento da página
-            toggleAlertaNaturezas();
-            // E verifica toda vez que o select mudar
-            naturezasSelect.on('change', function() {
-                toggleAlertaNaturezas();
-                // Mantém a revalidação dos campos de valor
-                $('#ValorMensal, #ValorContrato').each(function () { $(this).valid(); });
+            if (naturezasAtuais && naturezasAtuais.length > 0) {
+                naturezasAtuais.forEach(n => adicionarLinhaNatureza(n.naturezaId, n.valor));
+            } else {
+                adicionarLinhaNatureza();
+            }
+
+            // --- CÁLCULO TOTAL ---
+            const dataInicioInput = $('#DataInicio');
+            const dataFimInput    = $('#DataFim');
+
+            function calcularValorContrato() {
+                const d1 = dataInicioInput.val();
+                const d2 = dataFimInput.val();
+                const vMensal = parseCurrency(valorMensalInput.val());
+
+                if (d1 && d2 && vMensal > 0) {
+                    const inicio = new Date(d1 + 'T00:00:00');
+                    const fim    = new Date(d2 + 'T00:00:00');
+                    if (fim >= inicio) {
+                        const meses = (fim.getFullYear() - inicio.getFullYear()) * 12 + (fim.getMonth() - inicio.getMonth()) + 1;
+                        valorTotalInput.val(formatCurrency(vMensal * meses));
+                    }
+                }
+                recalcularTotais();
+            }
+
+            $('#DataInicio, #DataFim').on('change', calcularValorContrato);
+            valorMensalInput.on('input', function() { calcularValorContrato(); });
+            valorMensalInput.on('blur', function() { 
+                $(this).val(formatCurrency(parseCurrency($(this).val()))); 
+                calcularValorContrato(); 
             });
 
-            // ... (Sugerir número e Histórico - sem alterações) ...
+            // Selects
+            $('#fornecedor-select').select2({ theme: 'bootstrap-5', width: '100%', ajax: { url: '@Url.Action("BuscarFornecedores","Contratos")', dataType: 'json', delay: 250, data: p => ({ term: p.term, page: p.page || 1 }), processResults: (d, p) => ({ results: d.results, pagination: { more: d.pagination.more } }) } });
+            $('#OrcamentoId').select2({ theme: 'bootstrap-5', width: '100%' });
+
+            // --- SUBMIT (LIMPO) ---
+            form.on('submit', function(e) {
+                const vMensal = parseCurrency(valorMensalInput.val());
+                let somaRateio = 0;
+                $('.valor-natureza').each(function() { somaRateio += parseCurrency($(this).val()); });
+                
+                if (Math.abs(vMensal - somaRateio) > 0.05) {
+                    e.preventDefault();
+                    Swal.fire({ icon: 'error', title: 'Atenção!', text: `A soma do rateio não bate com o Valor Mensal.` });
+                    return false;
+                }
+                // O submit segue normal, enviando "25.000,00" como string.
+            });
+            
             $('#AnoContrato').on('change', function () {
                 var ano = $(this).val();
-                if (ano && !isEdit) {
-                    $.get('@Url.Action("SugerirNumero","Contratos")', { ano: ano }, function (d) {
-                        $('#NumeroContrato').val(d.proximoNumero);
-                    });
-                }
-            }).trigger('change');
-            if (isEdit) {
-                $('#historico-container').load('@Url.Action("Historico","Contratos", new { id = Model.Id })');
-            }
-
-            // --- LÓGICA DE SUBMISSÃO E JUSTIFICATIVA (COM MENSAGEM ATUALIZADA) ---
-            form.on('submit', async function (e) {
-                const mensalInput = $('#ValorMensal');
-                const totalInput = $('#ValorContrato');
-                const mensalDec = parseCurrency(mensalInput.val()).toFixed(2).replace('.', ',');
-                const totalDec  = parseCurrency(totalInput.val()).toFixed(2).replace('.', ',');
-                mensalInput.val(mensalDec);
-                totalInput.val(totalDec);
-
-                const currentFormData = form.serialize();
-                let precisaJustificativa = false;
-                let motivo = "";
-
-                if (isEdit) {
-                    if (currentFormData !== originalFormData) {
-                        precisaJustificativa = true;
-                        motivo = "Informe a justificativa para a alteração do contrato:";
-                    } else {
-                        e.preventDefault();
-                        Swal.fire({ icon: 'info', text: 'Nenhuma alteração foi feita.' });
-                        mensalInput.val(formatCurrency(parseCurrency(mensalInput.val())));
-                        totalInput.val(formatCurrency(parseCurrency(totalInput.val())));
-                        return;
-                    }
-                } else {
-                    const qtdNaturezas = ($('#naturezas-select').val() || []).length;
-                    if (qtdNaturezas > 1) {
-                        precisaJustificativa = true;
-                        // MENSAGEM ATUALIZADA
-                        motivo = "Você selecionou mais de uma natureza. Por favor, informe o motivo para vincular este contrato a múltiplas naturezas.";
-                    }
-                }
-
-                if (precisaJustificativa) {
-                    e.preventDefault(); 
-                    const { value: justificativa, isConfirmed } = await Swal.fire({
-                        title: "Justificativa Necessária",
-                        text: motivo,
-                        input: "textarea",
-                        inputAttributes: { maxlength: 1000 },
-                        inputValidator: (v) => !v ? "A justificativa é obrigatória." : undefined,
-                        showCancelButton: true,
-                        confirmButtonText: "Confirmar e Salvar",
-                        cancelButtonText: "Cancelar"
-                    });
-
-                    if (isConfirmed && justificativa) {
-                        $('#justificativa-hidden').val(justificativa);
-                        $(this).off('submit').submit();
-                    } else {
-                        mensalInput.val(formatCurrency(parseCurrency(mensalInput.val())));
-                        totalInput.val(formatCurrency(parseCurrency(totalInput.val())));
-                    }
-                }
+                if (ano && !isEdit) $.get('@Url.Action("SugerirNumero","Contratos")', { ano: ano }, function (d) { if(d && d.proximoNumero) $('#NumeroContrato').val(d.proximoNumero); });
             });
+            if (!isEdit) $('#AnoContrato').trigger('change');
         });
     </script>
 }
 
 <style>
-    .form-control-plaintext.fs-5.fw-bold { padding-left: 0.5rem; }
-    @@media (max-width: 767.98px) {
-        .col-12 > .btn {
-            display: block; width: 100%; float: none !important;
-            margin-bottom: 8px; margin-left: 0 !important; margin-right: 0 !important;
-        }
-        .col-12 > .btn-primary { order: 1; }
-        .col-12 > .btn-info    { order: 2; }
-        .col-12 > .btn-secondary { order: 3; }
-    }
+    .table tfoot td { font-weight: bold; }
+    .select2-container .select2-selection--single { height: 38px; line-height: 38px; }
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 36px; }
+    .btn-danger { transition: all 0.3s; }
 </style>

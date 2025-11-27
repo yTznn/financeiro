@@ -76,5 +76,7 @@ namespace Financeiro.Models.ViewModels
                     new[] { nameof(NovaDataFim) });
             }
         }
+        [Display(Name = "O valor informado é mensal?")]
+        public bool EhValorMensal { get; set; }
     }
 }

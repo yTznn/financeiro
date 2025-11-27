@@ -1,0 +1,147 @@
+@model Financeiro.Models.ViewModels.MovimentacaoViewModel
+@{ ViewData["Title"] = "Novo Pagamento"; }
+
+<h2>🚀 Novo Lançamento Financeiro</h2>
+<hr />
+
+<!-- [IMPORTANTE] enctype é obrigatório para upload de arquivos -->
+<form asp-action="Salvar" method="post" id="formMov" enctype="multipart/form-data">
+    @Html.AntiForgeryToken()
+    
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Data do Pagamento</label>
+            <input asp-for="DataMovimentacao" class="form-control" type="date" />
+            <span asp-validation-for="DataMovimentacao" class="text-danger"></span>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold">Valor Total (R$)</label>
+            <input asp-for="ValorTotal" class="form-control money" id="ValorTotal" />
+            <span asp-validation-for="ValorTotal" class="text-danger"></span>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Histórico / Descrição</label>
+            <input asp-for="Historico" class="form-control" placeholder="Ex: Pagamento Nota Fiscal 123" />
+            <span asp-validation-for="Historico" class="text-danger"></span>
+        </div>
+
+        <!-- [NOVO] Campo de Anexo -->
+        <div class="col-12">
+            <label asp-for="ArquivoAnexo" class="form-label fw-bold">
+                <i class='bx bx-paperclip'></i> Comprovante / Documento
+            </label>
+            <input asp-for="ArquivoAnexo" class="form-control" type="file" accept=".pdf, .png, .jpg, .jpeg" />
+            <div class="form-text">Selecione o comprovante (PDF ou Imagem) para auditoria.</div>
+            <span asp-validation-for="ArquivoAnexo" class="text-danger"></span>
+        </div>
+    </div>
+
+    <hr class="my-4" />
+
+    <div class="card bg-light border-0 shadow-sm">
+        <div class="card-header fw-bold bg-white border-bottom d-flex justify-content-between align-items-center">
+            <span><i class='bx bx-layer'></i> Origem do Recurso (Rateio)</span>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnAddItem">
+                <i class='bx bx-plus'></i> Adicionar Item
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" id="tbRateio">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 30%">Instrumento (Fonte)</th>
+                            <th style="width: 25%">Contrato (Opcional)</th>
+                            <th style="width: 25%">Natureza/Despesa</th>
+                            <th style="width: 15%">Valor (R$)</th>
+                            <th style="width: 5%"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaRateio">
+                        <!-- JS adiciona aqui -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-muted small">
+            A soma dos itens deve bater com o Valor Total informado acima.
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-success btn-lg">
+            <i class='bx bx-check-double'></i> Confirmar Pagamento
+        </button>
+        <a asp-action="Index" class="btn btn-secondary btn-lg">Voltar</a>
+    </div>
+</form>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        // Configuração global para aceitar vírgula no jQuery Validate
+        $.validator.methods.number = function (value, element) {
+            return this.optional(element) || /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value);
+        }
+        $.validator.setDefaults({ onkeyup: false, onclick: false });
+
+        $(document).ready(function() {
+            // Verifica alertas de erro do backend (TempData)
+            const msgErro = '@Html.Raw(TempData["Erro"])';
+            if(msgErro) Swal.fire({ icon: 'error', title: 'Atenção', html: msgErro });
+
+            let idx = 0;
+
+            // Adicionar Linha na Tabela
+            $('#btnAddItem').click(function() {
+                const tr = `
+                <tr>
+                    <td>
+                        <select name="Rateios[${idx}].InstrumentoId" class="form-select form-select-sm" required>
+                            <option value="">Selecione...</option>
+                            @foreach(var i in (SelectList)ViewBag.Instrumentos) { <option value="@i.Value">@i.Text</option> }
+                        </select>
+                    </td>
+                    <td>
+                        <select name="Rateios[${idx}].ContratoId" class="form-select form-select-sm">
+                            <option value="">(Avulso)</option>
+                            @foreach(var c in (SelectList)ViewBag.Contratos) { <option value="@c.Value">@c.Text</option> }
+                        </select>
+                    </td>
+                    <td>
+                        <select name="Rateios[${idx}].NaturezaId" class="form-select form-select-sm" required>
+                            <option value="">Selecione...</option>
+                            @foreach(var n in (SelectList)ViewBag.Naturezas) { <option value="@n.Value">@n.Text</option> }
+                        </select>
+                    </td>
+                    <td>
+                        <input name="Rateios[${idx}].Valor" class="form-control form-control-sm money-input" required placeholder="0,00" />
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-danger btn-sm remove-row" title="Remover"><i class='bx bx-trash'></i></button>
+                    </td>
+                </tr>`;
+                $('#listaRateio').append(tr);
+                idx++;
+            });
+
+            $(document).on('click', '.remove-row', function() { $(this).closest('tr').remove(); });
+
+            // Formatação básica de moeda nos inputs (classe money e money-input)
+            // Transforma 1000 em 1.000,00 ao sair do campo
+            $(document).on('blur', '.money-input, .money', function() {
+                let val = $(this).val().replace(/\./g, '').replace(',', '.');
+                if(val && !isNaN(val)) {
+                    $(this).val(parseFloat(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            });
+            
+            // Dispara um item inicial se a lista estiver vazia
+            if ($('#listaRateio tr').length === 0) {
+                $('#btnAddItem').click();
+            }
+        });
+    </script>
+}

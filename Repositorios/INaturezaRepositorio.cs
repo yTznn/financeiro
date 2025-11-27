@@ -11,5 +11,6 @@ namespace Financeiro.Repositorios
         Task AtualizarAsync(int id, NaturezaViewModel vm);
         Task<Natureza?> ObterPorIdAsync(int id);
         Task<IEnumerable<Natureza>> ListarAsync();
+        Task<IEnumerable<Natureza>> ListarTodasAsync();
     }
 }

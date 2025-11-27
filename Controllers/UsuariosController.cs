@@ -10,9 +10,11 @@ using Financeiro.Servicos;                        // ← novo (IUsuarioService)
 using Financeiro.Infraestrutura;
 using System.Security.Claims;
 using Dapper;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class UsuariosController : Controller
     {
         private readonly IUsuarioRepositorio          _usuarioRepositorio;

@@ -9,6 +9,11 @@
     var br = new CultureInfo("pt-BR");
 }
 
+@* --- MENSAGENS DE SUCESSO/ERRO (SWEETALERT) --- *@
+<div id="pageFlags"
+     data-success="@(TempData["MensagemSucesso"] ?? TempData["Sucesso"])"
+     data-error="@(TempData["MensagemErro"] ?? TempData["Erro"])"></div>
+
 <div class="container-md mt-4" style="max-width: 980px;">
     <div class="text-center mb-4">
         <h2 class="fw-bold">@ViewBag.Title</h2>
@@ -32,7 +37,7 @@
 
                         <div class="row g-3">
                             <div class="col-12 col-md-4">
-                                <div class="text-muted small">Valor vigente</div>
+                                <div class="text-muted small">Valor vigente (Total)</div>
                                 <div class="fs-5 fw-bold">@versaoAtual.ValorContrato.ToString("C", br)</div>
                             </div>
                             <div class="col-12 col-md-8">
@@ -52,7 +57,7 @@
         </div>
     }
 
-    @* summary de validação *@
+    @* Summary de validação padrão do ASP.NET *@
     <div asp-validation-summary="All" class="alert alert-danger d-none" id="validationSummary"></div>
 
     <form asp-action="Salvar"
@@ -60,7 +65,9 @@
           class="row g-3 bg-white p-4 rounded shadow-sm border position-relative"
           id="formAditivoContrato"
           novalidate
-          data-valor-atual="@((versaoAtual?.ValorContrato ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))">
+          data-valor-atual="@((versaoAtual?.ValorContrato ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))"
+          data-fim-atual="@(versaoAtual?.DataFim.ToString("yyyy-MM-dd") ?? "")">
+        
         @Html.AntiForgeryToken()
         <input asp-for="ContratoId" type="hidden" />
 
@@ -76,7 +83,7 @@
 
         <div class="col-md-4">
             <label asp-for="DataInicioAditivo" class="form-label fw-semibold">Início do Aditivo</label>
-            <input asp-for="DataInicioAditivo" type="date" class="form-control" />
+            <input asp-for="DataInicioAditivo" type="date" class="form-control" id="DataInicioAditivo" />
             <span asp-validation-for="DataInicioAditivo" class="text-danger small"></span>
         </div>
 
@@ -84,10 +91,18 @@
             <label asp-for="NovoValor" class="form-label fw-semibold">Valor (positivo)</label>
             <div class="input-group">
                 <span class="input-group-text">R$</span>
-                <input asp-for="NovoValor" type="text" inputmode="decimal" class="form-control" id="NovoValor" />
+                <input asp-for="NovoValor" type="text" class="form-control money" id="NovoValor" />
             </div>
+            
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" asp-for="EhValorMensal" id="EhValorMensal">
+                <label class="form-check-label text-muted small" for="EhValorMensal">
+                    É um acréscimo/desconto na parcela mensal?
+                </label>
+            </div>
+
             <div id="ajudaValor" class="form-text fw-semibold mt-1 text-secondary"></div>
-            <div id="previewValor" class="small mt-1 text-muted"></div>
+            <div id="previewValor" class="small mt-1 text-muted bg-light p-2 rounded"></div>
             <span asp-validation-for="NovoValor" class="text-danger small"></span>
         </div>
 
@@ -133,30 +148,33 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // aceitar formato pt-BR no client-validate
+        // Aceitar formato PT-BR no validator
         if (window.jQuery && $.validator) {
             $.validator.methods.number = function (value, element) {
-                if (this.optional(element)) return true;
-                const clean = (value || '').replace(/\./g, '').replace(',', '.');
-                return clean.trim() !== '' && !isNaN(clean);
+                return this.optional(element) || 
+                       /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value) ||
+                       /^-?\d+(?:[\.,]\d+)?$/.test(value);
             };
         }
 
-        const form        = document.getElementById('formAditivoContrato');
-        const tipoSelect  = document.getElementById('tipoAditivoSelect');
-        const campoValor  = document.getElementById('campo-novo-valor');
-        const campoData   = document.getElementById('campo-nova-data');
-        const campoObj    = document.getElementById('campo-novo-objeto');
-        const inpValor    = document.getElementById('NovoValor');
-        const ajudaValor  = document.getElementById('ajudaValor');
-        const preview     = document.getElementById('previewValor');
-        const novaFim     = document.getElementById('NovaDataFim');
-        const flagAuto    = document.getElementById('flagAuto');
+        const form          = document.getElementById('formAditivoContrato');
+        const tipoSelect    = document.getElementById('tipoAditivoSelect');
+        const campoValor    = document.getElementById('campo-novo-valor');
+        const campoData     = document.getElementById('campo-nova-data');
+        const campoObj      = document.getElementById('campo-novo-objeto');
+        const inpValor      = document.getElementById('NovoValor');
+        const chkMensal     = document.getElementById('EhValorMensal');
+        const ajudaValor    = document.getElementById('ajudaValor');
+        const preview       = document.getElementById('previewValor');
+        const novaFim       = document.getElementById('NovaDataFim');
+        const iniAditivo    = document.getElementById('DataInicioAditivo');
+        const flagAuto      = document.getElementById('flagAuto');
 
         // enum: Prazo=1, PrazoAcrescimo=2, PrazoSupressao=3, Supressao=4, Acrescimo=5
         const T = { Prazo:1, PrazoAcrescimo:2, PrazoSupressao:3, Supressao:4, Acrescimo:5 };
 
-        const valorAtual = Number(form?.dataset?.valorAtual || '0'); // vindo do data-valor-atual
+        const valorAtual = Number(form?.dataset?.valorAtual || '0');
+        const fimAtualStr = form?.dataset?.fimAtual || ''; 
 
         function show(el, on){ if (el) el.style.display = on ? 'block' : 'none'; }
         function req(el, on){ if (el){ el.required = !!on; el.setAttribute('aria-required', on ? 'true' : 'false'); } }
@@ -164,10 +182,10 @@
         function atualizarAjudaValor(tipo){
             let msg = '';
             switch (tipo) {
-                case T.Supressao:       msg = 'O valor digitado será SUBTRAÍDO do valor vigente do contrato.'; break;
-                case T.Acrescimo:       msg = 'O valor digitado será ACRESCENTADO ao valor vigente do contrato.'; break;
-                case T.PrazoSupressao:  msg = 'O valor digitado será SUBTRAÍDO e o prazo também será alterado.'; break;
-                case T.PrazoAcrescimo:  msg = 'O valor digitado será ACRESCENTADO e o prazo também será alterado.'; break;
+                case T.Supressao:       msg = 'O valor será SUBTRAÍDO do total vigente.'; break;
+                case T.Acrescimo:       msg = 'O valor será ACRESCENTADO ao total vigente.'; break;
+                case T.PrazoSupressao:  msg = 'O valor será SUBTRAÍDO e o prazo alterado.'; break;
+                case T.PrazoAcrescimo:  msg = 'O valor será ACRESCENTADO e o prazo alterado.'; break;
                 default: msg = '';
             }
             ajudaValor.textContent = msg;
@@ -176,11 +194,22 @@
 
         function parsePtBr(s){
             if(!s) return 0;
+            if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
             return Number((s || '').replace(/\./g,'').replace(',','.')) || 0;
         }
+        
         function fmtBr(n){
             try { return Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
             catch { return 'R$ ' + (n || 0).toFixed(2); }
+        }
+
+        function mesesEntre(d1Str, d2Str) {
+            if(!d1Str || !d2Str) return 0;
+            const i = new Date(d1Str + 'T00:00:00');
+            const f = new Date(d2Str + 'T00:00:00');
+            if (isNaN(i) || isNaN(f)) return 0;
+            if (f < i) return 0;
+            return (f.getFullYear() - i.getFullYear()) * 12 + (f.getMonth() - i.getMonth()) + 1;
         }
 
         function atualizarPreview(){
@@ -189,14 +218,29 @@
             const precisaValor = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
             if(!precisaValor || !inpValor) return;
 
-            const delta = parsePtBr(inpValor.value);
+            let delta = parsePtBr(inpValor.value);
             if (delta <= 0) return;
+
+            if (chkMensal && chkMensal.checked) {
+                const dataFinalConsiderada = (novaFim && novaFim.value) ? novaFim.value : fimAtualStr;
+                const dataInicialConsiderada = (iniAditivo && iniAditivo.value) ? iniAditivo.value : new Date().toISOString().slice(0, 10);
+                
+                const meses = mesesEntre(dataInicialConsiderada, dataFinalConsiderada);
+                
+                if(meses > 0) {
+                    const deltaTotal = delta * meses;
+                    preview.innerHTML = `<small class='d-block mb-1'>Cálculo Mensal: ${fmtBr(delta)} x ${meses} meses = <strong>${fmtBr(deltaTotal)}</strong></small>`;
+                    delta = deltaTotal;
+                } else {
+                    preview.innerHTML = `<small class='text-danger'>Não foi possível calcular os meses (verifique datas).</small>`;
+                }
+            }
 
             const final = (tipo === T.Supressao || tipo === T.PrazoSupressao)
                           ? (valorAtual - delta)
                           : (valorAtual + delta);
 
-            preview.textContent = `Valor vigente: ${fmtBr(valorAtual)}  →  Valor estimado após o aditivo: ${fmtBr(final)}.`;
+            preview.innerHTML += `Valor Total Vigente: <strong>${fmtBr(valorAtual)}</strong> <br> Novo Total Estimado: <strong>${fmtBr(final)}</strong>`;
         }
 
         function aplicarTipo() {
@@ -207,7 +251,7 @@
 
             show(campoValor, precisaValor);
             show(campoData,  precisaVigencia);
-            show(campoObj,   false); // manter oculto por ora
+            show(campoObj,   false);
 
             req(inpValor, precisaValor);
             req(novaFim,  precisaVigencia);
@@ -215,16 +259,27 @@
             atualizarAjudaValor(tipo);
             atualizarPreview();
         }
+        
+        function formatarMoedaInput(el) {
+            const v = parsePtBr(el.value);
+            if(v) el.value = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        if(inpValor) {
+            inpValor.addEventListener('blur', () => formatarMoedaInput(inpValor));
+            inpValor.addEventListener('input', atualizarPreview);
+        }
 
         tipoSelect?.addEventListener('change', aplicarTipo);
-        inpValor?.addEventListener('input', atualizarPreview);
-        aplicarTipo(); // estado inicial
+        chkMensal?.addEventListener('change', atualizarPreview);
+        iniAditivo?.addEventListener('change', atualizarPreview);
+        novaFim?.addEventListener('change', atualizarPreview);
+        
+        aplicarTipo();
 
-        // mostrar summary apenas quando houver erros
         const summary = document.getElementById("validationSummary");
         if (summary && summary.innerText.trim().length > 0) summary.classList.remove("d-none");
 
-        // submit com normalização e confirmação
         form?.addEventListener('submit', async (e) => {
             if (window.jQuery && !$(form).valid()) return;
 
@@ -234,7 +289,9 @@
                     e.preventDefault();
                     return Swal.fire({ icon:'warning', title:'Informe um valor numérico maior que zero.' });
                 }
-                inpValor.value = clean;
+                // Mantém a limpeza do valor para garantir formato numérico limpo
+                // Mesmo usando ViewModel String, enviar com ponto facilita o parse do fallback
+                inpValor.value = clean; 
             }
 
             e.preventDefault();
@@ -247,6 +304,31 @@
             });
             if (ok.isConfirmed) form.submit();
         });
+
+        // --- EXIBIÇÃO DE ALERTAS (TEMP DATA) ---
+        const pageFlags = document.getElementById('pageFlags');
+        if (pageFlags) {
+            const successMsg = pageFlags.getAttribute('data-success');
+            const errorMsg   = pageFlags.getAttribute('data-error');
+
+            if (successMsg) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso!',
+                    text: successMsg,
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+            }
+
+            if (errorMsg) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Atenção',
+                    html: errorMsg // Permite quebras de linha do validation summary
+                });
+            }
+        }
     });
     </script>
 }

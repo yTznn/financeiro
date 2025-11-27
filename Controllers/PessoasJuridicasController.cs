@@ -6,9 +6,11 @@ using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Validacoes;
 using Financeiro.Servicos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class PessoasJuridicasController : Controller
     {
         private readonly IPessoaJuridicaRepositorio _repo;

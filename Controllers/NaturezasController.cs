@@ -2,11 +2,15 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class NaturezasController : Controller
     {
+
         private readonly INaturezaRepositorio _repo;
 
         public NaturezasController(INaturezaRepositorio repo)

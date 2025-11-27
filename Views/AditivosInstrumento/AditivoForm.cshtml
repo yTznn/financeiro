@@ -110,19 +110,23 @@
             <span asp-validation-for="DataAssinatura" class="text-danger small"></span>
         </div>
 
-        <!-- Valor (sempre positivo; o sistema soma/subtrai conforme o tipo) -->
         <div class="col-md-6" id="grupoNovoValor" style="display:none;">
             <label asp-for="NovoValor" class="form-label fw-semibold">Valor</label>
             <div class="input-group">
                 <span class="input-group-text">R$</span>
                 <input asp-for="NovoValor" type="text" inputmode="decimal" class="form-control" id="NovoValor" />
             </div>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" asp-for="EhValorMensal" id="EhValorMensal">
+                <label class="form-check-label text-muted" for="EhValorMensal">
+                    O valor informado é mensal?
+                </label>
+            </div>
             <div id="ajudaValor" class="form-text fw-semibold mt-1 text-secondary"></div>
             <div id="previewValor" class="small mt-1 text-muted"></div>
             <span asp-validation-for="NovoValor" class="text-danger small"></span>
         </div>
 
-        <!-- Vigência -->
         <div class="col-md-12" id="grp-vigencia" style="display:none;">
             <div class="row g-3">
                 <div class="col-md-6">
@@ -177,6 +181,7 @@
         const grpVig    = document.getElementById('grp-vigencia');
 
         const inpValor  = document.getElementById('NovoValor');
+        const chkMensal = document.getElementById('EhValorMensal');
         const ajudaValor= document.getElementById('ajudaValor');
         const novaIni   = document.getElementById('NovaDataInicio');
         const novaFim   = document.getElementById('NovaDataFim');
@@ -198,14 +203,33 @@
         function parsePtBr(s){ return Number((s||'').replace(/\./g,'').replace(',','.')) || 0; }
         function fmtBr(n){ try { return Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); } catch { return 'R$ ' + (n||0).toFixed(2); } }
 
+        function mesesEntre(d1Str, d2Str) {
+            if(!d1Str || !d2Str) return 0;
+            const i = new Date(d1Str);
+            const f = new Date(d2Str);
+            if (isNaN(i) || isNaN(f)) return 0;
+            if (f < i) return 0;
+            return (f.getFullYear() - i.getFullYear()) * 12 + (f.getMonth() - i.getMonth()) + 1;
+        }
+
         function atualizarPreview() {
             preview.textContent = '';
             const tipo = parseInt(selTipo?.value || '0', 10);
             const precisaValor = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
             if (!precisaValor || !inpValor) return;
 
-            const delta = parsePtBr(inpValor.value);
+            let delta = parsePtBr(inpValor.value);
             if (delta <= 0) return;
+
+            // Lógica Mensal no Frontend (Preview)
+            if (chkMensal && chkMensal.checked) {
+                const meses = mesesEntre(novaIni?.value, novaFim?.value);
+                if (meses > 0) {
+                    delta = delta * meses;
+                    // Opcional: Mostrar no preview que foi multiplicado
+                    // preview.textContent += ` (x ${meses} meses) `;
+                }
+            }
 
             const final = (tipo === T.Supressao || tipo === T.PrazoSupressao)
                           ? (valorAtual - delta)
@@ -231,18 +255,31 @@
             const tipo = parseInt(selTipo?.value || '0', 10);
 
             const precisaValor    = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
-            const precisaVigencia = [T.Prazo, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            // AGORA SEMPRE MOSTRA VIGÊNCIA (Destravamento de Datas)
+            // Mas se quiser manter obrigatório só para "Prazo", a lógica seria:
+            // const precisaVigencia = [T.Prazo, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            // Porém, como permitimos editar data em qualquer aditivo, podemos deixar visível sempre ou condicional.
+            // Vamos manter a regra original de VISIBILIDADE, mas sem limpar campos se o usuário quiser abrir.
+            // Para simplificar e atender seu pedido "quero poder lançar data retroativa", vamos MOSTRAR SEMPRE que houver valor ou prazo.
+            
+            const mostrarVigencia = tipo !== 0; // Mostra datas para qualquer tipo de aditivo selecionado
 
             show(grpValor, precisaValor);
-            show(grpVig,   precisaVigencia);
+            show(grpVig,   mostrarVigencia); 
 
             req(inpValor, precisaValor);
-            req(novaIni,  precisaVigencia);
-            req(novaFim,  precisaVigencia);
+            
+            // Datas não são obrigatórias no HTML (poís o controller herda), 
+            // mas se for tipo PRAZO, deveriam ser. 
+            const ehTipoPrazo = [T.Prazo, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
+            req(novaIni, ehTipoPrazo);
+            req(novaFim, ehTipoPrazo);
 
-            // limpar quando esconder
-            clearIfHidden(grpValor, [inpValor]);
-            clearIfHidden(grpVig,   [novaIni, novaFim]);
+            // limpar quando esconder (se nenhum tipo selecionado)
+            if (tipo === 0) {
+                clearIfHidden(grpValor, [inpValor]);
+                clearIfHidden(grpVig,   [novaIni, novaFim]);
+            }
 
             atualizarAjudaValor(tipo);
             atualizarPreview();
@@ -250,6 +287,10 @@
 
         selTipo?.addEventListener('change', aplicarTipo);
         inpValor?.addEventListener('input', atualizarPreview);
+        chkMensal?.addEventListener('change', atualizarPreview);
+        novaIni?.addEventListener('change', atualizarPreview); // Recalcula meses se mudar data
+        novaFim?.addEventListener('change', atualizarPreview);
+
         aplicarTipo(); // estado inicial
 
         // Summary só se tiver erro
@@ -270,17 +311,22 @@
                 inpValor.value = clean;
             }
 
+            // Validação de datas
             if (grpVig && grpVig.style.display !== 'none' && novaIni && novaFim) {
-                if (!novaIni.value || !novaFim.value) {
-                    e.preventDefault();
-                    return Swal.fire({ icon:'warning', title:'Informe as duas datas de vigência.' });
+                // Se for obrigatório (Tipo Prazo) e estiver vazio
+                if (novaIni.required && (!novaIni.value || !novaFim.value)) {
+                     e.preventDefault();
+                     return Swal.fire({ icon:'warning', title:'Informe as duas datas de vigência.' });
                 }
-                // comparar apenas datas (sem hora)
-                const di = new Date(novaIni.value + 'T00:00:00');
-                const df = new Date(novaFim.value + 'T00:00:00');
-                if (df < di) {
-                    e.preventDefault();
-                    return Swal.fire({ icon:'warning', title:'Data de fim não pode ser anterior ao início.' });
+                
+                // Se preencheu as duas, valida lógica
+                if (novaIni.value && novaFim.value) {
+                    const di = new Date(novaIni.value + 'T00:00:00');
+                    const df = new Date(novaFim.value + 'T00:00:00');
+                    if (df < di) {
+                        e.preventDefault();
+                        return Swal.fire({ icon:'warning', title:'Data de fim não pode ser anterior ao início.' });
+                    }
                 }
             }
 
@@ -288,6 +334,7 @@
             const ok = await Swal.fire({
                 icon:'question',
                 title:'Confirmar registro do aditivo?',
+                text: 'Verifique os valores e datas antes de salvar.',
                 showCancelButton:true,
                 confirmButtonText:'Salvar',
                 cancelButtonText:'Cancelar'
@@ -295,7 +342,7 @@
             if (ok.isConfirmed) form.submit();
         });
 
-        // SweetAlert vindos do TempData (se reexibir a view)
+        // SweetAlert vindos do TempData
         const okMsg  = @Html.Raw(Json.Serialize(TempData["Sucesso"]?.ToString() ?? ""));
         const errMsg = @Html.Raw(Json.Serialize(TempData["Erro"]?.ToString() ?? ""));
         if (okMsg)  Swal.fire({ icon:'success', title:'Sucesso', text: okMsg });

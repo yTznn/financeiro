@@ -335,12 +335,22 @@
 
     function mesesEntre(inicio, fim) {
         if (!inicio || !fim) return null;
-        const di = new Date(inicio);
-        const df = new Date(fim);
-        if (isNaN(di) || isNaN(df)) return null;
-        return (df.getFullYear() - di.getFullYear()) * 12 + (df.getMonth() - di.getMonth()) + 1;
-    }
+        
+        // Quebra a string "yyyy-mm-dd" manualmente para evitar fuso horário
+        const [anoI, mesI, diaI] = inicio.split('-').map(Number);
+        const [anoF, mesF, diaF] = fim.split('-').map(Number);
+        
+        // Validação básica
+        if (!anoI || !anoF) return null;
 
+        // Cálculo exato de meses cheios
+        let meses = (anoF - anoI) * 12 + (mesF - mesI);
+
+        // Lógica de vigência inclusiva: 
+        // Se selecionou 01/01 a 31/12, a subtração pura dá 11 meses.
+        // Mas a vigência cobre o mês de dezembro inteiro, então soma +1.
+        return meses + 1;
+    }
     function formatCurrency(n) {
         if (isNaN(n)) return '';
         try { return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }

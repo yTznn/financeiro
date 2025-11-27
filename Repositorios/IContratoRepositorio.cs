@@ -17,5 +17,8 @@ namespace Financeiro.Repositorios
         Task<(IEnumerable<VwFornecedor> Itens, int TotalItens)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina);
         Task<IEnumerable<Natureza>> ListarTodasNaturezasAsync();
         Task<VwFornecedor?> ObterFornecedorPorIdCompletoAsync(string idCompleto);
+
+        // [NOVO] Método essencial para a Trava de Saldo do Orçamento
+        Task<decimal> ObterTotalComprometidoPorOrcamentoAsync(int orcamentoId, int? ignorarContratoId = null);
     }
 }

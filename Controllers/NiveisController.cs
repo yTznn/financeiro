@@ -1,5 +1,6 @@
 using Financeiro.Models.Dto;
 using Financeiro.Repositorios;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 namespace Financeiro.Controllers
 {
     [Route("Niveis")]
+    [Authorize]
     public class NiveisController : Controller
     {
         private readonly INivelRepositorio _repo;

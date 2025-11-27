@@ -13,5 +13,8 @@ namespace Financeiro.Repositorios
         Task<IEnumerable<OrcamentoDetalhe>> ObterDetalhesPorOrcamentoIdAsync(int orcamentoId);
         Task<IEnumerable<OrcamentoListViewModel>> ListarAsync();
         Task ExcluirAsync(int id);
+
+        // [NOVO] Método para somar quanto já foi gasto do instrumento
+        Task<decimal> ObterTotalComprometidoPorInstrumentoAsync(int instrumentoId, int? ignorarOrcamentoId = null);
     }
 }

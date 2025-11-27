@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-
 namespace Financeiro.Models.ViewModels
 {
     public class OrcamentoViewModel
     {
+
         public int Id { get; set; }
+        
+        [Display(Name = "Instrumento (Fonte de Recurso)")]
+        [Required(ErrorMessage = "Selecione a qual Instrumento este orçamento pertence.")]
+        public int InstrumentoId { get; set; }
 
         [Required(ErrorMessage = "O nome do orçamento é obrigatório.")]
         [Display(Name = "Nome do Orçamento")]

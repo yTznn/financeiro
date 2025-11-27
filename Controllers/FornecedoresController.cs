@@ -2,9 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Financeiro.Repositorios; // Precisaremos do repositório de contrato que busca na View
 using System.Threading.Tasks;
 using System; // Necessário para Math.Ceiling
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
+
     public class FornecedoresController : Controller
     {
         private readonly IContratoRepositorio _contratoRepo;

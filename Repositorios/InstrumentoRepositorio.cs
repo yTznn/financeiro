@@ -114,7 +114,7 @@ namespace Financeiro.Repositorios
             using var tx = conn.BeginTransaction();
             try
             {
-                const string delLanc = "DELETE FROM dbo.LancamentoInstrumento WHERE InstrumentoId = @id;";
+                const string delLanc = "DELETE FROM dbo.RecebimentoInstrumento WHERE InstrumentoId = @id;";
                 const string delVersao = "DELETE FROM dbo.InstrumentoVersao WHERE InstrumentoId = @id;";
                 const string delInstrumento = "DELETE FROM dbo.Instrumento WHERE Id = @id;";
 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using System.Threading.Tasks;
 using System;
@@ -10,29 +11,48 @@ using Financeiro.Models;
 using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Servicos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class OrcamentosController : Controller
     {
         private static readonly DateTime MinAppDate = new DateTime(2020, 1, 1);
 
-        // --- DEPENDÊNCIAS CORRIGIDAS ---
         private readonly IOrcamentoRepositorio _orcamentoRepo;
+        private readonly IInstrumentoRepositorio _instrumentoRepo; // [NOVO] Necessário para validar saldo e vigência
         private readonly ILogService _logService;
         private readonly IJustificativaService _justificativaService;
 
         public OrcamentosController(
             IOrcamentoRepositorio orcamentoRepo,
+            IInstrumentoRepositorio instrumentoRepo,
             ILogService logService,
             IJustificativaService justificativaService)
         {
             _orcamentoRepo = orcamentoRepo;
+            _instrumentoRepo = instrumentoRepo;
             _logService = logService;
             _justificativaService = justificativaService;
         }
 
         /* -------------------- HELPERS -------------------- */
+
+        private async Task CarregarInstrumentos(int? selecionado = null)
+        {
+            // Carrega apenas os instrumentos ativos para o Dropdown
+            var lista = await _instrumentoRepo.ListarAsync();
+            
+            // Formata o texto para facilitar a identificação (Número - Objeto curto)
+            ViewBag.Instrumentos = lista
+                .Where(i => i.Ativo)
+                .Select(i => new SelectListItem(
+                    $"{i.Numero} - {(i.Objeto.Length > 50 ? i.Objeto.Substring(0, 50) + "..." : i.Objeto)}", 
+                    i.Id.ToString(), 
+                    selecionado == i.Id))
+                .ToList();
+        }
 
         private static string Sanitize(string? s)
         {
@@ -71,20 +91,20 @@ namespace Financeiro.Controllers
             return View(lista);
         }
 
-        /* -------------------- NOVO (CORRIGIDO) -------------------- */
+        /* -------------------- NOVO -------------------- */
         [HttpGet]
-        public IActionResult Novo() // Não precisa ser async agora
+        public async Task<IActionResult> Novo()
         {
-            // REMOVIDO: Busca de Instrumentos (ViewBag)
+            await CarregarInstrumentos(); // Preenche o dropdown
             return View("OrcamentoForm", new OrcamentoViewModel
             {
                 Ativo = true,
                 VigenciaInicio = DateTime.Today,
-                VigenciaFim = DateTime.Today.AddMonths(1) // Sugestão: um mês de vigência por padrão
+                VigenciaFim = DateTime.Today.AddMonths(1)
             });
         }
 
-        /* -------------------- SALVAR (CORRIGIDO) -------------------- */
+        /* -------------------- SALVAR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(OrcamentoViewModel vm, string detalhamentoJson, string justificativa = null)
@@ -97,17 +117,53 @@ namespace Financeiro.Controllers
 
             if (string.IsNullOrWhiteSpace(vm.Nome))
                 ModelState.AddModelError(nameof(vm.Nome), "Informe o nome do orçamento.");
+            
             ValidarDatas(vm);
-
             vm.ValorPrevistoTotal = RecalcularTotal(vm.Detalhamento);
-
-            // REMOVIDO: Toda a lógica de buscar e comparar com o Instrumento.
 
             if (!ModelState.IsValid)
             {
-                // REMOVIDO: ViewBag.TiposDeAcordo
+                await CarregarInstrumentos(vm.InstrumentoId);
                 return View("OrcamentoForm", vm);
             }
+
+            // ===== VALIDAÇÃO DE NEGÓCIO: INSTRUMENTO, VIGÊNCIA & SALDO =====
+            
+            // 1. Busca os dados ATUAIS do instrumento (incluindo aditivos de prazo/valor)
+            var instrumentoResumo = await _instrumentoRepo.ObterResumoAsync(vm.InstrumentoId);
+            if (instrumentoResumo == null)
+            {
+                ModelState.AddModelError(nameof(vm.InstrumentoId), "Instrumento inválido ou não encontrado.");
+                await CarregarInstrumentos(vm.InstrumentoId);
+                return View("OrcamentoForm", vm);
+            }
+
+            // 2. Valida VIGÊNCIA: O orçamento deve estar DENTRO da vigência do instrumento
+            if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio || vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual)
+            {
+                string msg = $"A vigência do orçamento deve estar dentro do prazo do instrumento ({instrumentoResumo.VigenciaInicio:dd/MM/yyyy} a {instrumentoResumo.VigenciaFimAtual:dd/MM/yyyy}).";
+                
+                if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio) 
+                    ModelState.AddModelError(nameof(vm.VigenciaInicio), msg);
+                
+                if (vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual) 
+                    ModelState.AddModelError(nameof(vm.VigenciaFim), msg);
+                
+                await CarregarInstrumentos(vm.InstrumentoId);
+                return View("OrcamentoForm", vm);
+            }
+
+            // 3. Valida SALDO: (Valor Instrumento) - (Orçamentos Já Criados) >= (Novo Orçamento)
+            var jaComprometido = await _orcamentoRepo.ObterTotalComprometidoPorInstrumentoAsync(vm.InstrumentoId);
+            var saldoDisponivel = instrumentoResumo.ValorTotalAtual - jaComprometido;
+
+            if (vm.ValorPrevistoTotal > saldoDisponivel)
+            {
+                ModelState.AddModelError(nameof(vm.ValorPrevistoTotal), $"Saldo insuficiente no Instrumento. Disponível: {saldoDisponivel:C2}. Tentativa: {vm.ValorPrevistoTotal:C2}.");
+                await CarregarInstrumentos(vm.InstrumentoId);
+                return View("OrcamentoForm", vm);
+            }
+            // =====================================================
 
             try
             {
@@ -116,12 +172,7 @@ namespace Financeiro.Controllers
 
                 if (!string.IsNullOrWhiteSpace(justificativa))
                 {
-                    // Lógica de ação simplificada, pois não há mais comparação
-                    await _justificativaService.RegistrarAsync(
-                        "Orcamento",
-                        "Inserção de Orçamento", // Ação simplificada
-                        vm.Id,
-                        Sanitize(justificativa));
+                    await _justificativaService.RegistrarAsync("Orcamento", "Inserção de Orçamento", vm.Id, Sanitize(justificativa));
                 }
 
                 TempData["Sucesso"] = "Orçamento salvo com sucesso!";
@@ -129,18 +180,18 @@ namespace Financeiro.Controllers
             }
             catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601)
             {
-                TempData["Erro"] = "Já existe um registro com dados duplicados. Verifique valores únicos.";
+                TempData["Erro"] = "Já existe um registro com dados duplicados.";
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
+                TempData["Erro"] = $"Erro ao salvar: {ex.Message}";
             }
 
-            // REMOVIDO: ViewBag.TiposDeAcordo
+            await CarregarInstrumentos(vm.InstrumentoId);
             return View("OrcamentoForm", vm);
         }
 
-        /* -------------------- EDITAR (GET - CORRIGIDO) -------------------- */
+        /* -------------------- EDITAR -------------------- */
         [HttpGet]
         public async Task<IActionResult> Editar(int id)
         {
@@ -153,8 +204,8 @@ namespace Financeiro.Controllers
             var vm = new OrcamentoViewModel
             {
                 Id = orcamentoHeader.Id,
+                InstrumentoId = orcamentoHeader.InstrumentoId, // Carrega o vínculo existente
                 Nome = orcamentoHeader.Nome,
-                // REMOVIDO: TipoAcordoId = orcamentoHeader.TipoAcordoId,
                 VigenciaInicio = orcamentoHeader.VigenciaInicio,
                 VigenciaFim = orcamentoHeader.VigenciaFim,
                 ValorPrevistoTotal = orcamentoHeader.ValorPrevistoTotal,
@@ -163,11 +214,11 @@ namespace Financeiro.Controllers
                 Detalhamento = detalhamentoHierarquico
             };
 
-            // REMOVIDO: ViewBag.TiposDeAcordo
+            await CarregarInstrumentos(vm.InstrumentoId);
             return View("OrcamentoForm", vm);
         }
 
-        /* -------------------- ATUALIZAR (CORRIGIDO) -------------------- */
+        /* -------------------- ATUALIZAR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(OrcamentoViewModel vm, string detalhamentoJson, string justificativa = null)
@@ -179,17 +230,47 @@ namespace Financeiro.Controllers
             vm.Observacao = Sanitize(vm.Observacao);
             ValidarDatas(vm);
             vm.ValorPrevistoTotal = RecalcularTotal(vm.Detalhamento);
-            
-            // REMOVIDO: Toda a lógica de buscar e comparar com o Instrumento.
 
             if (!ModelState.IsValid)
             {
-                // REMOVIDO: ViewBag.TiposDeAcordo
+                await CarregarInstrumentos(vm.InstrumentoId);
                 return View("OrcamentoForm", vm);
             }
 
             var existe = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.Id);
             if (existe == null) return NotFound();
+
+            // ===== VALIDAÇÃO DE NEGÓCIO (REPETIDA PARA ATUALIZAÇÃO) =====
+            
+            var instrumentoResumo = await _instrumentoRepo.ObterResumoAsync(vm.InstrumentoId);
+            if (instrumentoResumo == null)
+            {
+                ModelState.AddModelError(nameof(vm.InstrumentoId), "Instrumento inválido.");
+                await CarregarInstrumentos(vm.InstrumentoId);
+                return View("OrcamentoForm", vm);
+            }
+
+            // Valida Vigência
+            if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio || vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual)
+            {
+                string msg = $"A vigência deve estar dentro do prazo do instrumento ({instrumentoResumo.VigenciaInicio:dd/MM/yyyy} a {instrumentoResumo.VigenciaFimAtual:dd/MM/yyyy}).";
+                if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio) ModelState.AddModelError(nameof(vm.VigenciaInicio), msg);
+                if (vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual) ModelState.AddModelError(nameof(vm.VigenciaFim), msg);
+                await CarregarInstrumentos(vm.InstrumentoId);
+                return View("OrcamentoForm", vm);
+            }
+
+            // Valida Saldo (Ignorando o valor antigo DESTE orçamento para não duplicar na conta)
+            var jaComprometidoOutros = await _orcamentoRepo.ObterTotalComprometidoPorInstrumentoAsync(vm.InstrumentoId, ignorarOrcamentoId: vm.Id);
+            var saldoDisponivel = instrumentoResumo.ValorTotalAtual - jaComprometidoOutros;
+
+            if (vm.ValorPrevistoTotal > saldoDisponivel)
+            {
+                ModelState.AddModelError(nameof(vm.ValorPrevistoTotal), $"Saldo insuficiente. Disponível para este orçamento: {saldoDisponivel:C2}. Tentativa: {vm.ValorPrevistoTotal:C2}.");
+                await CarregarInstrumentos(vm.InstrumentoId);
+                return View("OrcamentoForm", vm);
+            }
+            // ===================================================
 
             try
             {
@@ -198,30 +279,22 @@ namespace Financeiro.Controllers
 
                 if (!string.IsNullOrWhiteSpace(justificativa))
                 {
-                    await _justificativaService.RegistrarAsync(
-                        "Orcamento",
-                        "Atualização de Orçamento", // Ação simplificada
-                        vm.Id,
-                        Sanitize(justificativa));
+                    await _justificativaService.RegistrarAsync("Orcamento", "Atualização de Orçamento", vm.Id, Sanitize(justificativa));
                 }
 
                 TempData["Sucesso"] = "Orçamento atualizado com sucesso!";
                 return RedirectToAction("Index");
             }
-            catch (SqlException ex) when (ex.Number == 2627 || ex.Number == 2601)
+            catch (Exception ex)
             {
-                TempData["Erro"] = "Já existe um registro com dados duplicados. Verifique valores únicos.";
-            }
-            catch (Exception)
-            {
-                TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
+                TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
             }
 
-            // REMOVIDO: ViewBag.TiposDeAcordo
+            await CarregarInstrumentos(vm.InstrumentoId);
             return View("OrcamentoForm", vm);
         }
 
-        /* -------------------- EXCLUIR (SEM ALTERAÇÕES) -------------------- */
+        /* -------------------- EXCLUIR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Excluir(int id, string justificativa)
@@ -237,12 +310,7 @@ namespace Financeiro.Controllers
 
             try
             {
-                await _justificativaService.RegistrarAsync(
-                    "Orcamento",
-                    "Exclusão de Orçamento",
-                    id,
-                    Sanitize(justificativa));
-                
+                await _justificativaService.RegistrarAsync("Orcamento", "Exclusão de Orçamento", id, Sanitize(justificativa));
                 await _orcamentoRepo.ExcluirAsync(id);
                 await _logService.RegistrarExclusaoAsync("Orcamento", existente, id);
 
@@ -251,17 +319,16 @@ namespace Financeiro.Controllers
             }
             catch (SqlException ex) when (ex.Number == 547)
             {
-                TempData["Erro"] = "Não foi possível excluir: há vínculos relacionados.";
+                TempData["Erro"] = "Não foi possível excluir: há contratos vinculados a este orçamento.";
                 return RedirectToAction(nameof(Index));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
+                TempData["Erro"] = $"Erro ao excluir: {ex.Message}";
                 return RedirectToAction(nameof(Index));
             }
         }
 
-        /* -------------------- HIERARQUIA DETALHES (SEM ALTERAÇÕES) -------------------- */
         private List<OrcamentoDetalheViewModel> ConstruirHierarquia(List<OrcamentoDetalhe> todos, int? parentId)
         {
             return todos

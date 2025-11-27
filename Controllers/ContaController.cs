@@ -6,6 +6,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Financeiro.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {

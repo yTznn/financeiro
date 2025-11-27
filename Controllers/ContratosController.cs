@@ -5,9 +5,11 @@ using Financeiro.Models.ViewModels;
 using System.Linq;
 using Financeiro.Servicos;
 using System;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class ContratosController : Controller
     {
         private readonly IContratoRepositorio _contratoRepo;
@@ -17,7 +19,6 @@ namespace Financeiro.Controllers
         private readonly IOrcamentoRepositorio _orcamentoRepo;
         private readonly IContratoVersaoService _versaoService;
 
-        // ***** CONSTRUTOR CORRIGIDO *****
         public ContratosController(
             IContratoRepositorio contratoRepo,
             IContratoVersaoRepositorio versaoRepo,
@@ -38,63 +39,133 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(ContratoViewModel vm, string justificativa = null)
         {
-            // Validação de unicidade (número/ano)
+            // [CORREÇÃO] 1. Cálculo matemático usando a propriedade auxiliar que converte String -> Decimal
+            int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
+            if (meses < 1) meses = 1;
+
+            // Verifica se o valor convertido é válido
+            if (vm.ValorMensalDecimal > 0)
+            {
+                // Multiplica o valor MENSAL (convertido) pelos meses para achar o TOTAL do contrato
+                vm.ValorContrato = vm.ValorMensalDecimal * meses;
+                
+                // Remove erros de validação do Total (pois acabamos de calculá-lo corretamente)
+                ModelState.Remove(nameof(vm.ValorContrato));
+                
+                // Multiplica as naturezas (que vêm mensais da tela) para Totais (para o banco)
+                if (vm.Naturezas != null)
+                {
+                    foreach (var natureza in vm.Naturezas)
+                    {
+                        natureza.Valor = natureza.Valor * meses;
+                    }
+                }
+            }
+
+            // Validação de unicidade
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato))
             {
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número para o ano selecionado.");
             }
 
-            // Validação geral do model
+            // 2. TRAVA DE ORÇAMENTO
+            if (vm.OrcamentoId.HasValue)
+            {
+                var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
+                var jaGasto = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value);
+                var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGasto;
+
+                // Compara o Total Calculado com o Saldo Disponível
+                if (vm.ValorContrato > (saldoOrcamento + 0.01m)) // +0.01 margem de erro
+                {
+                    ModelState.AddModelError(nameof(vm.ValorContrato), 
+                        $"Saldo insuficiente no Orçamento vinculado. Disponível: {saldoOrcamento:C2}. Necessário: {vm.ValorContrato:C2}.");
+                }
+            }
+
+            // Validação geral
             if (!ModelState.IsValid)
             {
-                var todosErros = ModelState.Values.SelectMany(v => v.Errors)
-                                                    .Select(e => e.ErrorMessage);
+                // Se der erro, precisamos reverter a multiplicação das naturezas para a View não mostrar valores gigantes
+                if (meses > 0 && vm.Naturezas != null)
+                {
+                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor / meses;
+                }
+                // Nota: Não precisamos "dividir" o ValorMensal porque ele é string e não foi alterado.
+
+                var todosErros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
 
                 await PrepararViewBagParaFormulario(vm);
                 return View("ContratoForm", vm);
             }
             
-            // --- INÍCIO DA LÓGICA DE SALVAMENTO ORQUESTRADA ---
-
-            // 1. Salva o contrato principal no banco. 
-            //    O repositório preenche o vm.Id com o ID do novo contrato.
+            // --- PERSISTÊNCIA ---
             await _contratoRepo.InserirAsync(vm);
-
-            // 2. Com o ID em mãos, chama o serviço para criar a Versão 1 (original) no histórico.
             await _versaoService.CriarVersaoInicialAsync(vm);
-
-            // 3. Registra o log da criação do contrato.
             await _logService.RegistrarCriacaoAsync("Contrato", vm, vm.Id);
 
-            // 4. Se houver justificativa, registra-a.
             if (!string.IsNullOrWhiteSpace(justificativa))
             {
-                await _justificativaService.RegistrarAsync(
-                    "Contrato",
-                    "Inserção com múltiplas naturezas",
-                    vm.Id,
-                    justificativa);
+                await _justificativaService.RegistrarAsync("Contrato", "Inserção com naturezas", vm.Id, justificativa);
             }
-
-            // --- FIM DA LÓGICA ---
 
             TempData["Sucesso"] = "Contrato salvo com sucesso!";
             return RedirectToAction(nameof(Index));
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Atualizar(ContratoViewModel vm, string justificativa = null)
         {
+            // [CORREÇÃO] 1. Cálculo matemático na edição
+            int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
+            if (meses < 1) meses = 1;
+
+            if (vm.ValorMensalDecimal > 0)
+            {
+                vm.ValorContrato = vm.ValorMensalDecimal * meses;
+                ModelState.Remove(nameof(vm.ValorContrato));
+
+                if (vm.Naturezas != null)
+                {
+                    foreach (var natureza in vm.Naturezas)
+                    {
+                        natureza.Valor = natureza.Valor * meses;
+                    }
+                }
+            }
+
             if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato, vm.Id))
             {
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número para o ano selecionado.");
             }
 
+            // 2. TRAVA DE ORÇAMENTO NA EDIÇÃO
+            if (vm.OrcamentoId.HasValue)
+            {
+                var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
+                
+                // Ignora o valor antigo deste contrato para não duplicar a conta
+                var jaGastoOutros = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value, ignorarContratoId: vm.Id);
+                var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGastoOutros;
+
+                if (vm.ValorContrato > (saldoOrcamento + 0.01m))
+                {
+                    ModelState.AddModelError(nameof(vm.ValorContrato), 
+                        $"Saldo insuficiente no Orçamento. Disponível: {saldoOrcamento:C2}. Necessário: {vm.ValorContrato:C2}.");
+                }
+            }
+
             if (!ModelState.IsValid)
             {
-                var todosErros = ModelState.Values.SelectMany(v => v.Errors)
-                                                    .Select(e => e.ErrorMessage);
+                // Reverte Naturezas para visualização mensal em caso de erro
+                if (meses > 0 && vm.Naturezas != null)
+                {
+                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor / meses;
+                }
+
+                var todosErros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
                 TempData["Erro"] = string.Join("<br>", todosErros);
 
                 await PrepararViewBagParaFormulario(vm);
@@ -106,11 +177,7 @@ namespace Financeiro.Controllers
 
             if (!string.IsNullOrWhiteSpace(justificativa))
             {
-                await _justificativaService.RegistrarAsync(
-                    "Contrato",
-                    "Atualização com múltiplas naturezas",
-                    vm.Id,
-                    justificativa);
+                await _justificativaService.RegistrarAsync("Contrato", "Atualização", vm.Id, justificativa);
             }
 
             TempData["Sucesso"] = "Contrato atualizado com sucesso!";
@@ -215,12 +282,11 @@ namespace Financeiro.Controllers
             return PartialView("_HistoricoContrato", itens);
         }
         
-        // ***** MÉTODO HELPER CORRIGIDO E NO LUGAR CERTO *****
         private async Task PrepararViewBagParaFormulario(ContratoViewModel vm)
         {
             ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
             
-            // LINHA QUE BUSCA OS ORÇAMENTOS
+            // Busca orçamentos para popular o Dropdown na view
             ViewBag.Orcamentos = await _orcamentoRepo.ListarAsync(); 
 
             if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto))

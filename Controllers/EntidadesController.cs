@@ -6,9 +6,10 @@ using Financeiro.Models.ViewModels;
 using Financeiro.Servicos;
 using Financeiro.Repositorios;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.AspNetCore.Authorization;
 namespace Financeiro.Controllers
 {
+    [Authorize]
     [Route("Entidades")]
     public class EntidadesController : Controller
     {

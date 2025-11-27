@@ -21,10 +21,11 @@ namespace Financeiro.Servicos
         {
             if (vm == null) throw new ArgumentNullException(nameof(vm));
 
-            // 1) Garantir versão atual
+            // 1) Garantir versão atual (Vigente)
             var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId);
             if (versaoAtual == null)
             {
+                // Se não existir histórico, cria a versão 1 baseada no contrato atual
                 var contratoOriginal = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId)
                     ?? throw new Exception("Contrato não encontrado para criar a versão original.");
 
@@ -44,40 +45,57 @@ namespace Financeiro.Servicos
                 await _versaoRepo.InserirAsync(versaoAtual);
             }
 
-            // 2) Regras de valor: somar/subtrair (não substituir)
+            // 2) Definir Datas (Lógica de Continuidade)
+            // Se o aditivo mexe no prazo, usa a data nova. Se não, mantém a atual.
+            bool alteraPrazo = vm.TipoAditivo == TipoAditivo.Prazo ||
+                               vm.TipoAditivo == TipoAditivo.PrazoAcrescimo ||
+                               vm.TipoAditivo == TipoAditivo.PrazoSupressao;
+
+            var novaDataFim = alteraPrazo ? (vm.NovaDataFim ?? versaoAtual.DataFim) : versaoAtual.DataFim;
+            
+            // Data de início da vigência deste aditivo (pode ser retroativa ou futura)
+            var dataInicioAditivo = vm.DataInicioAditivo ?? DateTime.Today;
+
+            // 3) Cálculo do Novo Valor (Total ou Mensal)
             decimal valorFinal = versaoAtual.ValorContrato;
 
-            bool afetaValor =
-                vm.TipoAditivo == TipoAditivo.Acrescimo ||
-                vm.TipoAditivo == TipoAditivo.Supressao ||
-                vm.TipoAditivo == TipoAditivo.PrazoAcrescimo ||
-                vm.TipoAditivo == TipoAditivo.PrazoSupressao;
+            bool alteraValor = vm.TipoAditivo == TipoAditivo.Acrescimo ||
+                               vm.TipoAditivo == TipoAditivo.Supressao ||
+                               vm.TipoAditivo == TipoAditivo.PrazoAcrescimo ||
+                               vm.TipoAditivo == TipoAditivo.PrazoSupressao;
 
-            if (afetaValor)
+            if (alteraValor)
             {
-                if (!vm.NovoValor.HasValue || vm.NovoValor.Value <= 0)
-                    throw new ArgumentException("Informe um NovoValor maior que zero para este tipo de aditivo.");
+                // Usa a propriedade auxiliar que já converteu a string PT-BR para decimal
+                if (vm.NovoValorDecimal <= 0)
+                    throw new ArgumentException("Informe um valor de aditivo maior que zero.");
 
-                var delta = Math.Abs(vm.NovoValor.Value);
+                decimal delta = vm.NovoValorDecimal;
 
+                // [LÓGICA MENSAL]
+                if (vm.EhValorMensal)
+                {
+                    // Calcula quantos meses esse aditivo vai impactar
+                    // Ex: Aditivo começa em Junho, contrato vai até Dezembro = 7 meses.
+                    int mesesAfetados = ((novaDataFim.Year - dataInicioAditivo.Year) * 12) + novaDataFim.Month - dataInicioAditivo.Month + 1;
+                    
+                    if (mesesAfetados < 0) mesesAfetados = 0; // Segurança
+
+                    // Multiplica o valor mensal pelos meses restantes
+                    delta = delta * mesesAfetados;
+                }
+
+                // Aplica soma ou subtração no Valor Global
                 if (vm.TipoAditivo == TipoAditivo.Acrescimo || vm.TipoAditivo == TipoAditivo.PrazoAcrescimo)
                     valorFinal = versaoAtual.ValorContrato + delta;
-                else // Supressao / PrazoSupressao
+                else // Supressao
                     valorFinal = versaoAtual.ValorContrato - delta;
 
                 if (valorFinal < 0)
                     throw new InvalidOperationException("O valor do contrato não pode ficar negativo.");
             }
 
-            // 3) Regras de prazo (apenas quando o tipo envolve prazo)
-            bool afetaPrazo =
-                vm.TipoAditivo == TipoAditivo.Prazo ||
-                vm.TipoAditivo == TipoAditivo.PrazoAcrescimo ||
-                vm.TipoAditivo == TipoAditivo.PrazoSupressao;
-
-            var novaDataFim = afetaPrazo ? (vm.NovaDataFim ?? versaoAtual.DataFim) : versaoAtual.DataFim;
-
-            // 4) Criar nova versão
+            // 4) Criar nova versão no histórico
             var novaVersao = new ContratoVersao
             {
                 ContratoId = vm.ContratoId,
@@ -85,26 +103,42 @@ namespace Financeiro.Servicos
                 TipoAditivo = vm.TipoAditivo,
                 Observacao = vm.Observacao,
                 DataRegistro = DateTime.Now,
-                DataInicioAditivo = vm.DataInicioAditivo,
+                DataInicioAditivo = dataInicioAditivo,
 
                 ObjetoContrato = vm.NovoObjeto ?? versaoAtual.ObjetoContrato,
                 ValorContrato = valorFinal,
-                DataInicio = versaoAtual.DataInicio,
+                DataInicio = versaoAtual.DataInicio, // Data inicio original do contrato geralmente não muda
                 DataFim = novaDataFim
             };
 
             await _versaoRepo.InserirAsync(novaVersao);
 
-            // 5) Refletir no contrato "pai"
-            var contrato = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId)
-                           ?? throw new Exception("Contrato não encontrado para atualizar.");
+            // 5) Atualizar o contrato "Pai" para refletir a realidade atual
+            // Isso garante que a busca principal e validações de saldo usem o valor atualizado
+            var contratoPaiViewModel = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId);
+            if (contratoPaiViewModel != null)
+            {
+                // Atualizamos a ViewModel e mandamos salvar
+                // Nota: O método AtualizarAsync do repositório espera a ViewModel completa.
+                // Aqui estamos atualizando apenas os campos chave que o aditivo mudou.
+                
+                contratoPaiViewModel.ValorContrato = novaVersao.ValorContrato;
+                contratoPaiViewModel.DataFim = novaVersao.DataFim;
+                contratoPaiViewModel.ObjetoContrato = novaVersao.ObjetoContrato;
 
-            contrato.ObjetoContrato = novaVersao.ObjetoContrato;
-            contrato.ValorContrato = novaVersao.ValorContrato;
-            contrato.DataFim = novaVersao.DataFim;
-
-            await _contratoRepo.AtualizarAsync(contrato);
+                // Importante: Ao atualizar o pai, precisamos garantir que as Naturezas não se percam.
+                // Como estamos usando ObterParaEdicaoAsync, elas já vêm carregadas.
+                // Mas se o valor mudou, o rateio das naturezas vai ficar "torto" (soma diferente do total).
+                // O ideal seria forçar o usuário a re-ratear, mas num aditivo automático, 
+                // podemos aplicar um rateio proporcional ou deixar pendente.
+                
+                // POR ENQUANTO: Vamos salvar o valor total atualizado.
+                // O alerta de divergência vai aparecer se alguém tentar editar o contrato depois.
+                
+                await _contratoRepo.AtualizarAsync(contratoPaiViewModel);
+            }
         }
+
         public async Task CriarVersaoInicialAsync(ContratoViewModel vm)
         {
             if (vm == null || vm.Id == 0)
@@ -113,12 +147,12 @@ namespace Financeiro.Servicos
             var versaoInicial = new ContratoVersao
             {
                 ContratoId = vm.Id,
-                Versao = 1, // Sempre será a versão 1
+                Versao = 1,
                 ObjetoContrato = vm.ObjetoContrato,
                 DataInicio = vm.DataInicio,
                 DataFim = vm.DataFim,
                 ValorContrato = vm.ValorContrato,
-                TipoAditivo = null, // Não é um aditivo
+                TipoAditivo = null,
                 Observacao = "Versão original do contrato.",
                 DataRegistro = DateTime.Now,
                 DataInicioAditivo = null

@@ -9,9 +9,11 @@ using Financeiro.Models;
 using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Servicos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class InstrumentosController : Controller
     {
         private static readonly DateTime MinAppDate = new DateTime(2020, 1, 1);
@@ -79,11 +81,28 @@ namespace Financeiro.Controllers
             only = System.Text.RegularExpressions.Regex.Replace(only, @"/{2,}", "/");
             return only.Trim('/');
         }
-
-        // DATEDIFF(MONTH) + 1 (inclui mês de início e de fim)
         private static int CalcularMeses(DateTime inicio, DateTime fim)
         {
-            return ((fim.Year - inicio.Year) * 12) + (fim.Month - inicio.Month) + 1;
+            // Se a data fim for anterior ao início, retorna 0 (ou erro)
+            if (fim < inicio) return 0;
+
+            // Cálculo base de meses cheios
+            int meses = ((fim.Year - inicio.Year) * 12) + fim.Month - inicio.Month;
+
+            // Se o dia do fim for menor que o dia do início, ainda não completou o último mês cheio
+            // Ex: 01/01 a 20/02 -> 1 mês e pouco, não 2.
+            // MAS, como seu sistema parece considerar vigência "inclusiva" (mês cheio), 
+            // a lógica atual de +1 costuma ser usada para "Mês corrente + Mês final".
+
+            // Se você quer contar "período de vigência em meses":
+            // 01/01/25 a 31/01/25 = 1 mês.
+            // 01/01/25 a 31/12/25 = 12 meses.
+            
+            // A sua fórmula original ((ano*12)+mes)+1 ESTÁ CORRETA para vigência inclusiva.
+            // Se está dando 13, verifique os dados no banco:
+            // Rode: SELECT DataInicio, DataFim FROM Instrumento WHERE Id = SEU_ID
+            
+            return meses + 1; 
         }
         /* ---------- LISTAR ---------- */
         [HttpGet]
@@ -482,9 +501,10 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = "Não foi possível excluir: há vínculos relacionados.";
                 return RedirectToAction("Index");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                TempData["Erro"] = "Ops, algo deu errado. Tente novamente.";
+                // Agora o erro real será exibido na tela
+                TempData["Erro"] = $"Erro tecnico ao excluir: {ex.Message}";
                 return RedirectToAction("Index");
             }
         }

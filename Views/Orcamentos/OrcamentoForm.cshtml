@@ -16,7 +16,19 @@
     <input type="hidden" asp-for="Id" />
     <input type="hidden" id="detalhamentoJsonInput" name="detalhamentoJson" />
     <input type="hidden" id="justificativa" name="justificativa" />
-
+    <div class="row">
+        <div class="col-12 mb-3">
+            <label asp-for="InstrumentoId" class="form-label fw-bold">Instrumento (Fonte de Recurso)</label>
+            <select asp-for="InstrumentoId" 
+                    asp-items="ViewBag.Instrumentos" 
+                    class="form-select" 
+                    id="InstrumentoId">
+                <option value="">-- Selecione o Instrumento --</option>
+            </select>
+            <span asp-validation-for="InstrumentoId" class="text-danger"></span>
+            <div class="form-text text-muted">O orçamento abaterá do saldo deste instrumento.</div>
+        </div>
+    </div>
     <div class="row">
         <div class="col-12 mb-3">
             <label asp-for="Nome" class="form-label"></label>
@@ -125,6 +137,15 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const hasSwal = typeof window.Swal !== 'undefined';
+
+        // [NOVO] Ativa o Select2 no campo de Instrumento
+        if (window.jQuery && $('#InstrumentoId').length) {
+            $('#InstrumentoId').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Selecione ou digite para buscar...',
+                allowClear: true
+            });
+        }
 
         // ---------- VARIÁVEIS ----------
         let detalhamento = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Detalhamento ?? new List<Financeiro.Models.ViewModels.OrcamentoDetalheViewModel>()));

@@ -7,9 +7,11 @@ using Financeiro.Repositorios;
 using Financeiro.Servicos;
 using Financeiro.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class AditivosInstrumentoController : Controller
     {
         private readonly IInstrumentoVersaoRepositorio _versaoRepo;
@@ -91,28 +93,33 @@ namespace Financeiro.Controllers
                 vm.NovoValor = vm.TipoAditivo switch
                 {
                     TipoAditivo.Supressao or TipoAditivo.PrazoSupressao => -abs,
-                    TipoAditivo.Acrescimo or TipoAditivo.PrazoAcrescimo =>  abs,
+                    TipoAditivo.Acrescimo or TipoAditivo.PrazoAcrescimo => abs,
                     _ => vm.NovoValor
                 };
             }
 
-            // Só-valor → manter vigência atual
-            bool alteraPrazo = vm.TipoAditivo is TipoAditivo.Prazo or TipoAditivo.PrazoAcrescimo or TipoAditivo.PrazoSupressao;
-            if (!alteraPrazo)
+            // --- CORREÇÃO APLICADA AQUI ---
+            // PERMITIR DATAS PERSONALIZADAS SEMPRE (DESTRAMENTO DE DATA)
+            // Se o usuário informou datas (mesmo em aditivo só de valor), usamos elas. 
+            // Se não informou, herdamos da versão vigente (ou do instrumento original).
+            
+            // 1. Define Data Início
+            if (!vm.NovaDataInicio.HasValue)
             {
                 var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
-                if (atual != null)
-                {
-                    vm.NovaDataInicio = atual.VigenciaInicio;
-                    vm.NovaDataFim    = atual.VigenciaFim; // pode ser null (vigente)
-                }
-                else
-                {
-                    var pai = await _instrRepo.ObterPorIdAsync(vm.InstrumentoId);
-                    vm.NovaDataInicio = pai?.DataInicio;
-                    vm.NovaDataFim    = pai?.DataFim;
-                }
+                // Se não tem versão atual, pega do pai (instrumento original)
+                var pai = await _instrRepo.ObterPorIdAsync(vm.InstrumentoId);
+                vm.NovaDataInicio = atual?.VigenciaInicio ?? pai?.DataInicio;
             }
+
+            // 2. Define Data Fim
+            if (!vm.NovaDataFim.HasValue)
+            {
+                var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
+                var pai = await _instrRepo.ObterPorIdAsync(vm.InstrumentoId);
+                vm.NovaDataFim = atual?.VigenciaFim ?? pai?.DataFim;
+            }
+            // -----------------------------
 
             try
             {
@@ -146,7 +153,7 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = "Ops, algo deu errado ao salvar o aditivo.";
             }
 
-            // Reexibe view com VersaoAtual padronizada
+            // Reexibe view com VersaoAtual padronizada em caso de erro
             var v = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
             ViewBag.VersaoAtual = v == null
                 ? new { Versao = 1, Valor = 0m, VigenciaInicio = (DateTime?)null, VigenciaFim = (DateTime?)null }

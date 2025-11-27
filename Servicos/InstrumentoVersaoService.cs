@@ -22,10 +22,11 @@ namespace Financeiro.Servicos
         public async Task CriarAditivoAsync(AditivoInstrumentoViewModel vm)
         {
             if (vm == null) throw new ArgumentNullException(nameof(vm));
+            
             var instrumento = await _instrRepo.ObterPorIdAsync(vm.InstrumentoId)
-                               ?? throw new ArgumentException("Instrumento não encontrado.");
+                              ?? throw new ArgumentException("Instrumento não encontrado.");
 
-            // Garante versão inicial
+            // 1. Garante que existe uma versão inicial (Vigente)
             var vigente = await _versaoRepo.ObterVersaoAtualAsync(vm.InstrumentoId);
             if (vigente == null)
             {
@@ -34,7 +35,7 @@ namespace Financeiro.Servicos
                     InstrumentoId  = instrumento.Id,
                     Versao         = 1,
                     VigenciaInicio = instrumento.DataInicio,
-                    VigenciaFim    = null,
+                    VigenciaFim    = instrumento.DataFim, // Pega do pai se for o primeiro
                     Valor          = instrumento.Valor,
                     Objeto         = instrumento.Objeto,
                     TipoAditivo    = null,
@@ -43,36 +44,55 @@ namespace Financeiro.Servicos
                     DataRegistro   = DateTime.Now
                 };
                 await _versaoRepo.InserirAsync(original);
-                vigente = original;
+                vigente = original; // Agora temos uma base para calcular
             }
 
-            // Calcula novo valor (delta positivo/negativo já foi normalizado no Controller)
+            // 2. Define as NOVAS Datas de Vigência (Prioridade: Informada no Form > Vigente Atual)
+            DateTime novaIni = vm.NovaDataInicio ?? vigente.VigenciaInicio;
+            DateTime? novaFim = vm.NovaDataFim ?? vigente.VigenciaFim;
+
+            // 3. Cálculo do Novo Valor (Total ou Mensal)
             decimal valorFinal = vigente.Valor;
-            bool alteraValor = vm.TipoAditivo is TipoAditivo.Acrescimo
-                                             or TipoAditivo.Supressao
-                                             or TipoAditivo.PrazoAcrescimo
-                                             or TipoAditivo.PrazoSupressao;
+            
+            bool alteraValor = vm.TipoAditivo is TipoAditivo.Acrescimo 
+                            or TipoAditivo.Supressao 
+                            or TipoAditivo.PrazoAcrescimo 
+                            or TipoAditivo.PrazoSupressao;
+
             if (alteraValor)
             {
                 if (!vm.NovoValor.HasValue || vm.NovoValor.Value == 0)
                     throw new ArgumentException("Informe um valor de aditivo diferente de zero.");
-                valorFinal = vigente.Valor + vm.NovoValor.Value;
+
+                decimal delta = vm.NovoValor.Value; // O sinal (+/-) já vem tratado do Controller
+
+                // --- LÓGICA CORRIGIDA: ADITIVO MENSAL ---
+                if (vm.EhValorMensal)
+                {
+                    // Se o valor informado é mensal (ex: +100k/mês), precisamos saber quantos meses
+                    // isso representa no total do período para somar ao Valor Global do contrato.
+                    
+                    if (novaFim.HasValue)
+                    {
+                        int meses = CalcularMeses(novaIni, novaFim.Value);
+                        // Ex: 100k * 12 meses = 1.2 Milhões de acréscimo total
+                        delta = delta * meses; 
+                    }
+                    else
+                    {
+                        // Se for indeterminado, assumimos que o delta mensal é somado apenas uma vez?
+                        // Ou bloqueamos? Por segurança, vamos manter a lógica simples:
+                        // Em contratos sem fim, o aditivo mensal é aplicado como valor nominal único por enquanto
+                        // (Para evitar multiplicar por infinito).
+                    }
+                }
+                // ----------------------------------------
+
+                valorFinal = vigente.Valor + delta;
                 if (valorFinal < 0) throw new ArgumentException("O valor do instrumento não pode ficar negativo.");
             }
 
-            bool alteraPrazo = vm.TipoAditivo is TipoAditivo.Prazo
-                                             or TipoAditivo.PrazoAcrescimo
-                                             or TipoAditivo.PrazoSupressao;
-
-            DateTime novaIni = alteraPrazo ? (vm.NovaDataInicio ?? vigente.VigenciaInicio) : vigente.VigenciaInicio;
-            DateTime? novaFim = alteraPrazo ? vm.NovaDataFim : vigente.VigenciaFim;
-
-            // Se alterar prazo e houver sobreposição, encerramos a vigente no dia anterior ao novo início
-            if (alteraPrazo && vm.NovaDataInicio.HasValue && vm.NovaDataInicio.Value > vigente.VigenciaInicio)
-            {
-                await _versaoRepo.AtualizarVigenciaFimAsync(vigente.Id, vm.NovaDataInicio.Value.AddDays(-1));
-            }
-
+            // 4. Criação da Nova Versão
             var novaVersao = new InstrumentoVersao
             {
                 InstrumentoId  = vm.InstrumentoId,
@@ -80,7 +100,7 @@ namespace Financeiro.Servicos
                 VigenciaInicio = novaIni,
                 VigenciaFim    = novaFim,
                 Valor          = valorFinal,
-                Objeto         = instrumento.Objeto, // pode evoluir para permitir mudança
+                Objeto         = instrumento.Objeto, 
                 TipoAditivo    = vm.TipoAditivo,
                 Observacao     = vm.Observacao,
                 DataAssinatura = vm.DataAssinatura,
@@ -94,7 +114,7 @@ namespace Financeiro.Servicos
             int instrumentoId, int versao, string justificativa)
         {
             var atual = await _versaoRepo.ObterVersaoAtualAsync(instrumentoId)
-                       ?? throw new ArgumentException("Não há versão vigente para cancelar.");
+                        ?? throw new ArgumentException("Não há versão vigente para cancelar.");
 
             if (atual.Versao != versao)
                 throw new ArgumentException("Versão informada não é a vigente.");
@@ -105,6 +125,14 @@ namespace Financeiro.Servicos
             // Busca a nova vigente (versão anterior)
             var anterior = await _versaoRepo.ObterVersaoAtualAsync(instrumentoId);
             return (atual, anterior);
+        }
+
+        // Helper privado para cálculo de meses (igual ao que corrigimos no JS/Controller)
+        private int CalcularMeses(DateTime inicio, DateTime fim)
+        {
+            if (fim < inicio) return 0;
+            // Cálculo de meses inclusivo (ex: jan a dez = 12 meses)
+            return ((fim.Year - inicio.Year) * 12) + fim.Month - inicio.Month + 1;
         }
     }
 }

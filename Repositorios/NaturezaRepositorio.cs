@@ -60,5 +60,11 @@ WHERE  Id = @Id;";
             using var conn = _factory.CreateConnection();
             return await conn.QueryAsync<Natureza>(sql);
         }
+        public async Task<IEnumerable<Natureza>> ListarTodasAsync()
+        {
+            const string sql = "SELECT * FROM Natureza WHERE Ativo = 1 ORDER BY Nome";
+            using var conn = _factory.CreateConnection();
+            return await conn.QueryAsync<Natureza>(sql);
+        }
     }
 }

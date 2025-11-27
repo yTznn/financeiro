@@ -3,10 +3,12 @@ using Financeiro.Repositorios;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using System;
-using Financeiro.Servicos; // Adicionar para ILogService
+using Financeiro.Servicos;
+using Microsoft.AspNetCore.Authorization; // Adicionar para ILogService
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class RecebimentosInstrumentoController : Controller
     {
         private readonly IRecebimentoInstrumentoRepositorio _recebimentoRepo;

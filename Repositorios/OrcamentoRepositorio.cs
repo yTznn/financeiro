@@ -21,6 +21,8 @@ namespace Financeiro.Repositorios
 
         public async Task<IEnumerable<OrcamentoListViewModel>> ListarAsync()
         {
+            // Nota: Se quiser mostrar o nome do Instrumento na lista no futuro, 
+            // precisará fazer um JOIN com a tabela Instrumento aqui.
             const string sql = @"
                 SELECT
                     o.Id, o.Nome, o.Observacao, o.VigenciaInicio, o.VigenciaFim,
@@ -29,10 +31,10 @@ namespace Financeiro.Repositorios
                     (o.ValorPrevistoTotal - ISNULL(c.TotalComprometido, 0)) AS SaldoDisponivel
                 FROM [dbo].[Orcamento] o
                 LEFT JOIN (
-                     SELECT OrcamentoId, SUM(ValorContrato) AS TotalComprometido
-                     FROM [dbo].[Contrato]
-                     WHERE OrcamentoId IS NOT NULL
-                     GROUP BY OrcamentoId
+                      SELECT OrcamentoId, SUM(ValorContrato) AS TotalComprometido
+                      FROM [dbo].[Contrato]
+                      WHERE OrcamentoId IS NOT NULL
+                      GROUP BY OrcamentoId
                 ) c ON o.Id = c.OrcamentoId
                 ORDER BY o.Nome;";
 
@@ -54,6 +56,22 @@ namespace Financeiro.Repositorios
             return await conn.QueryAsync<OrcamentoDetalhe>(sql, new { orcamentoId });
         }
 
+        // [NOVO] Implementação do cálculo de saldo comprometido
+        public async Task<decimal> ObterTotalComprometidoPorInstrumentoAsync(int instrumentoId, int? ignorarOrcamentoId = null)
+        {
+            using var conn = _factory.CreateConnection();
+            const string sql = @"
+                SELECT SUM(ValorPrevistoTotal) 
+                FROM Orcamento 
+                WHERE InstrumentoId = @instrumentoId 
+                  AND Ativo = 1
+                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+
+            // O ExecuteScalarAsync retorna null se não houver registros, então usamos o operador de coalescência (?? 0)
+            var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { instrumentoId, ignorarId = ignorarOrcamentoId });
+            return total ?? 0m;
+        }
+
         public async Task InserirAsync(OrcamentoViewModel vm)
         {
             using var conn = _factory.CreateConnection();
@@ -62,14 +80,15 @@ namespace Financeiro.Repositorios
 
             try
             {
-                // CORREÇÃO: Removida a coluna 'TipoAcordoId' da query
+                // [ALTERADO] Adicionado InstrumentoId no INSERT
                 const string sqlHeader = @"
-                    INSERT INTO Orcamento (Nome, VigenciaInicio, VigenciaFim, ValorPrevistoTotal, Ativo, DataCriacao, Observacao)
-                    VALUES (@Nome, @VigenciaInicio, @VigenciaFim, @ValorPrevistoTotal, @Ativo, @DataCriacao, @Observacao);
+                    INSERT INTO Orcamento (InstrumentoId, Nome, VigenciaInicio, VigenciaFim, ValorPrevistoTotal, Ativo, DataCriacao, Observacao)
+                    VALUES (@InstrumentoId, @Nome, @VigenciaInicio, @VigenciaFim, @ValorPrevistoTotal, @Ativo, @DataCriacao, @Observacao);
                     SELECT CAST(SCOPE_IDENTITY() AS INT);";
                 
                 var orcamentoId = await conn.QuerySingleAsync<int>(sqlHeader, new 
                 {
+                    vm.InstrumentoId, // <--- Novo campo
                     vm.Nome,
                     vm.VigenciaInicio,
                     vm.VigenciaFim,
@@ -126,9 +145,10 @@ namespace Financeiro.Repositorios
 
             try
             {
-                // CORREÇÃO: Removida a coluna 'TipoAcordoId' da query
+                // [ALTERADO] Adicionado InstrumentoId no UPDATE
                 const string sqlHeader = @"
                     UPDATE Orcamento SET
+                        InstrumentoId = @InstrumentoId, -- <--- Novo campo
                         Nome = @Nome,
                         VigenciaInicio = @VigenciaInicio,
                         VigenciaFim = @VigenciaFim,
@@ -139,6 +159,7 @@ namespace Financeiro.Repositorios
                 
                 await conn.ExecuteAsync(sqlHeader, new 
                 { 
+                    vm.InstrumentoId, // <--- Novo campo
                     vm.Nome,
                     vm.VigenciaInicio,
                     vm.VigenciaFim,

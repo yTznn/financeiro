@@ -25,11 +25,20 @@ var culture = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = culture;
 CultureInfo.DefaultThreadCurrentUICulture = culture;
 
-// 2) MVC (com runtime compilation em DEBUG)
+// 2) MVC + BINDER CUSTOMIZADO
+// Adicionamos as options para registrar o nosso DecimalModelBinderProvider
 #if DEBUG
-builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation();
+builder.Services.AddControllersWithViews(options => 
+{
+    // Essa linha ensina o sistema a ler "25.000,00" corretamente
+    options.ModelBinderProviders.Insert(0, new DecimalModelBinderProvider());
+}).AddRazorRuntimeCompilation();
 #else
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options => 
+{
+    // Essa linha ensina o sistema a ler "25.000,00" corretamente
+    options.ModelBinderProviders.Insert(0, new DecimalModelBinderProvider());
+});
 #endif
 
 // 2.1) AutoMapper
@@ -49,9 +58,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 // 4) Connection-string
-// ALTERAÇÃO 1: Trocado de AddSingleton para AddScoped.
-// Isso garante que cada requisição web tenha seu próprio escopo de conexão com o banco,
-// eliminando o gargalo de performance.
 builder.Services.AddScoped<IDbConnectionFactory>(sp =>
 {
     var conn = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -60,8 +66,10 @@ builder.Services.AddScoped<IDbConnectionFactory>(sp =>
     return new DbConnectionFactory(conn, log);
 });
 
-// ALTERAÇÃO 2: Padronizado todos os registros de Transient para Scoped.
-// Isso otimiza a reutilização de serviços e repositórios dentro de uma mesma requisição.
+// ============================================================
+// INJEÇÃO DE DEPENDÊNCIA (SCOPED)
+// ============================================================
+
 #region Repositórios / Serviços já existentes
 builder.Services.AddScoped<IPessoaJuridicaRepositorio, PessoaJuridicaRepositorio>();
 builder.Services.AddScoped<PessoaJuridicaValidacoes>();
@@ -77,6 +85,9 @@ builder.Services.AddScoped<IOrcamentoRepositorio, OrcamentoRepositorio>();
 builder.Services.AddScoped<IContratoRepositorio, ContratoRepositorio>();
 builder.Services.AddScoped<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
 builder.Services.AddScoped<IContratoVersaoService, ContratoVersaoService>();
+
+// [NOVO] Repositório de Movimentações (Pagamentos)
+builder.Services.AddScoped<IMovimentacaoRepositorio, MovimentacaoRepositorio>();
 #endregion
 
 #region Repositórios e Serviços que já estavam corretos (Scoped)

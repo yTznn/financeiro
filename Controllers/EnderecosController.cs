@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models;
 using Financeiro.Models.ViewModels;
 using Financeiro.Servicos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Financeiro.Controllers
 {
+    [Authorize]
     public class EnderecosController : Controller
     {
         private readonly IEnderecoService _enderecoService;

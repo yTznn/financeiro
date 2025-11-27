@@ -63,20 +63,21 @@ namespace Financeiro.Repositorios
                 WHERE ContratoId = @contratoId;";
 
             using var conn = _factory.CreateConnection();
-            var itens = await conn.QueryAsync<ContratoVersao>(sqlItens, new
+            
+            var multi = await conn.QueryMultipleAsync($"{sqlItens} {sqlCount}", new
             {
                 contratoId,
                 Offset = (pagina - 1) * tamanhoPagina,
                 TamanhoPagina = tamanhoPagina
             });
 
-            var totalItens   = await conn.ExecuteScalarAsync<int>(sqlCount, new { contratoId });
+            var itens = await multi.ReadAsync<ContratoVersao>();
+            var totalItens = await multi.ReadSingleAsync<int>();
             var totalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
 
             return (itens, totalPaginas);
         }
 
-        // ✅ Quantidade total de aditivos de um contrato
         public async Task<int> ContarPorContratoAsync(int contratoId)
         {
             const string sql = "SELECT COUNT(*) FROM ContratoVersao WHERE ContratoId = @contratoId;";
@@ -84,7 +85,6 @@ namespace Financeiro.Repositorios
             return await conn.ExecuteScalarAsync<int>(sql, new { contratoId });
         }
 
-        // ✅ Exclui a versão (aditivo)
         public async Task ExcluirAsync(int versaoId)
         {
             const string sql = "DELETE FROM ContratoVersao WHERE Id = @versaoId;";
@@ -92,7 +92,7 @@ namespace Financeiro.Repositorios
             await conn.ExecuteAsync(sql, new { versaoId });
         }
 
-        // ✅ Restaura os campos do contrato com base na versão anterior
+        // Método usado ao cancelar um aditivo para voltar o contrato ao estado anterior
         public async Task RestaurarContratoAPartirDaVersaoAsync(ContratoVersao versaoAnterior)
         {
             const string sql = @"
