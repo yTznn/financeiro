@@ -67,7 +67,7 @@
           novalidate
           data-valor-atual="@((versaoAtual?.ValorContrato ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))"
           data-fim-atual="@(versaoAtual?.DataFim.ToString("yyyy-MM-dd") ?? "")">
-        
+       
         @Html.AntiForgeryToken()
         <input asp-for="ContratoId" type="hidden" />
 
@@ -93,7 +93,7 @@
                 <span class="input-group-text">R$</span>
                 <input asp-for="NovoValor" type="text" class="form-control money" id="NovoValor" />
             </div>
-            
+           
             <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" asp-for="EhValorMensal" id="EhValorMensal">
                 <label class="form-check-label text-muted small" for="EhValorMensal">
@@ -151,7 +151,7 @@
         // Aceitar formato PT-BR no validator
         if (window.jQuery && $.validator) {
             $.validator.methods.number = function (value, element) {
-                return this.optional(element) || 
+                return this.optional(element) ||
                        /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value) ||
                        /^-?\d+(?:[\.,]\d+)?$/.test(value);
             };
@@ -174,7 +174,7 @@
         const T = { Prazo:1, PrazoAcrescimo:2, PrazoSupressao:3, Supressao:4, Acrescimo:5 };
 
         const valorAtual = Number(form?.dataset?.valorAtual || '0');
-        const fimAtualStr = form?.dataset?.fimAtual || ''; 
+        const fimAtualStr = form?.dataset?.fimAtual || '';
 
         function show(el, on){ if (el) el.style.display = on ? 'block' : 'none'; }
         function req(el, on){ if (el){ el.required = !!on; el.setAttribute('aria-required', on ? 'true' : 'false'); } }
@@ -197,7 +197,7 @@
             if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
             return Number((s || '').replace(/\./g,'').replace(',','.')) || 0;
         }
-        
+       
         function fmtBr(n){
             try { return Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
             catch { return 'R$ ' + (n || 0).toFixed(2); }
@@ -224,9 +224,9 @@
             if (chkMensal && chkMensal.checked) {
                 const dataFinalConsiderada = (novaFim && novaFim.value) ? novaFim.value : fimAtualStr;
                 const dataInicialConsiderada = (iniAditivo && iniAditivo.value) ? iniAditivo.value : new Date().toISOString().slice(0, 10);
-                
+               
                 const meses = mesesEntre(dataInicialConsiderada, dataFinalConsiderada);
-                
+               
                 if(meses > 0) {
                     const deltaTotal = delta * meses;
                     preview.innerHTML = `<small class='d-block mb-1'>Cálculo Mensal: ${fmtBr(delta)} x ${meses} meses = <strong>${fmtBr(deltaTotal)}</strong></small>`;
@@ -259,7 +259,7 @@
             atualizarAjudaValor(tipo);
             atualizarPreview();
         }
-        
+       
         function formatarMoedaInput(el) {
             const v = parsePtBr(el.value);
             if(v) el.value = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -274,7 +274,7 @@
         chkMensal?.addEventListener('change', atualizarPreview);
         iniAditivo?.addEventListener('change', atualizarPreview);
         novaFim?.addEventListener('change', atualizarPreview);
-        
+       
         aplicarTipo();
 
         const summary = document.getElementById("validationSummary");
@@ -283,15 +283,20 @@
         form?.addEventListener('submit', async (e) => {
             if (window.jQuery && !$(form).valid()) return;
 
+            // [CORREÇÃO JAVASCRIPT AQUI]
             if (campoValor && campoValor.style.display !== 'none' && inpValor) {
-                const clean = (inpValor.value || '').replace(/\./g, '').replace(',', '.');
-                if (!clean || isNaN(clean) || Number(clean) <= 0) {
+                // Removemos pontos de milhar apenas para checar se é numero válido no JS
+                const checkClean = (inpValor.value || '').replace(/\./g, '').replace(',', '.');
+                
+                // Valida apenas se é numérico
+                if (!checkClean || isNaN(checkClean) || Number(checkClean) <= 0) {
                     e.preventDefault();
                     return Swal.fire({ icon:'warning', title:'Informe um valor numérico maior que zero.' });
                 }
-                // Mantém a limpeza do valor para garantir formato numérico limpo
-                // Mesmo usando ViewModel String, enviar com ponto facilita o parse do fallback
-                inpValor.value = clean; 
+
+                // REMOVIDA A LINHA: inpValor.value = clean;
+                // Agora o valor é enviado ORIGINALMENTE (ex: 5.000,00) para o servidor
+                // O seu ViewModel em C# (NovoValorDecimal) lidará com isso usando a cultura pt-BR.
             }
 
             e.preventDefault();

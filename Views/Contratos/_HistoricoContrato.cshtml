@@ -1,14 +1,13 @@
 @model IEnumerable<Financeiro.Models.ContratoVersao>
 @using System.Globalization
-@using System.Linq
 @using Financeiro.Models
 
 @{
     var br = new CultureInfo("pt-BR");
-    int totalPaginas = ViewBag.TotalPaginas;
-    int paginaAtual  = ViewBag.PaginaAtual;
-    int contratoId   = ViewBag.ContratoId;
-    var ultimaVersao = Model?.Any() == true ? Model.Max(m => m.Versao) : 0;
+    // Recebe paginação do Controller
+    int totalPaginas = ViewBag.TotalPaginas ?? 0;
+    int paginaAtual  = ViewBag.PaginaAtual ?? 1;
+    int contratoId   = ViewBag.ContratoId ?? 0;
 
     string BadgeTipo(ContratoVersao v)
     {
@@ -30,94 +29,64 @@
   #hist-contrato th, #hist-contrato td { vertical-align: middle; white-space: normal; }
   #hist-contrato .nowrap { white-space: nowrap; }
   #hist-contrato .money { font-variant-numeric: tabular-nums; }
-  #hist-contrato .col-acao { width: 1%; white-space: nowrap; }
-  
-  #hist-contrato .btn-cancel {
-      padding: .25rem .5rem;
-      display: inline-flex; align-items: center; gap: .4rem;
-      white-space: nowrap; border-radius: .5rem;
-  }
-  #hist-contrato .btn-cancel .ico { width: 1rem; height: 1rem; display:block; }
-  
-  @@media (max-width: 991.98px) {
-      #hist-contrato .btn-cancel .lbl { display: none; }
-  }
+  #hist-contrato thead th { background-color:#0d6efd14; }
 </style>
 
 <div id="hist-contrato">
   <table class="table table-sm table-hover table-bordered align-middle d-none d-md-table mb-2">
-    <thead class="table-light">
+    <thead class="table-light text-center">
       <tr>
-        <th class="text-center nowrap">Versão</th>
+        <th class="nowrap">Versão</th>
         <th>Tipo de Aditivo</th>
-        <th class="text-center">Início do Aditivo</th>
-        <th class="text-end nowrap">Valor Global</th>
-        <th class="text-center">Vigência</th>
-        <th class="text-center">Data Registro</th>
-        <th class="text-center col-acao">Ações</th>
+        <th>Início do Aditivo</th>
+        <th class="nowrap">Valor Global</th>
+        <th>Vigência</th>
+        <th>Data Registro</th>
       </tr>
     </thead>
     <tbody>
-    @foreach (var v in Model)
+    @if(Model != null)
     {
-        // Só permite cancelar se for a última versão E não for a original (v1)
-        var podeCancelar = v.Versao == ultimaVersao && v.Versao > 1;
-
-        <tr>
-          <td class="text-center fw-semibold nowrap">@v.Versao</td>
-          <td>@Html.Raw(BadgeTipo(v))</td>
-          <td class="text-center">@((v.DataInicioAditivo?.ToString("dd/MM/yyyy")) ?? "-")</td>
-          <td class="text-end nowrap money">@v.ValorContrato.ToString("C", br)</td>
-          <td class="text-center">@v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</td>
-          <td class="text-center">@v.DataRegistro.ToString("dd/MM/yyyy HH:mm")</td>
-          <td class="text-center">
-            @if (podeCancelar)
-            {
-              <button type="button" 
-                      class="btn btn-danger btn-cancel js-cancelar-aditivo"
-                      data-bs-toggle="tooltip"
-                      title="Cancelar aditivo v@v.Versao"
-                      data-versao="@v.Versao"
-                      data-contrato-id="@contratoId">
-                <svg class="ico" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M2 8a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1z"/>
-                </svg>
-                <span class="lbl">Cancelar</span>
-              </button>
-            }
-          </td>
-        </tr>
+        foreach (var v in Model)
+        {
+            <tr>
+              <td class="text-center fw-semibold nowrap">@v.Versao</td>
+              <td>@Html.Raw(BadgeTipo(v))</td>
+              <td class="text-center">@((v.DataInicioAditivo?.ToString("dd/MM/yyyy")) ?? "-")</td>
+              <td class="text-end nowrap money">@v.ValorContrato.ToString("C", br)</td>
+              <td class="text-center">@v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</td>
+              <td class="text-center">@v.DataRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+            </tr>
+        }
+    }
+    else 
+    {
+        <tr><td colspan="6" class="text-center text-muted">Nenhum histórico encontrado.</td></tr>
     }
     </tbody>
   </table>
 
   <div class="accordion d-md-none" id="historicoAccordion">
-    @foreach (var v in Model)
+    @if(Model != null)
     {
-        var podeCancelar = v.Versao == ultimaVersao && v.Versao > 1;
-        var collapseId = $"collapse-{v.Versao}";
-        <div class="accordion-item mb-2">
-          <h2 class="accordion-header" id="h@collapseId">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
-              Versão @v.Versao
-            </button>
-          </h2>
-          <div id="@collapseId" class="accordion-collapse collapse" data-bs-parent="#historicoAccordion">
-            <div class="accordion-body small">
-              <p class="mb-1"><strong>Tipo:</strong> @Html.Raw(BadgeTipo(v))</p>
-              <p class="mb-1"><strong>Valor:</strong> @v.ValorContrato.ToString("C", br)</p>
-              @if (podeCancelar)
-              {
-                <button type="button" 
-                        class="btn btn-danger btn-sm js-cancelar-aditivo w-100 mt-2"
-                        data-versao="@v.Versao"
-                        data-contrato-id="@contratoId">
-                  Cancelar Aditivo
+        foreach (var v in Model)
+        {
+            var collapseId = $"collapse-{v.Versao}";
+            <div class="accordion-item mb-2">
+              <h2 class="accordion-header" id="h@collapseId">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                  Versão @v.Versao
                 </button>
-              }
+              </h2>
+              <div id="@collapseId" class="accordion-collapse collapse" data-bs-parent="#historicoAccordion">
+                <div class="accordion-body small">
+                  <p class="mb-1"><strong>Tipo:</strong> @Html.Raw(BadgeTipo(v))</p>
+                  <p class="mb-1"><strong>Valor:</strong> @v.ValorContrato.ToString("C", br)</p>
+                  <p class="mb-1"><strong>Vigência:</strong> @v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+        }
     }
   </div>
 
@@ -137,69 +106,14 @@
 </div>
 
 <script>
-  // Reinicia tooltips
-  var tooltipTriggerList = [].slice.call(document.querySelectorAll('#hist-contrato [data-bs-toggle="tooltip"]'))
-  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl)
-  })
-
-  // Paginação AJAX
-  $(document).off('click', '.historico-page-link').on('click', '.historico-page-link', function (e) {
-      e.preventDefault();
-      const page       = $(this).data('page');
-      const contratoId = $(this).data('contrato-id');
-      $('#historico-container').load('@Url.Action("Historico","Contratos")' + '?id=' + contratoId + '&pag=' + page);
-  });
-
-  // Cancelar Aditivo (CORRIGIDO)
-  $(document).off('click', '.js-cancelar-aditivo').on('click', '.js-cancelar-aditivo', async function(e){
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      // [CORREÇÃO CRÍTICA] Usamos .attr() para ler o valor bruto do HTML e parseInt para garantir número
-      const contratoId = parseInt($(this).attr('data-contrato-id'));
-      const versao     = parseInt($(this).attr('data-versao'));
-
-      if (!contratoId || !versao) {
-          Swal.fire({ icon: "error", text: "Erro ao ler dados do aditivo. Recarregue a página." });
-          return;
-      }
-
-      const result = await Swal.fire({
-          title: `Cancelar aditivo v${versao}?`,
-          text : "Isso reverterá o contrato para os valores da versão anterior. Informe o motivo:",
-          input: "textarea",
-          inputAttributes: { maxlength: 1000 },
-          inputValidator: (v) => !v ? "A justificativa é obrigatória." : undefined,
-          showCancelButton: true,
-          confirmButtonText: "Sim, cancelar",
-          confirmButtonColor: "#dc3545"
-      });
-
-      if (!result.isConfirmed || !result.value) return;
-
-      try {
-          // Chama o Controller de ADITIVOS
-          const r = await fetch('@Url.Action("CancelarAditivo", "AditivosContrato")', {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                  ContratoId: contratoId, 
-                  Versao: versao, 
-                  Justificativa: result.value 
-              })
-          });
-
-          if (r.ok) {
-              await Swal.fire({ icon:"success", title:"Sucesso", text:"Aditivo cancelado. A página será atualizada." });
-              window.location.reload(); // RECARREGA TUDO
-          } else {
-              const msg = await r.text();
-              Swal.fire({ icon:"error", title: "Erro", text: msg || "Não foi possível cancelar." });
-          }
-      } catch (err) {
-          console.error(err);
-          Swal.fire({ icon:"error", text:"Erro de comunicação com o servidor." });
-      }
-  });
+    // Apenas lógica de paginação, sem cancelamento aqui dentro
+    $(document).off('click', '.historico-page-link').on('click', '.historico-page-link', function (e) {
+        e.preventDefault();
+        const page = $(this).data('page');
+        const cId = $(this).data('contrato-id');
+        const container = $('#historico-container'); // Certifique-se que o ID na View principal é este
+        if(container.length) {
+            container.load('@Url.Action("Historico","Contratos")' + '?id=' + cId + '&pag=' + page);
+        }
+    });
 </script>

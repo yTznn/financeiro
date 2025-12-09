@@ -498,7 +498,7 @@ namespace Financeiro.Controllers
             }
             catch (SqlException ex) when (ex.Number == 547)
             {
-                TempData["Erro"] = "Não foi possível excluir: há vínculos relacionados.";
+                TempData["Erro"] = "Nao foi possivel excluir: ha vinculos relacionados.";
                 return RedirectToAction("Index");
             }
             catch (Exception ex)

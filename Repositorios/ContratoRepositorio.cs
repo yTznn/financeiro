@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Globalization; // Necessário para converter decimal para string PT-BR
+using System.Globalization; 
 
 namespace Financeiro.Repositorios
 {
@@ -70,7 +70,6 @@ namespace Financeiro.Repositorios
                 var contratoId = await conn.QuerySingleAsync<int>(sqlInsertContrato, contrato, transaction);
                 vm.Id = contratoId;
 
-                // Passamos a lista completa de naturezas (com valor)
                 await InserirContratoNaturezasAsync(conn, transaction, contratoId, vm.Naturezas);
                 
                 transaction.Commit();
@@ -129,7 +128,6 @@ namespace Financeiro.Repositorios
                 const string sqlDeleteNaturezas = "DELETE FROM ContratoNatureza WHERE ContratoId = @ContratoId;";
                 await conn.ExecuteAsync(sqlDeleteNaturezas, new { ContratoId = vm.Id }, transaction);
                 
-                // Passamos a lista completa de naturezas (com valor)
                 await InserirContratoNaturezasAsync(conn, transaction, vm.Id, vm.Naturezas);
                 
                 transaction.Commit();
@@ -143,7 +141,18 @@ namespace Financeiro.Repositorios
 
         public async Task ExcluirAsync(int id)
         {
+            // CORREÇÃO AQUI: Tratamento da Cascata Financeira
+            
+            // 1. Desvincula lançamentos financeiros (Transforma em "Sem Contrato")
+            // Isso evita o erro de FK e preserva o histórico de pagamentos
+            const string sqlDesvincularFinanceiro = "UPDATE MovimentacaoRateio SET ContratoId = NULL WHERE ContratoId = @id;";
+            
+            // 2. Deleta dependências diretas do contrato
+            // (Seu banco já tem DELETE CASCADE configurado, mas deixar explícito garante funcionamento)
             const string sqlNatureza = "DELETE FROM ContratoNatureza WHERE ContratoId = @id;";
+            const string sqlVersao = "DELETE FROM ContratoVersao WHERE ContratoId = @id;";
+            
+            // 3. Deleta o contrato
             const string sqlContrato = "DELETE FROM Contrato WHERE Id = @id;";
             
             using var conn = _factory.CreateConnection();
@@ -151,8 +160,12 @@ namespace Financeiro.Repositorios
             using var tx = conn.BeginTransaction();
             try
             {
+                // Executa na ordem correta
+                await conn.ExecuteAsync(sqlDesvincularFinanceiro, new { id }, tx);
                 await conn.ExecuteAsync(sqlNatureza, new { id }, tx);
+                await conn.ExecuteAsync(sqlVersao, new { id }, tx);
                 await conn.ExecuteAsync(sqlContrato, new { id }, tx);
+                
                 tx.Commit();
             }
             catch
@@ -170,7 +183,6 @@ namespace Financeiro.Repositorios
             var contrato = await conn.QuerySingleOrDefaultAsync<Contrato>(sqlContrato, new { id });
             if (contrato == null) return null;
 
-            // [ATUALIZADO] Busca NaturezaId + Valor e o Nome da Natureza (JOIN)
             const string sqlNaturezas = @"
                 SELECT cn.NaturezaId, n.Nome AS NomeNatureza, cn.Valor
                 FROM ContratoNatureza cn
@@ -179,7 +191,6 @@ namespace Financeiro.Repositorios
                 
             var naturezas = await conn.QueryAsync<ContratoNaturezaViewModel>(sqlNaturezas, new { id });
 
-            // Calcula o número de meses para reverter o valor TOTAL -> MENSAL
             int mesesEdicao = 1;
             if (contrato.DataFim >= contrato.DataInicio)
             {
@@ -187,7 +198,6 @@ namespace Financeiro.Repositorios
                 if (mesesEdicao < 1) mesesEdicao = 1;
             }
 
-            // Ajusta os valores das naturezas (Banco tem Total -> Tela quer Mensal)
             var listaNaturezas = naturezas.ToList();
             foreach (var n in listaNaturezas)
             {
@@ -211,19 +221,15 @@ namespace Financeiro.Repositorios
                 Naturezas = listaNaturezas
             };
 
-            // [CORREÇÃO DO ERRO DE COMPILAÇÃO]
-            // Convertemos o cálculo decimal para string formatada em PT-BR
             if (vm.ValorContrato > 0)
             {
                 decimal valorMensalCalc = vm.ValorContrato / mesesEdicao;
-                // "N2" formata com 2 casas decimais e separadores (ex: "25.000,00")
                 vm.ValorMensal = valorMensalCalc.ToString("N2", new CultureInfo("pt-BR"));
             }
 
             return vm;
         }
 
-        // [MÉTODO ATUALIZADO] Grava o valor na tabela de ligação
         private async Task InserirContratoNaturezasAsync(IDbConnection conn, IDbTransaction transaction, int contratoId, List<ContratoNaturezaViewModel> naturezas)
         {
             if (naturezas == null || !naturezas.Any()) return;
@@ -231,7 +237,6 @@ namespace Financeiro.Repositorios
             const string sql = "INSERT INTO ContratoNatureza (ContratoId, NaturezaId, Valor) VALUES (@ContratoId, @NaturezaId, @Valor);";
             foreach (var item in naturezas)
             {
-                // Salva apenas naturezas com valor > 0 ou salva zerado se quiser permitir
                 if (item.Valor >= 0) 
                 {
                     await conn.ExecuteAsync(sql, new { ContratoId = contratoId, item.NaturezaId, item.Valor }, transaction);

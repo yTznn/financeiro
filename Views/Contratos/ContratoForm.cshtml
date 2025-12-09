@@ -10,6 +10,9 @@
     
     // Serializa as naturezas já salvas para recriar a tabela no JS
     var naturezasJson = Json.Serialize(Model.Naturezas);
+
+    // Recupera a versão atual para verificar se pode cancelar
+    var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.ContratoVersao;
 }
 
 <div id="pageFlags"
@@ -19,6 +22,33 @@
 <h3 class="fw-bold mb-4"><i class="bi bi-file-earmark-text-fill me-2"></i>@ViewData["Title"]</h3>
 <hr />
 
+@if (Model.Id != 0)
+{
+    <div class="card bg-light border-0 mb-4 shadow-sm">
+        <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+            <h6 class="mb-0 me-auto text-primary fw-bold">
+                <i class="bi bi-file-earmark-medical me-2"></i>Gestão de Aditivos
+            </h6>
+            
+            <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-lg"></i> Novo Aditivo
+            </a>
+
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalHistorico">
+                <i class="bi bi-clock-history"></i> Histórico
+            </button>
+
+            @if (versaoAtual != null && versaoAtual.Versao > 1)
+            {
+                <button type="button" class="btn btn-sm btn-outline-danger" id="btnCancelarAditivo"
+                        data-contrato-id="@Model.Id" 
+                        data-versao="@versaoAtual.Versao">
+                    <i class="bi bi-x-circle"></i> Cancelar último aditivo (v.@versaoAtual.Versao)
+                </button>
+            }
+        </div>
+    </div>
+}
 <form id="form-contrato" novalidate
       asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
       method="post"
@@ -167,57 +197,53 @@
             <i class="bi bi-check-circle me-1"></i> Salvar Alterações
         </button>
 
-        @if (Model.Id > 0)
-        {
-            <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-info">
-                <i class="bi bi-plus-circle me-1"></i> Aditivar Contrato
-            </a>
-        }
-
         <a asp-action="Index" class="btn btn-secondary">
-            <i class="bi bi-x-circle me-1"></i> Cancelar
+            <i class="bi bi-x-circle me-1"></i> Voltar
         </a>
     </div>
 </form>
 
-@if (Model.Id > 0)
+@if (Model.Id != 0)
 {
-    <hr class="my-4" />
-    <h4 class="fw-bold">Histórico de Aditivos</h4>
-    <div id="historico-container"><p>Carregando histórico...</p></div>
+  <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-secondary text-white">
+          <h5 class="modal-title">Histórico do Contrato</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="historico-container">
+            <div class="text-center my-3"><div class="spinner-border text-secondary"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
 }
-
 @section Scripts {
     @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
         // --- CONFIGURAÇÃO GLOBAL DO VALIDATOR ---
-        // Aceita formato com ponto ou vírgula
         $.validator.methods.number = function (value, element) {
             return this.optional(element) || 
                    /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value) || 
                    /^-?\d+(?:[\.,]\d+)?$/.test(value);
         }
-        
         $.validator.setDefaults({ onkeyup: false, onclick: false });
 
         // --- FUNÇÕES AUXILIARES ---
         function parseCurrency(value) {
             if (!value) return 0;
             let s = String(value).trim();
-            // Se formato americano
             if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
-            // Formato PT-BR
             const normalized = s.replace(/\./g, '').replace(',', '.');
             const n = parseFloat(normalized);
             return isNaN(n) ? 0 : n;
         }
-        
         function formatCurrency(value) {
             return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
-
         function formatCurrencyBRL(value) {
             return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
@@ -236,7 +262,6 @@
             // --- TABELA DE NATUREZAS ---
             function adicionarLinhaNatureza(id = "", valor = 0) {
                 const index = listaNaturezas.children('tr').length;
-                
                 const tr = $(`
                     <tr class="linha-natureza">
                         <td>
@@ -290,9 +315,7 @@
 
             $('#btn-add-natureza').click(function() { adicionarLinhaNatureza(); });
 
-            listaNaturezas.on('input', '.valor-natureza', function() {
-                recalcularTotais();
-            });
+            listaNaturezas.on('input', '.valor-natureza', function() { recalcularTotais(); });
 
             function reindexarNaturezas() {
                 listaNaturezas.children('tr').each(function(i) {
@@ -302,12 +325,9 @@
                 });
             }
 
-            // --- CÁLCULO VISUAL ---
             function recalcularTotais() {
                 let somaRateio = 0;
-                $('.valor-natureza').each(function() {
-                    somaRateio += parseCurrency($(this).val());
-                });
+                $('.valor-natureza').each(function() { somaRateio += parseCurrency($(this).val()); });
 
                 const valorMensalMeta = parseCurrency(valorMensalInput.val());
                 const diferenca = valorMensalMeta - somaRateio;
@@ -376,7 +396,6 @@
                     Swal.fire({ icon: 'error', title: 'Atenção!', text: `A soma do rateio não bate com o Valor Mensal.` });
                     return false;
                 }
-                // O submit segue normal, enviando "25.000,00" como string.
             });
             
             $('#AnoContrato').on('change', function () {
@@ -384,6 +403,75 @@
                 if (ano && !isEdit) $.get('@Url.Action("SugerirNumero","Contratos")', { ano: ano }, function (d) { if(d && d.proximoNumero) $('#NumeroContrato').val(d.proximoNumero); });
             });
             if (!isEdit) $('#AnoContrato').trigger('change');
+
+            // =========================================================================
+            // GESTÃO DE ADITIVOS E HISTÓRICO (CÓDIGO INSERIDO)
+            // =========================================================================
+            
+            // 1. CARREGAR HISTÓRICO NO MODAL
+            const modalHist = document.getElementById('modalHistorico');
+            const containerHist = $('#historico-container');
+            if (modalHist && containerHist.length) {
+                modalHist.addEventListener('shown.bs.modal', function () {
+                    const url = '@Url.Action("Historico", "Contratos")' + '?id=@Model.Id&pag=1';
+                    containerHist.html('<div class="text-center my-3"><div class="spinner-border text-primary"></div></div>');
+                    containerHist.load(url);
+                });
+            }
+
+            // 2. LÓGICA DE CANCELAR ADITIVO
+            const btnCancelar = document.getElementById('btnCancelarAditivo');
+            if (btnCancelar) {
+                btnCancelar.addEventListener('click', async function () {
+                    const contratoId = parseInt(this.getAttribute('data-contrato-id'));
+                    const versao     = parseInt(this.getAttribute('data-versao'));
+
+                    if (!contratoId || !versao) return;
+
+                    const result = await Swal.fire({
+                        title: `Cancelar aditivo v${versao}?`,
+                        text: "Isso reverterá o contrato para os valores da versão anterior. A justificativa é obrigatória.",
+                        input: "textarea",
+                        inputPlaceholder: "Informe o motivo do cancelamento...",
+                        inputAttributes: { maxlength: 1000 },
+                        inputValidator: (v) => !v?.trim() ? "A justificativa é obrigatória." : undefined,
+                        showCancelButton: true,
+                        confirmButtonText: "Sim, cancelar",
+                        confirmButtonColor: "#dc3545",
+                        cancelButtonText: "Voltar",
+                        focusConfirm: false
+                    });
+
+                    if (!result.isConfirmed || !result.value) return;
+
+                    try {
+                        const response = await fetch('@Url.Action("CancelarAditivo", "AditivosContrato")', {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ 
+                                ContratoId: contratoId, 
+                                Versao: versao, 
+                                Justificativa: result.value 
+                            })
+                        });
+
+                        if (response.ok) {
+                            await Swal.fire({ 
+                                icon: "success", 
+                                title: "Sucesso", 
+                                text: "Aditivo cancelado com sucesso. A página será recarregada." 
+                            });
+                            window.location.reload(); 
+                        } else {
+                            const msg = await response.text();
+                            Swal.fire({ icon: "error", title: "Erro", text: msg || "Não foi possível cancelar." });
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        Swal.fire({ icon: "error", text: "Erro de comunicação com o servidor." });
+                    }
+                });
+            }
         });
     </script>
 }

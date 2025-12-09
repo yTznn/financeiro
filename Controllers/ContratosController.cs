@@ -215,6 +215,12 @@ namespace Financeiro.Controllers
             if (vm == null) return NotFound();
 
             await PrepararViewBagParaFormulario(vm);
+
+            // ADICIONE/VERIFIQUE ESTA LINHA:
+            // Precisamos da versão atual para saber se podemos cancelar o último aditivo
+            var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
+            ViewBag.VersaoAtual = versaoAtual; 
+
             return View("ContratoForm", vm);
         }
 
