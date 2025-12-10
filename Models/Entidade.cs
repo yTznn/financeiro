@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+// using Dapper.Contrib.Extensions; // Caso use Dapper.Contrib no futuro, usaria [Write(false)]
 
 namespace Financeiro.Models
 {
@@ -24,5 +25,10 @@ namespace Financeiro.Models
 
         [StringLength(int.MaxValue)]
         public string? Observacao { get; set; }
+
+        // === PROPRIEDADE AUXILIAR (Transporte) ===
+        // Esta propriedade não existe na tabela 'Entidade'. 
+        // Ela será preenchida pelo Dapper através de um JOIN no Repositório.
+        public Endereco? EnderecoPrincipal { get; set; }
     }
 }

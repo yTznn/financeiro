@@ -156,11 +156,23 @@
                 <ul class="collapse list-unstyled @(isGerenciamentoActive ? "show" : "")" id="submenu-gerenciamento">
                     <li class="menu-window p-0" id="window-gerenciamento">
                         <ul id="gerenciamento-list" class="list-unstyled m-0">
+                            
                             <li class="menu-item"><a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")"><i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span></a></li>
-                            <li class="menu-item"><a asp-controller="Entidades" asp-action="Index" class="@(currentController == "Entidades" ? "active" : "")"><i class='bx bx-building-house'></i><span class="links_name">Entidades</span></a></li>
+                            
+                            @* --- ITEM PROTEGIDO: ENTIDADES --- *@
+                            @if (User.TemPermissao("ENTIDADE_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Entidades" asp-action="Index" class="@(currentController == "Entidades" ? "active" : "")">
+                                        <i class='bx bx-building-house'></i><span class="links_name">Entidades</span>
+                                    </a>
+                                </li>
+                            }
+                            @* -------------------------------- *@
+
                             <li class="menu-item"><a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")"><i class='bx bx-package'></i><span class="links_name">Fornecedores</span></a></li>
                             
-                            @* --- ITEM PROTEGIDO: Só aparece se tiver permissão de Visualizar --- *@
+                            @* --- ITEM PROTEGIDO: INSTRUMENTOS --- *@
                             @if (User.TemPermissao("INSTRUMENTO_VIEW"))
                             {
                                 <li class="menu-item">
@@ -169,7 +181,7 @@
                                     </a>
                                 </li>
                             }
-                            @* ---------------------------------------------------------------- *@
+                            @* ------------------------------------ *@
                             
                             <li class="menu-item">
                                 <a asp-controller="Movimentacoes" asp-action="Index" class="@(currentController == "Movimentacoes" ? "active" : "")">

@@ -1,19 +1,35 @@
 @model IEnumerable<Financeiro.Models.Entidade>
 @using System.Linq
+@using Financeiro.Extensions  @* NECESSÁRIO PARA CHECAR PERMISSÕES *@
 
 @{
     ViewData["Title"] = "Entidades";
     Layout = "_Layout";
+
+    // Cache de permissões
+    bool podeCriar  = User.TemPermissao("ENTIDADE_ADD");
+    bool podeEditar = User.TemPermissao("ENTIDADE_EDIT");
+    bool podeExcluir= User.TemPermissao("ENTIDADE_DEL");
+
+    // Dados de paginação
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
 @functions {
-    // Formata CNPJ em 00.000.000/0000-00
     string FormatCnpj(string? cnpj)
     {
         if (string.IsNullOrWhiteSpace(cnpj)) return "";
         var d = new string(cnpj.Where(char.IsDigit).ToArray());
         if (d.Length != 14) return cnpj ?? "";
         return $"{d[..2]}.{d.Substring(2,3)}.{d.Substring(5,3)}/{d.Substring(8,4)}-{d.Substring(12,2)}";
+    }
+    
+    string FormatCep(string? cep)
+    {
+        if (string.IsNullOrWhiteSpace(cep)) return "";
+        var d = new string(cep.Where(char.IsDigit).ToArray());
+        return System.Text.RegularExpressions.Regex.Replace(d, @"^(\d{5})(\d{3})$", "$1-$2");
     }
 }
 
@@ -27,7 +43,7 @@
         letter-spacing: .2px;
     }
 
-    /* Endereço principal (labels menores, valores maiores) */
+    /* Endereço principal */
     .addr-grid .label{
         color:#6c757d;
         font-size:.82rem;
@@ -40,70 +56,188 @@
         font-size:1.12rem;
         line-height:1.3;
     }
+
+    /* Paginação Customizada */
+    .pagination .page-link {
+        border: none;
+        color: #6c757d;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 5px;
+        transition: all 0.2s;
+    }
+    .pagination .page-link:hover:not(.disabled) {
+        background-color: #e9ecef;
+        color: #0d6efd;
+    }
+    .pagination .page-item.disabled .page-link {
+        background-color: transparent;
+        color: #dee2e6;
+    }
+    .pagination .page-info {
+        display: flex;
+        align-items: center;
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 600;
+        margin: 0 15px;
+    }
 </style>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h2 class="mb-0 fw-bold" style="color:var(--dark);">Entidades</h2>
-    <a asp-action="Create" class="btn btn-primary">
-        <i class='bx bx-plus-circle'></i> Nova Entidade
-    </a>
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h2 class="mb-0 fw-bold" style="color:var(--dark);">Entidades</h2>
+        <small class="text-muted">Unidades gerenciadas pelo sistema</small>
+    </div>
+    
+    @if (podeCriar)
+    {
+        <a asp-action="Create" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class='bx bx-plus-circle me-1'></i> Nova Entidade
+        </a>
+    }
 </div>
 
-<div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
-@foreach (var e in Model)
+@if (!Model.Any())
 {
-    <div class="col">
-        <div class="card h-100 shadow-sm border-0 entidade-card" data-id="@e.Id">
-            <div class="card-body d-flex flex-column">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <div class="fw-semibold" style="color:var(--dark);">@e.Nome</div>
-                        <div class="small text-muted">@e.Sigla</div>
-                    </div>
-                    <span class="badge bg-@(e.Ativo ? "primary" : "secondary")">
-                        @(e.Ativo ? "Ativa" : "Inativa")
-                    </span>
-                </div>
-
-                <div class="small text-muted mb-2">
-                    <i class='bx bx-id-card me-1'></i>
-                    <span class="cnpj">@FormatCnpj(e.Cnpj)</span>
-                </div>
-
-                <div class="mt-auto">
-                    <div class="small text-muted mb-1">
-                        <i class="bx bx-map me-1"></i> Endereço principal
-                    </div>
-
-                    <!-- preenchido via AJAX -->
-                    <div id="addr-@e.Id" class="text-muted">
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        Carregando…
-                    </div>
-                </div>
-            </div>
-
-            <div class="card-footer bg-transparent border-0 pt-0">
-                <div class="d-flex flex-wrap gap-2">
-                    <a class="btn btn-sm btn-outline-secondary"
-                       asp-action="GerenciarEnderecos" asp-route-id="@e.Id" title="Endereços">
-                        <i class='bx bx-map'></i> Endereços
-                    </a>
-                    <a class="btn btn-sm btn-outline-primary"
-                       asp-action="Edit" asp-route-id="@e.Id" title="Editar">
-                        <i class='bx bx-pencil'></i> Editar
-                    </a>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-danger js-delete"
-                            data-id="@e.Id" data-nome="@e.Nome" title="Excluir">
-                        <i class='bx bx-trash'></i>
-                    </button>
-                </div>
-            </div>
+    <div class="col-12">
+        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+            <i class="bx bx-buildings display-4 text-light mb-3"></i>
+            <h5 class="text-muted">Nenhuma entidade encontrada</h5>
         </div>
     </div>
 }
-</div>
+else
+{
+    <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
+    @foreach (var e in Model)
+    {
+        <div class="col">
+            <div class="card h-100 shadow-sm border-0 entidade-card" data-id="@e.Id">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <div class="fw-semibold" style="color:var(--dark);">@e.Nome</div>
+                            <div class="small text-muted">@e.Sigla</div>
+                        </div>
+                        <span class="badge bg-@(e.Ativo ? "primary" : "secondary")">
+                            @(e.Ativo ? "Ativa" : "Inativa")
+                        </span>
+                    </div>
+
+                    <div class="small text-muted mb-2">
+                        <i class='bx bx-id-card me-1'></i>
+                        <span class="cnpj">@FormatCnpj(e.Cnpj)</span>
+                    </div>
+
+                    <div class="mt-auto">
+                        <div class="small text-muted mb-1">
+                            <i class="bx bx-map me-1"></i> Endereço principal
+                        </div>
+
+                        @if (e.EnderecoPrincipal != null)
+                        {
+                            <div class="addr-grid">
+                                <div class="row gx-2 gy-1">
+                                    <div class="col-12">
+                                        <div class="label">Logradouro</div>
+                                        <div class="value">@e.EnderecoPrincipal.Logradouro</div>
+                                    </div>
+                                    <div class="col-4 col-sm-3">
+                                        <div class="label">Número</div>
+                                        <div class="value">@e.EnderecoPrincipal.Numero</div>
+                                    </div>
+                                    <div class="col-8 col-sm-9">
+                                        <div class="label">Complemento</div>
+                                        <div class="value">@e.EnderecoPrincipal.Complemento</div>
+                                    </div>
+                                    <div class="col-4 col-sm-3">
+                                        <div class="label">CEP</div>
+                                        <div class="value">@FormatCep(e.EnderecoPrincipal.Cep)</div>
+                                    </div>
+                                    <div class="col-8 col-sm-3">
+                                        <div class="label">Bairro</div>
+                                        <div class="value">@e.EnderecoPrincipal.Bairro</div>
+                                    </div>
+                                    <div class="col-8 col-sm-4">
+                                        <div class="label">Município</div>
+                                        <div class="value">@e.EnderecoPrincipal.Municipio</div>
+                                    </div>
+                                    <div class="col-4 col-sm-2">
+                                        <div class="label">UF</div>
+                                        <div class="value">@e.EnderecoPrincipal.Uf</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">
+                                <i class="bx bx-minus me-1"></i> Sem principal
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           asp-action="GerenciarEnderecos" asp-route-id="@e.Id" title="Endereços">
+                            <i class='bx bx-map'></i> Endereços
+                        </a>
+                        
+                        @if (podeEditar)
+                        {
+                            <a class="btn btn-sm btn-outline-primary"
+                               asp-action="Edit" asp-route-id="@e.Id" title="Editar">
+                                <i class='bx bx-pencil'></i> Editar
+                            </a>
+                        }
+                        
+                        @if (podeExcluir)
+                        {
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-danger js-delete"
+                                    data-id="@e.Id" data-nome="@e.Nome" title="Excluir">
+                                <i class='bx bx-trash'></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    </div>
+
+    @if (totalPaginas > 1)
+    {
+        <div class="d-flex justify-content-center mt-5 mb-3">
+            <nav>
+                <ul class="pagination align-items-center shadow-sm bg-white rounded-pill p-1">
+                    <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual - 1)" aria-label="Anterior">
+                            <i class="bx bx-chevron-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-info">
+                            Página @paginaAtual de @totalPaginas
+                        </span>
+                    </li>
+                    <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual + 1)" aria-label="Próximo">
+                            <i class="bx bx-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
+}
 
 <form id="antiForgeryForm">@Html.AntiForgeryToken()</form>
 
@@ -114,72 +248,6 @@
         const el = document.querySelector("#antiForgeryForm input[name='__RequestVerificationToken']");
         return el ? el.value : "";
     }
-    function formatCep(cep) {
-        if (!cep) return '';
-        const d = ('' + cep).replace(/\D/g, '');
-        return d.replace(/^(\d{5})(\d{3})$/, '$1-$2');
-    }
-
-    // Preenche o endereço principal de cada card
-    document.querySelectorAll(".entidade-card").forEach(function(card) {
-        const id = card.getAttribute("data-id");
-        const slot = document.getElementById(`addr-${id}`);
-
-        fetch(`/Entidades/EnderecoPrincipal/${id}`)
-            .then(r => r.json())
-            .then(j => {
-                if (!j?.sucesso) {
-                    slot.classList.add("text-danger");
-                    slot.textContent = "Falha ao carregar";
-                    return;
-                }
-                if (!j.possuiPrincipal) {
-                    slot.innerHTML = `<span class="badge bg-secondary">
-                        <i class="bx bx-minus me-1"></i> Sem principal
-                    </span>`;
-                    return;
-                }
-
-                const e = j.endereco || {};
-                slot.innerHTML = `
-                    <div class="addr-grid">
-                        <div class="row gx-2 gy-1">
-                            <div class="col-12">
-                                <div class="label">Logradouro</div>
-                                <div class="value">${e.logradouro ?? ''}</div>
-                            </div>
-                            <div class="col-4 col-sm-3">
-                                <div class="label">Número</div>
-                                <div class="value">${e.numero ?? ''}</div>
-                            </div>
-                            <div class="col-8 col-sm-9">
-                                <div class="label">Complemento</div>
-                                <div class="value">${e.complemento ?? ''}</div>
-                            </div>
-                            <div class="col-4 col-sm-3">
-                                <div class="label">CEP</div>
-                                <div class="value">${formatCep(e.cep)}</div>
-                            </div>
-                            <div class="col-8 col-sm-3">
-                                <div class="label">Bairro</div>
-                                <div class="value">${e.bairro ?? ''}</div>
-                            </div>
-                            <div class="col-8 col-sm-4">
-                                <div class="label">Município</div>
-                                <div class="value">${e.municipio ?? ''}</div>
-                            </div>
-                            <div class="col-4 col-sm-2">
-                                <div class="label">UF</div>
-                                <div class="value">${e.uf ?? ''}</div>
-                            </div>
-                        </div>
-                    </div>`;
-            })
-            .catch(() => {
-                slot.classList.add("text-danger");
-                slot.textContent = "Erro";
-            });
-    });
 
     // Exclusão com SweetAlert
     document.querySelectorAll('.js-delete').forEach(function(btn) {
