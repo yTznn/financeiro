@@ -10,12 +10,23 @@ namespace Financeiro.Repositorios
         Task InserirAsync(InstrumentoViewModel vm);
         Task AtualizarAsync(int id, InstrumentoViewModel vm);
         Task<Instrumento?> ObterPorIdAsync(int id);
-        Task<IEnumerable<Instrumento>> ListarAsync();
+        
+        // Mantemos o ListarAsync genérico por enquanto
+        Task<IEnumerable<Instrumento>> ListarAsync(); 
+        
         Task ExcluirAsync(int id);
 
-        Task<bool> ExisteNumeroAsync(string numero, int? ignorarId = null);
+        // --- ALTERAÇÃO AQUI: Adicionado 'entidadeId' para validar duplicidade apenas na unidade ---
+        Task<bool> ExisteNumeroAsync(string numero, int entidadeId, int? ignorarId = null);
+        
         Task<string> SugerirProximoNumeroAsync(int ano);
-        Task<IEnumerable<InstrumentoResumoViewModel>> ListarResumoAsync();
+
+        // Retorna uma Tupla: (Lista de Itens, Total de Registros para o Pager)
+        Task<(IEnumerable<InstrumentoResumoViewModel> Itens, int TotalItens)> ListarResumoPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina);
+        
         Task<InstrumentoResumoViewModel?> ObterResumoAsync(int instrumentoId);
+
+        // Método auxiliar da lógica de vigência
+        Task<Instrumento?> ObterVigentePorEntidadeAsync(int entidadeId);
     }
 }

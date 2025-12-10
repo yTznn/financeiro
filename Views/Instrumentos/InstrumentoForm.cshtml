@@ -6,13 +6,13 @@
     Layout        = "_Layout";
     var action    = (string?)ViewBag.FormAction ?? (Model.Id == 0 ? "Salvar" : "Atualizar");
 
-    // Tipagem forte para evitar RuntimeBinderException
+    // Tipagem forte para evitar erros
     var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.InstrumentoVersao;
 
-    // Resumo atual consolidado (valor total/mensal atuais, vigência atual e saldo)
+    // Resumo atual consolidado
     var resumo = ViewBag.ResumoAtual as Financeiro.Models.ViewModels.InstrumentoResumoViewModel;
 
-    // Cálculo do "vigente" com fallback para os dados base do Instrumento
+    // Cálculo do "vigente" com fallback
     decimal   valorVig = versaoAtual?.Valor ?? Model.Valor;
     DateTime  iniVig   = versaoAtual?.VigenciaInicio ?? Model.DataInicio;
     DateTime? fimVig   = versaoAtual?.VigenciaFim ?? Model.DataFim;
@@ -23,55 +23,54 @@
 
 <h2 class="mb-4">@ViewBag.Title</h2>
 
-<!-- ========== CARD RESUMO ATUAL (READ-ONLY) — passo 4 ========== -->
+@* --- CARD DE RESUMO FINANCEIRO (SÓ APARECE NA EDIÇÃO) --- *@
 @if (resumo != null)
 {
   <div class="card shadow-sm border-0 mb-2">
     <div class="card-header bg-light d-flex align-items-center justify-content-between">
       <strong>Resumo Atual do Instrumento</strong>
-      @* Botão para ver lançamentos do mês *@
       @if (Model.Id != 0 && ViewBag.ResumoAtual != null) {
         var r = (Financeiro.Models.ViewModels.InstrumentoResumoViewModel)ViewBag.ResumoAtual;
         <a class="btn btn-outline-secondary btn-sm"
-          asp-controller="RecebimentosInstrumento" 
-          asp-action="Index"
-          asp-route-instrumentoId="@resumo.InstrumentoId"> 
-          Ver Recebimentos
+           asp-controller="RecebimentosInstrumento" 
+           asp-action="Index"
+           asp-route-instrumentoId="@resumo.InstrumentoId"> 
+           Ver Recebimentos
         </a>
       }
     </div>
     <div class="card-body p-3 p-md-4">
       <div class="row g-3">
         <div class="col-md-3">
-          <label class="form-label">Valor Total (Atual)</label>
-          <input class="form-control" value="@resumo.ValorTotalAtual.ToString("C", br)" readonly />
+          <label class="form-label text-muted small text-uppercase">Valor Total</label>
+          <input class="form-control fw-bold" value="@resumo.ValorTotalAtual.ToString("C", br)" readonly />
         </div>
         <div class="col-md-3">
-          <label class="form-label">Valor Mensal (Atual)</label>
+          <label class="form-label text-muted small text-uppercase">Valor Mensal</label>
           <input class="form-control" value="@resumo.ValorMensalAtual.ToString("C", br)" readonly />
         </div>
         <div class="col-md-3">
-          <label class="form-label">Vigência (Início)</label>
+          <label class="form-label text-muted small text-uppercase">Início Vigência</label>
           <input class="form-control" value="@resumo.VigenciaInicio.ToString("dd/MM/yyyy")" readonly />
         </div>
         <div class="col-md-3">
-          <label class="form-label">Vigência (Fim Atual)</label>
+          <label class="form-label text-muted small text-uppercase">Fim Vigência</label>
           <input class="form-control" value="@resumo.VigenciaFimAtual.ToString("dd/MM/yyyy")" readonly />
         </div>
         <div class="col-md-3">
-          <label class="form-label">Meses Vigentes (Atuais)</label>
+          <label class="form-label text-muted small text-uppercase">Duração (Meses)</label>
           <input class="form-control" value="@resumo.MesesVigentesAtuais" readonly />
         </div>
         <div class="col-md-3">
-          <label class="form-label">Saldo (Atual)</label>
-          <input class="form-control" value="@resumo.SaldoAtual.ToString("C", br)" readonly />
+          <label class="form-label text-muted small text-uppercase">Saldo Disponível</label>
+          <input class="form-control text-primary fw-bold" value="@resumo.SaldoAtual.ToString("C", br)" readonly />
         </div>
       </div>
     </div>
   </div>
 }
 
-<!-- ========== CARD CABEÇALHO ORIGINAL (mantido) ========== -->
+@* --- CARD DE STATUS DO REGISTRO --- *@
 <div class="card shadow-sm border-0 mb-4">
   <div class="card-body p-3 p-md-4">
     <div class="d-flex flex-wrap align-items-center gap-3">
@@ -83,14 +82,17 @@
             <span class="badge @(Model.Ativo ? "bg-success" : "bg-secondary")">
               @(Model.Ativo ? "Ativo" : "Inativo")
             </span>
+             @if (Model.Vigente)
+             {
+                 <span class="badge bg-primary">Vigente (Padrão)</span>
+             }
           }
         </div>
 
         <div class="fs-5 fw-semibold mb-1">
-          <span id="resumoEntidade">Entidade: (selecione)</span>
+          <span id="resumoEntidade">Entidade: (carregando...)</span>
         </div>
 
-        <!-- Linha do período BASE (inputs) — continuará sendo atualizada pelo JS -->
         <div class="text-muted">
           Período (base): <span id="resumoPeriodo">
             @(Model.DataInicio != default && Model.DataFim != default
@@ -99,56 +101,39 @@
           </span>
         </div>
 
-        <!-- Linha da VIGÊNCIA VIGENTE -->
         <div class="text-muted mt-1">
           Vigência vigente:
           <span class="badge rounded-pill bg-secondary-subtle text-secondary">
             @iniVig.ToString("dd/MM/yyyy") → @fimVigTxt
           </span>
-          @if (iniVig != Model.DataInicio || (fimVig?.Date ?? DateTime.MinValue) != Model.DataFim.Date)
-          {
-              <span class="small text-muted ms-2">
-                (base: @Model.DataInicio.ToString("dd/MM/yyyy") → @Model.DataFim.ToString("dd/MM/yyyy"))
-              </span>
-          }
         </div>
       </div>
 
-      <!-- Bloco do VALOR VIGENTE + (orig.) -->
       <div class="text-end ms-auto">
         <div class="text-muted small">Valor vigente</div>
         <div class="display-6 fw-bold" id="resumoValorVigente">
           @valorVig.ToString("C", br)
-        </div>
-        @if (valorVig != Model.Valor)
-        {
-          <div class="small text-muted">orig.: @Model.Valor.ToString("C", br)</div>
-        }
-
-        <!-- Mantém também o bloco dinâmico do "Valor acordado" (base) atualizado pelo JS via input -->
-        <div class="text-muted small mt-3">Valor (base)</div>
-        <div class="fw-semibold" id="resumoValor">
-          @(Model.Valor > 0 ? Model.Valor.ToString("C", br) : "R$ 0,00")
         </div>
       </div>
     </div>
   </div>
 </div>
 
+@* --- BOTÕES DE AÇÃO (ADITIVOS) --- *@
 @if (Model.Id != 0)
 {
   <div class="mb-3 d-flex flex-wrap gap-2">
     <a asp-controller="AditivosInstrumento" asp-action="Novo" asp-route-instrumentoId="@Model.Id" class="btn btn-outline-primary">
-      + Registrar Aditivo
+      <i class="bi bi-file-earmark-plus"></i> Registrar Aditivo
     </a>
     <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalHistorico">
-      Histórico de Aditivos
+      <i class="bi bi-clock-history"></i> Histórico de Aditivos
     </button>
     @if (versaoAtual != null)
     {
       <a class="btn btn-outline-danger" id="btnCancelarAditivo"
          data-instrumento="@Model.Id" data-versao="@versaoAtual.Versao">
-        Cancelar último aditivo
+        <i class="bi bi-x-circle"></i> Cancelar último aditivo
       </a>
     }
   </div>
@@ -156,6 +141,7 @@
 
 <div asp-validation-summary="All" class="text-danger mb-2"></div>
 
+@* --- FORMULÁRIO PRINCIPAL --- *@
 <form id="formInstrumento" asp-controller="Instrumentos" asp-action="@action" method="post" class="row g-3" novalidate>
   @Html.AntiForgeryToken()
   <input type="hidden" asp-for="Id" />
@@ -163,19 +149,22 @@
 
   <div class="col-md-6">
     <label asp-for="EntidadeId" class="form-label">Entidade</label>
-    <select asp-for="EntidadeId" class="form-select" asp-items="ViewBag.Entidades" id="EntidadeId">
-      <option value="">-- selecione --</option>
+    <select asp-for="EntidadeId" 
+            class="form-select bg-light text-primary fw-bold" 
+            asp-items="ViewBag.Entidades" 
+            id="EntidadeId" 
+            style="pointer-events: none;" 
+            tabindex="-1">
     </select>
     <span asp-validation-for="EntidadeId" class="text-danger"></span>
   </div>
 
   <div class="col-md-3">
     <label asp-for="Numero" class="form-label">Número</label>
-    <input asp-for="Numero" class="form-control" id="Numero" />
+    <input asp-for="Numero" class="form-control" id="Numero" placeholder="Ex: 01/2025" />
     <span asp-validation-for="Numero" class="text-danger"></span>
   </div>
 
-  <!-- ========== BLOCO VALOR (MENSAL ↔ TOTAL) — passo 5.2 ========== -->
   <div class="col-md-12">
     <div class="card mb-3">
       <div class="card-header">
@@ -191,19 +180,19 @@
               </label>
             </div>
             <small class="text-muted d-block">
-              Se marcado, você informa o <strong>Valor Mensal</strong> e o sistema calcula o <strong>Total</strong> pela vigência.
+              Se marcado, você informa o <strong>Valor Mensal</strong> e o sistema calcula o <strong>Total</strong>.
             </small>
           </div>
 
           <div class="col-md-4" id="grupoValorTotal">
-            <label asp-for="Valor" class="form-label"></label>
+            <label asp-for="Valor" class="form-label">Valor Total</label>
             <input asp-for="Valor" class="form-control" id="Valor" />
             <span asp-validation-for="Valor" class="text-danger"></span>
             <small class="text-muted" id="hintTotal"></small>
           </div>
 
           <div class="col-md-4" id="grupoValorMensal">
-            <label asp-for="ValorMensal" class="form-label"></label>
+            <label asp-for="ValorMensal" class="form-label">Valor Mensal</label>
             <input asp-for="ValorMensal" class="form-control" id="ValorMensal" />
             <span asp-validation-for="ValorMensal" class="text-danger"></span>
             <small class="text-muted" id="hintMensal"></small>
@@ -226,7 +215,7 @@
           </div>
 
           <div class="col-md-3">
-            <div class="form-text">
+            <div class="form-text mt-4">
               A vigência influencia o cálculo entre <em>Total</em> e <em>Mensal</em>.
             </div>
           </div>
@@ -237,7 +226,7 @@
 
   <div class="col-md-12">
     <label asp-for="Objeto" class="form-label">Objeto</label>
-    <textarea asp-for="Objeto" class="form-control" rows="3" maxlength="4000" id="Objeto"></textarea>
+    <textarea asp-for="Objeto" class="form-control" rows="3" maxlength="4000" id="Objeto" placeholder="Descrição do objeto do contrato..."></textarea>
     <span asp-validation-for="Objeto" class="text-danger"></span>
   </div>
 
@@ -247,11 +236,20 @@
     <span asp-validation-for="DataAssinatura" class="text-danger"></span>
   </div>
 
-  <div class="col-md-3 d-flex align-items-center">
-    <div class="form-check mt-4">
-      <input asp-for="Ativo" class="form-check-input" id="Ativo" />
-      <label asp-for="Ativo" class="form-check-label">Ativo</label>
-    </div>
+  <div class="col-md-5 d-flex flex-column gap-2 mt-4">
+      <div class="form-check">
+          <input asp-for="Ativo" class="form-check-input" id="Ativo" />
+          <label asp-for="Ativo" class="form-check-label"><strong>Ativo</strong> (Registro válido no sistema)</label>
+      </div>
+
+      <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" asp-for="Vigente" id="checkVigente">
+          <label class="form-check-label" for="checkVigente">
+              <strong>Definir como Vigente (Padrão)</strong>
+              <br />
+              <small class="text-muted" style="font-size: 0.85em;">Ao marcar, este será o instrumento principal desta entidade.</small>
+          </label>
+      </div>
   </div>
 
   <div class="col-md-12">
@@ -260,14 +258,15 @@
     <span asp-validation-for="Observacao" class="text-danger"></span>
   </div>
 
-  <div class="col-12 d-flex gap-2">
-    <button type="submit" class="btn btn-success" id="btnSubmit">
-      @(Model.Id == 0 ? "Salvar" : "Atualizar")
+  <div class="col-12 d-flex gap-2 mt-3 border-top pt-3">
+    <button type="submit" class="btn btn-success px-4" id="btnSubmit">
+      <i class="bi bi-check-lg"></i> @(Model.Id == 0 ? "Salvar" : "Atualizar")
     </button>
-    <a asp-controller="Instrumentos" asp-action="Index" class="btn btn-secondary">Cancelar</a>
+    <a asp-controller="Instrumentos" asp-action="Index" class="btn btn-light border px-4">Cancelar</a>
   </div>
 </form>
 
+@* --- MODAL DE HISTÓRICO --- *@
 @if (Model.Id != 0)
 {
   <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
@@ -288,6 +287,7 @@
 @section Scripts {
   <partial name="_ValidationScriptsPartial" />
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
   <script>
   document.addEventListener('DOMContentLoaded', () => {
@@ -301,14 +301,14 @@
         };
     }
 
-    // ====== CAMPOS / RESUMO (base) ======
+    // ====== ELEMENTOS DOM ======
     const selEntidade   = document.getElementById('EntidadeId');
     const resumoEntidade= document.getElementById('resumoEntidade');
     const resumoValor   = document.getElementById('resumoValor');
     const resumoPeriodo = document.getElementById('resumoPeriodo');
 
-    const inValor       = document.getElementById('Valor');        // total
-    const inValorMensal = document.getElementById('ValorMensal');  // mensal
+    const inValor       = document.getElementById('Valor');
+    const inValorMensal = document.getElementById('ValorMensal');
     const usarMensal    = document.getElementById('usarMensal');
 
     const di            = document.getElementById('DataInicio');
@@ -323,6 +323,7 @@
     const grpTotal      = document.getElementById('grupoValorTotal');
     const grpMensal     = document.getElementById('grupoValorMensal');
 
+    // Funções Auxiliares
     function toNumberBR(raw) {
       if (!raw) return 0;
       const s = raw.replace(/\./g, '').replace(',', '.');
@@ -335,45 +336,39 @@
 
     function mesesEntre(inicio, fim) {
         if (!inicio || !fim) return null;
-        
-        // Quebra a string "yyyy-mm-dd" manualmente para evitar fuso horário
         const [anoI, mesI, diaI] = inicio.split('-').map(Number);
         const [anoF, mesF, diaF] = fim.split('-').map(Number);
-        
-        // Validação básica
         if (!anoI || !anoF) return null;
-
-        // Cálculo exato de meses cheios
         let meses = (anoF - anoI) * 12 + (mesF - mesI);
-
-        // Lógica de vigência inclusiva: 
-        // Se selecionou 01/01 a 31/12, a subtração pura dá 11 meses.
-        // Mas a vigência cobre o mês de dezembro inteiro, então soma +1.
-        return meses + 1;
+        return meses + 1; // inclusivo
     }
+    
     function formatCurrency(n) {
         if (isNaN(n)) return '';
         try { return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
         catch { return n.toFixed(2); }
     }
 
+    // Atualiza o painel superior de resumo
     function atualizarResumo(){
-      const optText = selEntidade?.selectedOptions?.length ? selEntidade.selectedOptions[0].text : '(selecione)';
-      resumoEntidade.textContent = 'Entidade: ' + (optText || '(selecione)');
+      // Pega o texto da entidade selecionada (ou travada)
+      const optText = selEntidade?.selectedOptions?.length ? selEntidade.selectedOptions[0].text : '';
+      resumoEntidade.textContent = 'Entidade: ' + (optText || '(carregando...)');
 
-      // Valor (base) exibido no cabeçalho mantém o Total informado (não o mensal)
       const v = getValorTotal();
-      resumoValor.textContent = v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      if(resumoValor) resumoValor.textContent = v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-      // Período (base)
       const d1 = di?.value, d2 = df?.value;
-      resumoPeriodo.textContent = (d1 && d2)
-        ? new Date(d1).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) + ' → ' + new Date(d2).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
-        : 'definir datas';
+      if(resumoPeriodo) {
+          resumoPeriodo.textContent = (d1 && d2)
+            ? new Date(d1).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) + ' → ' + new Date(d2).toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+            : 'definir datas';
+      }
 
       updateHints();
     }
 
+    // Atualiza as dicas abaixo dos campos de valor
     function updateHints() {
         const m = mesesEntre(di?.value, df?.value);
 
@@ -381,25 +376,26 @@
             const vm = getValorMensal();
             if (m && vm) {
                 const total = vm * m;
-                hintMensal.textContent = `Vigência atual: ${m} mês(es). Total estimado = ValorMensal × meses = ${formatCurrency(total)}.`;
+                hintMensal.textContent = `Vigência: ${m} meses. Total estimado = ${formatCurrency(total)}.`;
                 hintTotal.textContent = '';
             } else {
-                hintMensal.textContent = m ? `Vigência atual: ${m} mês(es).` : '';
+                hintMensal.textContent = m ? `Vigência: ${m} meses.` : '';
                 hintTotal.textContent = '';
             }
         } else {
             const vt = getValorTotal();
             if (m && vt) {
                 const mensal = vt / m;
-                hintTotal.textContent = `Vigência atual: ${m} mês(es). Mensal estimado = Total ÷ meses = ${formatCurrency(mensal)}.`;
+                hintTotal.textContent = `Vigência: ${m} meses. Mensal estimado = ${formatCurrency(mensal)}.`;
                 hintMensal.textContent = '';
             } else {
-                hintTotal.textContent = m ? `Vigência atual: ${m} mês(es).` : '';
+                hintTotal.textContent = m ? `Vigência: ${m} meses.` : '';
                 hintMensal.textContent = '';
             }
         }
     }
 
+    // Alterna entre digitar Total ou Mensal
     function toggleModo() {
         const usandoMensal = !!usarMensal?.checked;
 
@@ -412,104 +408,87 @@
         updateHints();
     }
 
-    // impede colagem de emojis/caracteres indesejados
-    const badCharsRegex = /[\u{1F300}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F1E6}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}*!@@#']/gu;
+    // Sanitização de inputs
+    const badCharsRegex = /[\u{1F300}-\u{1FAFF}\u{1F600}-\u{1F64F}*!@@#']/gu;
     function sanitizeInput(el){ if(!el) return; const c=(el.value||'').replace(badCharsRegex,''); if(c!==el.value) el.value=c; }
     [inNumero, obs, objeto].forEach(el=>{
       el?.addEventListener('input', ()=>sanitizeInput(el));
-      el?.addEventListener('paste', ()=>setTimeout(()=>sanitizeInput(el),0));
     });
 
+    // Listeners
     selEntidade?.addEventListener('change', atualizarResumo);
-    if (window.jQuery && selEntidade) { try { $(selEntidade).on('select2:select select2:clear', atualizarResumo); } catch {} }
-
+    
     inValor?.addEventListener('input', atualizarResumo);
     inValor?.addEventListener('keyup', atualizarResumo);
-    inValor?.addEventListener('change', atualizarResumo);
-
     inValorMensal?.addEventListener('input', updateHints);
     inValorMensal?.addEventListener('keyup', updateHints);
-    inValorMensal?.addEventListener('change', updateHints);
 
     di?.addEventListener('change', atualizarResumo);
     df?.addEventListener('change', atualizarResumo);
 
     usarMensal?.addEventListener('change', toggleModo);
 
-    // Estado inicial (considera valores vindos do servidor)
+    // Inicialização
     toggleModo();
     setTimeout(atualizarResumo, 100);
 
-    // ====== SUBMIT (ajustado para mensal ↔ total) ======
+    // Submit do Formulário
     const form = document.getElementById('formInstrumento');
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
 
       if (!selEntidade.value){
-        return Swal.fire({ icon:'warning', title:'Selecione a Entidade', text:'O instrumento precisa estar vinculado a uma Entidade.' });
-      }
-
-      const usandoMensal = !!usarMensal?.checked;
-      const vTotal   = getValorTotal();
-      const vMensal  = getValorMensal();
-
-      if (!usandoMensal && vTotal <= 0){
-        return Swal.fire({ icon:'warning', title:'Valor inválido', text:'Informe um valor total maior que zero.' });
-      }
-      if (usandoMensal && vMensal <= 0){
-        return Swal.fire({ icon:'warning', title:'Valor mensal inválido', text:'Informe um valor mensal maior que zero.' });
+        return Swal.fire({ icon:'warning', title:'Atenção', text:'Erro ao identificar a entidade logada.' });
       }
 
       const confirm = await Swal.fire({
         icon:'question',
-        title:'@(Model.Id == 0 ? "Confirmar criação do instrumento?" : "Confirmar atualização do instrumento?")',
+        title:'Confirmar gravação?',
         showCancelButton:true,
-        confirmButtonText:'@(Model.Id == 0 ? "Salvar" : "Atualizar")',
+        confirmButtonText:'Sim, Salvar',
         cancelButtonText:'Cancelar'
       });
       if (!confirm.isConfirmed) return;
 
-      // Normaliza o Valor total quando não estiver usando mensal (mantém seu comportamento anterior)
-      if (!usandoMensal && inValor) inValor.value = vTotal;
-
-      // Submete
+      // Se estiver usando valor mensal, precisamos garantir que o campo Valor Total não vá vazio (ou zero) se possível
+      // Mas o backend recalcula tudo. O importante é submeter.
       form.submit();
     });
 
-    // ====== CANCELAR ÚLTIMO ADITIVO ======
+    // Scripts do Histórico / Cancelamento (mantidos)
     const btnCancelarAditivo = document.getElementById('btnCancelarAditivo');
     if(btnCancelarAditivo) {
         btnCancelarAditivo.addEventListener('click', async () => {
              const instrumentoId=parseInt(btnCancelarAditivo.getAttribute('data-instrumento'),10);
              let versao=parseInt(btnCancelarAditivo.getAttribute('data-versao'),10) || 0;
-             if(!instrumentoId || !versao){ return Swal.fire({ icon:'warning', title:'Nada a cancelar', text:'Não há aditivo vigente para cancelar.' }); }
+             if(!instrumentoId || !versao){ return; }
+             
              const { value: justificativa } = await Swal.fire({
-                title:'Cancelar último aditivo', input:'textarea', inputLabel:'Justificativa (obrigatória)',
-                inputValidator:v=>!v?.trim() ? 'Informe a justificativa.' : undefined,
-                showCancelButton:true, confirmButtonText:'Cancelar aditivo', confirmButtonColor:'#dc3545'
+                title:'Cancelar aditivo', input:'textarea', inputLabel:'Justificativa',
+                inputValidator:v=>!v?.trim()?'Obrigatório.':undefined,
+                showCancelButton:true, confirmButtonText:'Confirmar', confirmButtonColor:'#dc3545'
              });
              if(!justificativa) return;
+
              try{
                 const res=await fetch('/AditivosInstrumento/Cancelar',{ method:'POST', headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({ instrumentoId, versao, justificativa }) });
-                if(!res.ok){ const msg=await res.text(); return Swal.fire({icon:'error', title:'Ops', text:msg||'Falha ao cancelar.'}); }
+                if(!res.ok){ const msg=await res.text(); return Swal.fire('Erro', msg, 'error'); }
                 location.reload();
-             }catch{ Swal.fire({ icon:'error', title:'Ops', text:'Erro de comunicação.' }); }
+             }catch{ Swal.fire('Erro','Falha na comunicação','error'); }
         });
     }
 
-    // ====== HISTÓRICO (usa _HistoricoAditivosTable com paginação AJAX) ======
+    // Modal Histórico
     const modal = document.getElementById('modalHistorico');
     const bodyDiv = $('#histBody');
     if (modal && bodyDiv.length) {
       modal.addEventListener('shown.bs.modal', () => {
         const url = '@Url.Action("Historico","Instrumentos")' + '?id=@Model.Id&pag=1';
         bodyDiv.html('<div class="text-center my-3"><div class="spinner-border"></div></div>');
-        bodyDiv.load(url); // carrega a partial _HistoricoAditivosTable
+        bodyDiv.load(url);
       });
     }
-
-    // delega a paginação (caso o script dentro da partial não execute)
     $(document).on('click', '.hist-page-link', function (e) {
         e.preventDefault();
         const p  = $(this).data('pagina');
@@ -518,18 +497,21 @@
         $('#histBody').load(url);
     });
 
-    // ====== SweetAlerts de TempData ======
+    // Feedback TempData
     const ok  = @Html.Raw(Json.Serialize(TempData["Sucesso"]?.ToString() ?? "")); 
     const err = @Html.Raw(Json.Serialize(TempData["Erro"]?.ToString() ?? ""));    
-    if (ok)  Swal.fire({ icon:'success', title:'Sucesso', text: ok });
-    if (err) Swal.fire({ icon:'error',   title:'Ops',     text: err });
+    if (ok)  Swal.fire({ icon:'success', title:'Sucesso', text: ok, timer: 3000, showConfirmButton:false });
+    if (err) Swal.fire({ icon:'error',   title:'Erro',    text: err });
   });
   </script>
 
   <style>
     .card .badge.bg-info-subtle { background:#e6f4ff !important; color:#0b6bcb !important; }
-    .modal-header { border-bottom:none; }
-    .table thead.table-light th { background-color:#0d6efd20; }
-    .pagination .page-item.active .page-link { background:#0d6efd; border-color:#0d6efd; }
+    /* Ajuste para o campo de entidade parecer readonly mas bonito */
+    #EntidadeId { 
+        cursor: not-allowed; 
+        opacity: 0.8;
+        border-color: #dee2e6;
+    }
   </style>
 }

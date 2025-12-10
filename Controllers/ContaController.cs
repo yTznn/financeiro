@@ -1,12 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
-using Financeiro.Repositorios;
+using Financeiro.Repositorios; // Certifique-se que IPermissaoRepositorio está acessível aqui
 using Financeiro.Servicos.Seguranca;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Financeiro.Models;
 using Microsoft.AspNetCore.Authorization;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Financeiro.Controllers
 {
@@ -14,12 +17,15 @@ namespace Financeiro.Controllers
     {
         private readonly IUsuarioRepositorio _usuarioRepositorio;
         private readonly ICriptografiaService _criptografiaService;
+        private readonly IPermissaoRepositorio _permissaoRepositorio; // <--- 1. Nova dependência
 
         public ContaController(IUsuarioRepositorio usuarioRepositorio,
-                               ICriptografiaService criptografiaService)
+                               ICriptografiaService criptografiaService,
+                               IPermissaoRepositorio permissaoRepositorio) // <--- Injeção
         {
             _usuarioRepositorio = usuarioRepositorio;
             _criptografiaService = criptografiaService;
+            _permissaoRepositorio = permissaoRepositorio;
         }
 
         public IActionResult Login()
@@ -75,6 +81,7 @@ namespace Financeiro.Controllers
 
             await _usuarioRepositorio.AtualizarUltimoAcessoAsync(usuario.Id);
 
+            // Mapeamento antigo de Roles (pode manter como fallback ou remover se migrar tudo para Permissões)
             var perfil = usuario.PerfilId switch
             {
                 1 => "Administrador",
@@ -97,6 +104,17 @@ namespace Financeiro.Controllers
             {
                 claims.Add(new Claim("HashImagem", usuario.HashImagem));
             }
+
+            // --- 2. CARREGAMENTO DAS PERMISSÕES HÍBRIDAS ---
+            // Busca a lista de chaves (ex: "INSTRUMENTO_ADD", "INSTRUMENTO_VIEW")
+            var permissoes = await _permissaoRepositorio.ObterPermissoesDoUsuarioAsync(usuario.Id);
+
+            foreach (var p in permissoes)
+            {
+                // Adiciona cada permissão como uma Claim do tipo "Permissao"
+                claims.Add(new Claim("Permissao", p));
+            }
+            // -----------------------------------------------
 
             var identidade = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identidade);

@@ -114,6 +114,10 @@
         .menu-window:hover::-webkit-scrollbar-thumb { background-color: var(--scrollbar-hover); }
     </style>
 </head>
+
+@* --- IMPORTANTE: Necessário para usar User.TemPermissao() --- *@
+@using Financeiro.Extensions 
+
 <body>
     @{
         // Pega o nome do controller da rota atual
@@ -121,7 +125,6 @@
         string? currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
         // Lista de todos os controllers que estão no submenu "Base de Gerenciamento"
-        // [ATUALIZADO] Incluí "Movimentacoes" na lista para manter o menu aberto
         var gerenciamentoControllers = new[] {
             "Contratos", "Entidades", "Fornecedores", "Instrumentos",
             "LancamentosInstrumento", "Movimentacoes", "Naturezas", "Niveis", "Orcamentos",
@@ -156,9 +159,18 @@
                             <li class="menu-item"><a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")"><i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span></a></li>
                             <li class="menu-item"><a asp-controller="Entidades" asp-action="Index" class="@(currentController == "Entidades" ? "active" : "")"><i class='bx bx-building-house'></i><span class="links_name">Entidades</span></a></li>
                             <li class="menu-item"><a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")"><i class='bx bx-package'></i><span class="links_name">Fornecedores</span></a></li>
-                            <li class="menu-item"><a asp-controller="Instrumentos" asp-action="Index" class="@(currentController == "Instrumentos" ? "active" : "")"><i class='bx bx-book-content'></i><span class="links_name">Instrumentos</span></a></li>
                             
-                            @* [NOVO] Item de Movimentações Financeiras *@
+                            @* --- ITEM PROTEGIDO: Só aparece se tiver permissão de Visualizar --- *@
+                            @if (User.TemPermissao("INSTRUMENTO_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Instrumentos" asp-action="Index" class="@(currentController == "Instrumentos" ? "active" : "")">
+                                        <i class='bx bx-book-content'></i><span class="links_name">Instrumentos</span>
+                                    </a>
+                                </li>
+                            }
+                            @* ---------------------------------------------------------------- *@
+                            
                             <li class="menu-item">
                                 <a asp-controller="Movimentacoes" asp-action="Index" class="@(currentController == "Movimentacoes" ? "active" : "")">
                                     <i class='bx bx-money-withdraw'></i><span class="links_name">Pagamentos / Lançamentos</span>

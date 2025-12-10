@@ -1,106 +1,387 @@
 @model IEnumerable<Financeiro.Models.ViewModels.InstrumentoResumoViewModel>
 @using System.Globalization
+@using Financeiro.Extensions  @* <--- OBRIGATÓRIO PARA AS PERMISSÕES FUNCIONAREM NA VIEW *@
 
 @{
-    ViewBag.Title = "Instrumentos";
+    ViewBag.Title = "Gestão de Instrumentos";
     Layout = "_Layout";
     var br = new CultureInfo("pt-BR");
+    
+    // Cacheamos as permissões
+    bool podeEditar   = User.TemPermissao("INSTRUMENTO_EDIT");
+    bool podeExcluir  = User.TemPermissao("INSTRUMENTO_DEL");
+    bool podeAditivar = User.TemPermissao("INSTRUMENTO_ADITIVO");
+    bool podeCriar    = User.TemPermissao("INSTRUMENTO_ADD");
+
+    // Dados de Paginação vindos do Controller
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
-<h2 class="mb-4 d-flex align-items-center justify-content-between">
-    <span>@ViewBag.Title</span>
-    <a asp-action="Novo" class="btn btn-primary">+ Novo Instrumento</a>
-</h2>
+<style>
+    /* === ESTILOS PREMIUM DOS CARDS === */
+    .page-header {
+        margin-bottom: 2rem;
+    }
+    
+    .card-instrumento {
+        background-color: #ffffff;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        position: relative;
+        overflow: hidden;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
 
-<div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0 w-100" id="t-instrumentos">
-            <thead class="table-light">
-                <tr class="text-center">
-                    <th style="width:130px">Número</th>
-                    <th>Descrição</th>
-                    <th style="width:220px">Vigência (Atual)</th>
-                    <th style="width:100px">Meses</th>
-                    <th class="text-end" style="width:150px">Valor Total (Atual)</th>
-                    <th class="text-end" style="width:150px">Valor Mensal (Atual)</th>
-                    <th class="text-end" style="width:140px">Saldo a Receber</th>
-                    <th style="width:180px">Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-            @if (!Model.Any())
+    /* Hover Effect */
+    .card-instrumento:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    /* === ESTILO DO VIGENTE (O Destaque) === */
+    .is-vigente {
+        border: 1px solid #0d6efd; /* Borda Azul */
+        background: linear-gradient(145deg, #fbfdff 0%, #ffffff 100%);
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.1);
+    }
+
+    /* Faixa de status Vigente */
+    .ribbon-vigente {
+        background-color: #0d6efd;
+        color: white;
+        padding: 4px 12px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-radius: 0 0 0 8px; /* Canto arredondado */
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 2;
+    }
+
+    .card-header-custom {
+        padding: 1.25rem 1.25rem 0.5rem 1.25rem;
+        background: transparent;
+        border: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .instrumento-num {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #2c3e50;
+        margin-bottom: 0.2rem;
+        display: block;
+    }
+
+    .instrumento-desc {
+        font-size: 0.9rem;
+        color: #6c757d;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        height: 2.7em; /* Altura fixa para alinhar cards */
+        line-height: 1.35em;
+    }
+
+    .card-body-custom {
+        padding: 0.5rem 1.25rem 1.25rem 1.25rem;
+        flex-grow: 1;
+    }
+
+    /* Mini Dashboard dentro do Card */
+    .mini-stats {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: #adb5bd;
+        font-weight: 600;
+        margin-bottom: 2px;
+        display: block;
+    }
+    
+    .stat-value {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #495057;
+    }
+
+    .stat-value.money {
+        font-family: 'Consolas', monospace; /* Fonte mono para números ficarem alinhados */
+    }
+
+    /* Botão de Menu (três pontinhos) */
+    .btn-dots {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        color: #ced4da;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+    .btn-dots:hover {
+        background-color: #e9ecef;
+        color: #495057;
+    }
+    
+    /* Dropdown Item Hover */
+    .dropdown-item:active {
+        background-color: #0d6efd;
+        color: white !important;
+    }
+    .dropdown-item:active i {
+        color: white !important;
+    }
+
+    .badge-historico {
+        background-color: #e9ecef;
+        color: #adb5bd;
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    /* Paginação Customizada */
+    .pagination .page-link {
+        border: none;
+        color: #6c757d;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 5px;
+        transition: all 0.2s;
+    }
+    .pagination .page-link:hover:not(.disabled) {
+        background-color: #e9ecef;
+        color: #0d6efd;
+    }
+    .pagination .page-item.disabled .page-link {
+        background-color: transparent;
+        color: #dee2e6;
+    }
+    .pagination .page-info {
+        display: flex;
+        align-items: center;
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 600;
+        margin: 0 15px;
+    }
+</style>
+
+<div class="container-fluid px-0 py-3">
+    <div class="d-flex align-items-center justify-content-between page-header">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">Gestão de Instrumentos</h2>
+            <small class="text-muted">Gerenciamento de contratos e termos ativos</small>
+        </div>
+        
+        @if (podeCriar)
+        {
+            <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                <i class="bi bi-plus-lg me-2"></i>Novo Instrumento
+            </a>
+        }
+    </div>
+
+    <div class="row g-4">
+        @if (!Model.Any())
+        {
+            <div class="col-12">
+                <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+                    <i class="bi bi-journal-x display-4 text-light mb-3"></i>
+                    <h5 class="text-muted">Nenhum instrumento encontrado</h5>
+                    <p class="small text-muted mb-0">
+                        @(podeCriar ? "Comece cadastrando um novo instrumento." : "Não há registros disponíveis nesta unidade.")
+                    </p>
+                </div>
+            </div>
+        }
+        else
+        {
+            foreach (var item in Model)
             {
-                <tr>
-                    <td colspan="8" class="text-center text-muted py-4">Nenhum instrumento cadastrado.</td>
-                </tr>
-            }
-            else
-            {
-                foreach (var item in Model)
-                {
-                    var saldoClass = item.SaldoAtual < 0 ? "text-danger fw-semibold" : "text-body";
-                    <tr>
-                        <td class="text-center fw-semibold">@item.Numero</td>
-                        <td>
-                            <div class="obj-cell" title="@item.Descricao">
+                var activeClass = item.Vigente ? "is-vigente" : "";
+                var saldoColor = item.SaldoAtual < 0 ? "text-danger" : "text-success";
+
+                <div class="col-12 col-md-6 col-lg-4 col-xxl-3">
+                    <div class="card-instrumento @activeClass">
+                        
+                        @if (item.Vigente)
+                        {
+                            <div class="ribbon-vigente shadow-sm">
+                                <i class="bi bi-star-fill me-1" style="font-size:0.6rem"></i> Vigente
+                            </div>
+                        }
+
+                        <div class="card-header-custom">
+                            <div style="max-width: 85%;">
+                                <span class="instrumento-num">@item.Numero</span>
+                                @if (!item.Vigente)
+                                {
+                                    <span class="badge-historico">HISTÓRICO</span>
+                                }
+                            </div>
+                            
+                            @if (podeEditar || podeExcluir || podeAditivar)
+                            {
+                                <div class="dropdown">
+                                    <button class="btn btn-link btn-dots text-decoration-none" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                        <li><h6 class="dropdown-header">Gerenciar</h6></li>
+                                        
+                                        @if (podeEditar)
+                                        {
+                                            <li>
+                                                <a class="dropdown-item py-2" asp-action="Editar" asp-route-id="@item.InstrumentoId">
+                                                    <i class="bi bi-pencil-square me-2 text-primary"></i>Editar
+                                                </a>
+                                            </li>
+                                        }
+
+                                        @if (podeAditivar)
+                                        {
+                                            <li>
+                                                <a class="dropdown-item py-2" asp-controller="AditivosInstrumento" asp-action="Novo" asp-route-instrumentoId="@item.InstrumentoId">
+                                                    <i class="bi bi-file-earmark-plus me-2 text-success"></i>Aditivar
+                                                </a>
+                                            </li>
+                                        }
+
+                                        @if (podeExcluir)
+                                        {
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <form asp-action="Excluir" asp-route-id="@item.InstrumentoId" method="post" class="js-delete" data-nome="@item.Numero">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="dropdown-item py-2 text-danger">
+                                                        <i class="bi bi-trash me-2"></i>Excluir
+                                                    </button>
+                                                </form>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="card-body-custom">
+                            <div class="instrumento-desc mb-3" title="@item.Descricao">
                                 @item.Descricao
                             </div>
-                        </td>
-                        <td class="text-center">
-                            <span class="badge rounded-pill bg-secondary-subtle text-secondary">
-                                @item.VigenciaInicio.ToString("dd/MM/yyyy") → @item.VigenciaFimAtual.ToString("dd/MM/yyyy")
-                            </span>
-                        </td>
-                        <td class="text-center">@item.MesesVigentesAtuais</td>
-                        <td class="text-end">@item.ValorTotalAtual.ToString("C", br)</td>
-                        <td class="text-end">@item.ValorMensalAtual.ToString("C", br)</td>
-                        <td class="text-end"><span class="@saldoClass">@item.SaldoAtual.ToString("C", br)</span></td>
-                        <td class="text-center">
-                            <div class="d-inline-flex gap-1">
-                                <a class="btn btn-sm btn-outline-primary" asp-action="Editar" asp-route-id="@item.InstrumentoId">Editar</a>
-                                <form asp-action="Excluir" asp-route-id="@item.InstrumentoId" method="post" class="d-inline js-delete" data-nome="@item.Numero">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
-                                </form>
+
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div>
+                                    <span class="stat-label">Vigência</span>
+                                    <span class="fw-semibold text-dark small">
+                                        @item.VigenciaInicio.ToString("dd/MM/yy") a @item.VigenciaFimAtual.ToString("dd/MM/yy")
+                                    </span>
+                                </div>
+                                <div class="text-end">
+                                    <span class="stat-label">Duração</span>
+                                    <span class="badge bg-light text-dark border">@item.MesesVigentesAtuais meses</span>
+                                </div>
                             </div>
-                        </td>
-                    </tr>
-                }
+
+                            <div class="mini-stats">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <span class="stat-label">Valor Total</span>
+                                        <span class="stat-value money text-primary">@item.ValorTotalAtual.ToString("C", br)</span>
+                                    </div>
+                                    <div class="col-6 border-start ps-3">
+                                        <span class="stat-label">Valor Mensal</span>
+                                        <span class="stat-value money">@item.ValorMensalAtual.ToString("C", br)</span>
+                                    </div>
+                                    <div class="col-12 mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
+                                        <span class="stat-label mb-0 fw-bold text-dark">Saldo</span>
+                                        <span class="stat-value money @saldoColor">@item.SaldoAtual.ToString("C", br)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
             }
-            </tbody>
-        </table>
+        }
     </div>
+
+    @if (totalPaginas > 1)
+    {
+        <div class="d-flex justify-content-center mt-5 mb-3">
+            <nav>
+                <ul class="pagination align-items-center shadow-sm bg-white rounded-pill p-1">
+                    <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual - 1)" aria-label="Anterior">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+
+                    <li class="page-item disabled">
+                        <span class="page-info">
+                            Página @paginaAtual de @totalPaginas
+                        </span>
+                    </li>
+
+                    <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual + 1)" aria-label="Próximo">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
 </div>
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Mensagens (TempData)
-        (function () {
-            const ok = '@(TempData["Sucesso"] ?? "")';
-            const err = '@(TempData["Erro"] ?? "")';
-            if (ok)  Swal.fire({ icon: 'success', title: 'Sucesso', text: ok });
-            if (err) Swal.fire({ icon: 'error', title: 'Ops', text: err });
-        })();
+        const ok = '@(TempData["Sucesso"] ?? "")';
+        const err = '@(TempData["Erro"] ?? "")';
+        if (ok)  Swal.fire({ icon: 'success', title: 'Sucesso', text: ok, timer: 3000, showConfirmButton: false });
+        if (err) Swal.fire({ icon: 'error', title: 'Atenção', text: err });
 
-        // Confirmação de exclusão
         document.querySelectorAll('form.js-delete').forEach(f => {
             f.addEventListener('submit', function (e) {
                 e.preventDefault();
-                const nome = this.getAttribute('data-nome') || 'este instrumento';
+                const nome = this.getAttribute('data-nome');
                 Swal.fire({
+                    title: 'Excluir Instrumento?',
+                    html: `Tem certeza que deseja excluir o instrumento <b>${nome}</b>?<br>Esta ação removerá todos os aditivos e lançamentos vinculados.`,
                     icon: 'warning',
-                    title: 'Confirmar exclusão?',
-                    text: `Você está prestes a excluir ${nome}.`,
                     showCancelButton: true,
-                    confirmButtonText: 'Excluir',
-                    cancelButtonText: 'Cancelar',
-                    confirmButtonColor: '#dc3545'
-                }).then(res => { if (res.isConfirmed) this.submit(); });
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sim, excluir',
+                    cancelButtonText: 'Cancelar'
+                }).then((r) => { if (r.isConfirmed) this.submit(); });
             });
         });
     </script>
-    <style>
-        .obj-cell { /* ... seu estilo ... */ }
-    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 }

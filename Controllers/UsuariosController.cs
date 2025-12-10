@@ -6,26 +6,35 @@ using Financeiro.Models.Dto;
 using Financeiro.Repositorios;
 using Financeiro.Servicos.Anexos;
 using Financeiro.Servicos.Seguranca;
-using Financeiro.Servicos;                        // ← novo (IUsuarioService)
+using Financeiro.Servicos;                        
 using Financeiro.Infraestrutura;
 using System.Security.Claims;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.IO;
+using System;
 
 namespace Financeiro.Controllers
 {
     [Authorize]
     public class UsuariosController : Controller
     {
-        private readonly IUsuarioRepositorio          _usuarioRepositorio;
-        private readonly ICriptografiaService         _criptografiaService;
-        private readonly IAnexoService                _anexoService;
-        private readonly IArquivoRepositorio          _arquivoRepositorio;
-        private readonly IPessoaFisicaRepositorio     _pessoaFisicaRepositorio;
-        private readonly IPerfilRepositorio           _perfilRepositorio;
-        private readonly IEntidadeRepositorio         _entidadeRepositorio;     // novo
-        private readonly IUsuarioService              _usuarioService;          // novo
-        private readonly IDbConnectionFactory         _connectionFactory;
+        private readonly IUsuarioRepositorio      _usuarioRepositorio;
+        private readonly ICriptografiaService     _criptografiaService;
+        private readonly IAnexoService            _anexoService;
+        private readonly IArquivoRepositorio      _arquivoRepositorio;
+        private readonly IPessoaFisicaRepositorio _pessoaFisicaRepositorio;
+        private readonly IPerfilRepositorio       _perfilRepositorio;
+        private readonly IEntidadeRepositorio     _entidadeRepositorio;    
+        private readonly IUsuarioService          _usuarioService;         
+        private readonly IDbConnectionFactory     _connectionFactory;
+        
+        // --- NOVAS DEPENDÊNCIAS ---
+        private readonly IPermissaoRepositorio    _permissaoRepositorio;
+        private readonly ILogService              _logService;
 
         public UsuariosController(
             IUsuarioRepositorio      usuarioRepositorio,
@@ -34,19 +43,23 @@ namespace Financeiro.Controllers
             IArquivoRepositorio      arquivoRepositorio,
             IPessoaFisicaRepositorio pessoaFisicaRepositorio,
             IPerfilRepositorio       perfilRepositorio,
-            IEntidadeRepositorio     entidadeRepositorio,   // novo
-            IUsuarioService          usuarioService,        // novo
-            IDbConnectionFactory     connectionFactory)
+            IEntidadeRepositorio     entidadeRepositorio,   
+            IUsuarioService          usuarioService,        
+            IDbConnectionFactory     connectionFactory,
+            IPermissaoRepositorio    permissaoRepositorio,
+            ILogService              logService)
         {
-            _usuarioRepositorio   = usuarioRepositorio;
-            _criptografiaService  = criptografiaService;
-            _anexoService         = anexoService;
-            _arquivoRepositorio   = arquivoRepositorio;
+            _usuarioRepositorio      = usuarioRepositorio;
+            _criptografiaService     = criptografiaService;
+            _anexoService            = anexoService;
+            _arquivoRepositorio      = arquivoRepositorio;
             _pessoaFisicaRepositorio = pessoaFisicaRepositorio;
-            _perfilRepositorio    = perfilRepositorio;
-            _entidadeRepositorio  = entidadeRepositorio;    // novo
-            _usuarioService       = usuarioService;         // novo
-            _connectionFactory    = connectionFactory;
+            _perfilRepositorio       = perfilRepositorio;
+            _entidadeRepositorio     = entidadeRepositorio;    
+            _usuarioService          = usuarioService;         
+            _connectionFactory       = connectionFactory;
+            _permissaoRepositorio    = permissaoRepositorio;
+            _logService              = logService;
         }
 
         /* =================== LISTAGEM =================== */
@@ -81,7 +94,7 @@ namespace Financeiro.Controllers
             var model = new UsuarioViewModel();
             await PreencherPessoasFisicasAsync(model);
             await PreencherPerfisAsync(model);
-            await PreencherEntidadesAsync(model);                 // novo
+            await PreencherEntidadesAsync(model);                 
             return View("UsuarioForm", model);
         }
 
@@ -94,7 +107,7 @@ namespace Financeiro.Controllers
             {
                 await PreencherPessoasFisicasAsync(model);
                 await PreencherPerfisAsync(model);
-                await PreencherEntidadesAsync(model);             // garantir lista
+                await PreencherEntidadesAsync(model);             
                 return View("UsuarioForm", model);
             }
 
@@ -148,13 +161,15 @@ namespace Financeiro.Controllers
                 Ativo              = true
             };
 
-            await _usuarioRepositorio.AdicionarAsync(usuario);
+            // --- CORREÇÃO AQUI: CAPTURA O ID GERADO ---
+            var novoId = await _usuarioRepositorio.AdicionarAsync(usuario);
+            usuario.Id = novoId; // Atualiza o objeto na memória com o ID real (ex: 15)
 
-            /* -------- grava vínculos de entidades -------- */
+            /* -------- grava vínculos de entidades (agora com o ID correto) -------- */
             await _usuarioService.SalvarEntidadesAsync(
                 usuario.Id,
                 model.EntidadesSelecionadas,
-                model.EntidadeAtivaId ?? model.EntidadesSelecionadas.First());
+                model.EntidadeAtivaId ?? model.EntidadesSelecionadas.FirstOrDefault());
 
             TempData["MensagemSucesso"] = "Usuário cadastrado com sucesso!";
             return RedirectToAction(nameof(Index));
@@ -178,7 +193,7 @@ namespace Financeiro.Controllers
 
             await PreencherPessoasFisicasAsync(model);
             await PreencherPerfisAsync(model);
-            await PreencherEntidadesAsync(model, id);          // carrega vínculos existentes
+            await PreencherEntidadesAsync(model, id);          
             return View("UsuarioForm", model);
         }
 
@@ -238,10 +253,70 @@ namespace Financeiro.Controllers
             await _usuarioService.SalvarEntidadesAsync(
                 model.Id,
                 model.EntidadesSelecionadas,
-                model.EntidadeAtivaId ?? model.EntidadesSelecionadas.First());
+                model.EntidadeAtivaId ?? model.EntidadesSelecionadas.FirstOrDefault());
 
             TempData["MensagemSucesso"] = "Usuário atualizado com sucesso!";
             return RedirectToAction("Index");
+        }
+
+        /* =================== GERENCIAR PERMISSÕES (NOVO) =================== */
+        [HttpGet]
+        public async Task<IActionResult> EditarPermissoes(int id)
+        {
+            var usuario = await _usuarioRepositorio.ObterPorIdAsync(id);
+            if (usuario == null) return NotFound();
+
+            // Busca a lista plana do banco
+            var listaPlana = await _permissaoRepositorio.ObterStatusPermissoesUsuarioAsync(id);
+
+            // Transforma em hierarquia (ViewModel)
+            var viewModel = new UsuarioPermissoesEdicaoViewModel
+            {
+                UsuarioId = usuario.Id,
+                NomeUsuario = usuario.NameSkip,
+                EmailUsuario = _criptografiaService.DescriptografarEmail(usuario.EmailCriptografado),
+                Modulos = listaPlana
+                    .GroupBy(p => p.Modulo)
+                    .Select(g => new ModuloPermissoesViewModel
+                    {
+                        NomeModulo = g.Key,
+                        Permissoes = g.Select(p => new PermissaoCheckViewModel
+                        {
+                            PermissaoId = p.Id,
+                            Nome = p.Nome,
+                            Chave = p.Chave,
+                            Descricao = p.Descricao,
+                            Concedido = p.TemPeloUsuario,
+                            HerdadoDoPerfil = p.TemPeloPerfil
+                        }).ToList()
+                    }).ToList()
+            };
+
+            return View("EditarPermissoes", viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SalvarPermissoes(int usuarioId, List<int> permissoesSelecionadas)
+        {
+            var usuario = await _usuarioRepositorio.ObterPorIdAsync(usuarioId);
+            if (usuario == null) return NotFound();
+
+            // Salva no banco
+            await _permissaoRepositorio.AtualizarPermissoesUsuarioAsync(usuarioId, permissoesSelecionadas);
+
+            // Log de Auditoria
+            await _logService.RegistrarEdicaoAsync(
+                "PermissoesUsuario", 
+                "Alteração de permissões individuais", 
+                $"Permissões concedidas manualmente: {permissoesSelecionadas?.Count ?? 0}", 
+                usuarioId
+            );
+
+            TempData["MensagemSucesso"] = "Permissões atualizadas com sucesso.";
+            
+            // Retorna para a mesma tela
+            return RedirectToAction("EditarPermissoes", new { id = usuarioId });
         }
 
         /* =================== EXCLUIR =================== */
@@ -273,7 +348,6 @@ namespace Financeiro.Controllers
             }).ToList();
         }
 
-        /* ---------- NOVO: preencher lista de entidades ---------- */
         private async Task PreencherEntidadesAsync(UsuarioViewModel model, int? usuarioId = null)
         {
             var entidades = await _entidadeRepositorio.ListAsync();

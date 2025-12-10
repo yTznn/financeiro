@@ -14,6 +14,11 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Descrição")]
         public string? Descricao { get; set; }
 
+        // --- ADICIONADO PARA SUPORTAR O DESIGN DO CARD ---
+        [Display(Name = "Vigente?")]
+        public bool Vigente { get; set; }
+        // -------------------------------------------------
+
         [Display(Name = "Início da Vigência")]
         [DataType(DataType.Date)]
         public DateTime VigenciaInicio { get; set; }
@@ -36,12 +41,11 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Saldo (Atual)")]
         [DataType(DataType.Currency)]
         public decimal SaldoAtual { get; set; }
-        // InstrumentoResumoViewModel
+
         [DataType(DataType.Currency)]
         public decimal TotalLancadoNoMes { get; set; }
 
         [DataType(DataType.Currency)]
         public decimal SaldoDoMesAtual { get; set; }
-
     }
 }

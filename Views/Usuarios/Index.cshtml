@@ -1,59 +1,194 @@
 @model IEnumerable<Financeiro.Models.ViewModels.UsuarioListagemViewModel>
 
 @{
-    ViewBag.Title = "Usuários Cadastrados";
+    ViewBag.Title = "Usuários do Sistema";
     Layout = "_Layout";
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
+<style>
+    /* Estilo "Blue & White" Consistente */
+    .table-header-blue {
+        background-color: #0d6efd;
+        color: #ffffff;
+    }
+    .table-header-blue th {
+        font-weight: 500;
+        border-bottom: none;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+    
+    /* Avatar Circular */
+    .avatar-cell img {
+        object-fit: cover;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .avatar-placeholder {
+        width: 40px;
+        height: 40px;
+        background-color: #e9ecef;
+        color: #adb5bd;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
 
-@if (TempData["MensagemSucesso"] != null)
-{
-    <div class="alert alert-success">@TempData["MensagemSucesso"]</div>
+    /* Linha da Tabela */
+    .align-middle td {
+        vertical-align: middle;
+        padding: 0.8rem 1rem;
+    }
+    
+    /* Badges */
+    .badge-status-active {
+        background-color: #d1e7dd;
+        color: #0f5132;
+        font-weight: 600;
+        padding: 0.4em 0.8em;
+        border-radius: 20px;
+    }
+    .badge-status-inactive {
+        background-color: #f8d7da;
+        color: #842029;
+        font-weight: 600;
+        padding: 0.4em 0.8em;
+        border-radius: 20px;
+    }
+</style>
+
+<div class="container-fluid px-0 py-3">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">@ViewBag.Title</h2>
+            <small class="text-muted">Gerencie o acesso e as permissões da equipe</small>
+        </div>
+        <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="bi bi-person-plus-fill me-2"></i>Novo Usuário
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0 overflow-hidden" style="border-radius: 12px;">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-header-blue">
+                        <tr>
+                            <th class="ps-4">Usuário / Login</th>
+                            <th>Pessoa Vinculada</th>
+                            <th>Email</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Foto</th>
+                            <th class="text-center" style="width: 180px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var usuario in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-semibold text-dark">
+                                    @usuario.NameSkip
+                                </td>
+                                <td class="text-muted">
+                                    @if (!string.IsNullOrEmpty(usuario.NomePessoaFisica))
+                                    {
+                                        <i class="bi bi-person-badge me-1"></i> @usuario.NomePessoaFisica
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">- não vinculado -</span>
+                                    }
+                                </td>
+                                <td class="text-muted">@usuario.Email</td>
+                                <td class="text-center">
+                                    @if (usuario.Ativo)
+                                    {
+                                        <span class="badge-status-active"><i class="bi bi-check-circle me-1"></i>Ativo</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-status-inactive"><i class="bi bi-x-circle me-1"></i>Inativo</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-flex justify-content-center avatar-cell">
+                                        @if (!string.IsNullOrEmpty(usuario.HashImagem))
+                                        {
+                                            <img src="/Usuarios/ImagemPerfil?hash=@usuario.HashImagem" alt="Foto" width="40" height="40" class="rounded-circle" />
+                                        }
+                                        else
+                                        {
+                                            <div class="avatar-placeholder" title="Sem imagem">
+                                                <i class="bi bi-person"></i>
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group">
+                                        <a asp-action="Editar" asp-route-id="@usuario.Id" 
+                                           class="btn btn-sm btn-outline-primary border-0" 
+                                           data-bs-toggle="tooltip" title="Editar Dados">
+                                            <i class="bi bi-pencil-square fs-5"></i>
+                                        </a>
+
+                                        <a asp-action="EditarPermissoes" asp-route-id="@usuario.Id" 
+                                           class="btn btn-sm btn-outline-warning border-0" 
+                                           data-bs-toggle="tooltip" title="Gerenciar Permissões">
+                                            <i class="bi bi-shield-lock-fill fs-5"></i>
+                                        </a>
+
+                                        <form asp-action="Excluir" asp-route-id="@usuario.Id" method="post" class="d-inline js-delete" data-nome="@usuario.NameSkip">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" 
+                                                    data-bs-toggle="tooltip" title="Excluir">
+                                                <i class="bi bi-trash fs-5"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+    <script>
+        // Inicializa Tooltips do Bootstrap (para aparecer o texto ao passar o mouse nos botões)
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Mensagens de Sucesso
+        const ok = '@(TempData["MensagemSucesso"] ?? "")';
+        if (ok) Swal.fire({ icon: 'success', title: 'Sucesso', text: ok, timer: 3000, showConfirmButton: false });
+
+        // Confirmação de Exclusão estilizada
+        document.querySelectorAll('form.js-delete').forEach(f => {
+            f.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const nome = this.getAttribute('data-nome');
+                Swal.fire({
+                    title: 'Excluir Usuário?',
+                    html: `Tem certeza que deseja remover o usuário <b>${nome}</b>?<br>Ele perderá o acesso imediatamente.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sim, excluir',
+                    cancelButtonText: 'Cancelar'
+                }).then((r) => { if (r.isConfirmed) this.submit(); });
+            });
+        });
+    </script>
 }
-
-<table class="table table-bordered table-striped align-middle">
-    <thead class="table-dark">
-        <tr>
-            <th>NameSkip</th>
-            <th>Pessoa Física</th>
-            <th>Email (Descriptografado)</th>
-            <th>Ativo</th>
-            <th>Imagem</th>
-            <th style="width: 150px;">Ações</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var usuario in Model)
-        {
-            <tr>
-                <td>@usuario.NameSkip</td>
-                <td>@usuario.NomePessoaFisica</td>
-                <td>@usuario.Email</td>
-                <td>@(usuario.Ativo ? "Sim" : "Não")</td>
-                <td>
-                    @if (!string.IsNullOrEmpty(usuario.HashImagem))
-                    {
-                        <img src="/Usuarios/ImagemPerfil?hash=@usuario.HashImagem" alt="Imagem de Perfil" width="40" height="40" class="rounded-circle border" />
-                    }
-                    else
-                    {
-                        <span class="text-muted">Sem imagem</span>
-                    }
-                </td>
-                <td>
-                    <a asp-action="Editar" asp-route-id="@usuario.Id" class="btn btn-sm btn-warning me-1">Editar</a>
-                    <form asp-action="Excluir" asp-route-id="@usuario.Id" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-sm btn-danger"
-                                onclick="return confirm('Deseja realmente excluir este usuário?');">
-                            Excluir
-                        </button>
-                    </form>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
-
-<a asp-action="Novo" class="btn btn-primary mt-3">Novo Usuário</a>

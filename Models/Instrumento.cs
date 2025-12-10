@@ -14,6 +14,7 @@ namespace Financeiro.Models
         public DateTime DataInicio { get; set; }
         public DateTime DataFim { get; set; }
         public bool Ativo { get; set; } = true;
+        public bool Vigente { get; set; } // Nova propriedade
         public string? Observacao { get; set; }
         public DateTime? DataAssinatura { get; set; }
         public int EntidadeId { get; set; }

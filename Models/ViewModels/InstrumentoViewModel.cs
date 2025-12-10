@@ -44,6 +44,9 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Ativo?")]
         public bool Ativo { get; set; }
 
+        [Display(Name = "Vigente (Padrão)?")]
+        public bool Vigente { get; set; }
+
         [Display(Name = "Observação")]
         public string? Observacao { get; set; }
 

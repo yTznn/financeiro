@@ -2,6 +2,8 @@ using Dapper;
 using Financeiro.Models;
 using Financeiro.Infraestrutura;
 using System.Data;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace Financeiro.Repositorios
 {
@@ -14,13 +16,17 @@ namespace Financeiro.Repositorios
             _connectionFactory = connectionFactory;
         }
 
+        // --- CORREÇÃO PRINCIPAL AQUI ---
+        // Alterado para retornar int (o ID gerado) em vez de apenas executar
         public async Task<int> AdicionarAsync(Usuario usuario)
         {
             const string sql = @"
                 INSERT INTO Usuarios
                 (NameSkip, EmailCriptografado, EmailHash, SenhaHash, NomeArquivoImagem, HashImagem, PessoaFisicaId, PerfilId, Ativo, DataCriacao)
-                VALUES (@NameSkip, @EmailCriptografado, @EmailHash, @SenhaHash, @NomeArquivoImagem, @HashImagem, @PessoaFisicaId, @PerfilId, @Ativo, @DataCriacao);
+                VALUES 
+                (@NameSkip, @EmailCriptografado, @EmailHash, @SenhaHash, @NomeArquivoImagem, @HashImagem, @PessoaFisicaId, @PerfilId, @Ativo, @DataCriacao);
 
+                -- Retorna o ID gerado pelo banco
                 SELECT CAST(SCOPE_IDENTITY() as int);
             ";
 
@@ -28,7 +34,8 @@ namespace Financeiro.Repositorios
             if (conn.State != ConnectionState.Open)
                 conn.Open();
 
-            return await conn.ExecuteScalarAsync<int>(sql, usuario);
+            // ExecuteScalarAsync pega o retorno do SELECT SCOPE_IDENTITY()
+            return await conn.QuerySingleAsync<int>(sql, usuario);
         }
 
         public async Task<Usuario?> ObterPorIdAsync(int id)
@@ -117,6 +124,7 @@ namespace Financeiro.Repositorios
 
             await conn.ExecuteAsync(sql, new { Id = id });
         }
+
         public async Task<IEnumerable<Entidade>> ObterEntidadesPorUsuarioIdAsync(int usuarioId)
         {
             const string sql = @"
