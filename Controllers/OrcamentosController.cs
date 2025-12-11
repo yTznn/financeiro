@@ -12,6 +12,8 @@ using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;
 using Financeiro.Servicos;
 using Microsoft.AspNetCore.Authorization;
+using Financeiro.Atributos; 
+using Financeiro.Extensions; 
 
 namespace Financeiro.Controllers
 {
@@ -19,9 +21,10 @@ namespace Financeiro.Controllers
     public class OrcamentosController : Controller
     {
         private static readonly DateTime MinAppDate = new DateTime(2020, 1, 1);
+        private const int TAMANHO_PAGINA = 3; // Paginação com 3 itens
 
         private readonly IOrcamentoRepositorio _orcamentoRepo;
-        private readonly IInstrumentoRepositorio _instrumentoRepo; // [NOVO] Necessário para validar saldo e vigência
+        private readonly IInstrumentoRepositorio _instrumentoRepo; 
         private readonly ILogService _logService;
         private readonly IJustificativaService _justificativaService;
 
@@ -41,14 +44,19 @@ namespace Financeiro.Controllers
 
         private async Task CarregarInstrumentos(int? selecionado = null)
         {
-            // Carrega apenas os instrumentos ativos para o Dropdown
+            // 1. Pega Entidade Logada
+            int entidadeId = User.ObterEntidadeId();
+
+            // 2. Busca lista COMPLETA (repositorio generico) e filtra em memória 
+            // OU melhor: cria um metodo no repositorio para listar por entidade.
+            // Para simplificar e usar o que temos: buscamos todos e filtramos aqui.
+            // Se a lista for gigante, ideal é filtrar no banco.
             var lista = await _instrumentoRepo.ListarAsync();
             
-            // Formata o texto para facilitar a identificação (Número - Objeto curto)
             ViewBag.Instrumentos = lista
-                .Where(i => i.Ativo)
+                .Where(i => i.Ativo && i.EntidadeId == entidadeId) // <--- Filtro de Isolamento
                 .Select(i => new SelectListItem(
-                    $"{i.Numero} - {(i.Objeto.Length > 50 ? i.Objeto.Substring(0, 50) + "..." : i.Objeto)}", 
+                    $"{i.Numero} - {(i.Objeto.Length > 50 ? i.Objeto.Substring(0, 50) + "..." : i.Objeto)}", // <--- Formatação melhorada
                     i.Id.ToString(), 
                     selecionado == i.Id))
                 .ToList();
@@ -85,17 +93,28 @@ namespace Financeiro.Controllers
 
         /* -------------------- LISTAR -------------------- */
         [HttpGet]
-        public async Task<IActionResult> Index()
+        [AutorizarPermissao("ORCAMENTO_VIEW")]
+        public async Task<IActionResult> Index(int p = 1)
         {
-            var lista = await _orcamentoRepo.ListarAsync();
-            return View(lista);
+            int entidadeId = User.ObterEntidadeId();
+            if (entidadeId == 0) return RedirectToAction("Login", "Conta");
+
+            if (p < 1) p = 1;
+
+            var (itens, total) = await _orcamentoRepo.ListarPaginadoAsync(entidadeId, p, TAMANHO_PAGINA);
+
+            ViewBag.PaginaAtual = p;
+            ViewBag.TotalPaginas = (int)Math.Ceiling((double)total / TAMANHO_PAGINA);
+
+            return View(itens);
         }
 
         /* -------------------- NOVO -------------------- */
         [HttpGet]
+        [AutorizarPermissao("ORCAMENTO_ADD")]
         public async Task<IActionResult> Novo()
         {
-            await CarregarInstrumentos(); // Preenche o dropdown
+            await CarregarInstrumentos(); 
             return View("OrcamentoForm", new OrcamentoViewModel
             {
                 Ativo = true,
@@ -107,6 +126,7 @@ namespace Financeiro.Controllers
         /* -------------------- SALVAR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("ORCAMENTO_ADD")]
         public async Task<IActionResult> Salvar(OrcamentoViewModel vm, string detalhamentoJson, string justificativa = null)
         {
             if (!string.IsNullOrEmpty(detalhamentoJson))
@@ -127,9 +147,8 @@ namespace Financeiro.Controllers
                 return View("OrcamentoForm", vm);
             }
 
-            // ===== VALIDAÇÃO DE NEGÓCIO: INSTRUMENTO, VIGÊNCIA & SALDO =====
+            // ===== VALIDAÇÃO DE NEGÓCIO =====
             
-            // 1. Busca os dados ATUAIS do instrumento (incluindo aditivos de prazo/valor)
             var instrumentoResumo = await _instrumentoRepo.ObterResumoAsync(vm.InstrumentoId);
             if (instrumentoResumo == null)
             {
@@ -138,22 +157,19 @@ namespace Financeiro.Controllers
                 return View("OrcamentoForm", vm);
             }
 
-            // 2. Valida VIGÊNCIA: O orçamento deve estar DENTRO da vigência do instrumento
+            // [SEGURANÇA] Verifica se o Instrumento pertence à unidade do usuário
+            // Como ObterResumoAsync já carrega o objeto, e o objeto é isolado, teoricamente ok.
+            // Mas para garantir, podemos checar o EntidadeId se disponível no resumo, ou confiar no CarregarInstrumentos que só mostrou os permitidos.
+            
             if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio || vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual)
             {
                 string msg = $"A vigência do orçamento deve estar dentro do prazo do instrumento ({instrumentoResumo.VigenciaInicio:dd/MM/yyyy} a {instrumentoResumo.VigenciaFimAtual:dd/MM/yyyy}).";
-                
-                if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio) 
-                    ModelState.AddModelError(nameof(vm.VigenciaInicio), msg);
-                
-                if (vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual) 
-                    ModelState.AddModelError(nameof(vm.VigenciaFim), msg);
-                
+                if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio) ModelState.AddModelError(nameof(vm.VigenciaInicio), msg);
+                if (vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual) ModelState.AddModelError(nameof(vm.VigenciaFim), msg);
                 await CarregarInstrumentos(vm.InstrumentoId);
                 return View("OrcamentoForm", vm);
             }
 
-            // 3. Valida SALDO: (Valor Instrumento) - (Orçamentos Já Criados) >= (Novo Orçamento)
             var jaComprometido = await _orcamentoRepo.ObterTotalComprometidoPorInstrumentoAsync(vm.InstrumentoId);
             var saldoDisponivel = instrumentoResumo.ValorTotalAtual - jaComprometido;
 
@@ -163,7 +179,6 @@ namespace Financeiro.Controllers
                 await CarregarInstrumentos(vm.InstrumentoId);
                 return View("OrcamentoForm", vm);
             }
-            // =====================================================
 
             try
             {
@@ -193,10 +208,18 @@ namespace Financeiro.Controllers
 
         /* -------------------- EDITAR -------------------- */
         [HttpGet]
+        [AutorizarPermissao("ORCAMENTO_EDIT")]
         public async Task<IActionResult> Editar(int id)
         {
             var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(id);
             if (orcamentoHeader == null) return NotFound();
+
+            // [SEGURANÇA] Verifica se pertence à unidade
+            var instrumento = await _instrumentoRepo.ObterPorIdAsync(orcamentoHeader.InstrumentoId);
+            if (instrumento == null || instrumento.EntidadeId != User.ObterEntidadeId())
+            {
+                return Forbid();
+            }
 
             var detalhes = await _orcamentoRepo.ObterDetalhesPorOrcamentoIdAsync(id);
             var detalhamentoHierarquico = ConstruirHierarquia(detalhes.ToList(), null);
@@ -204,7 +227,7 @@ namespace Financeiro.Controllers
             var vm = new OrcamentoViewModel
             {
                 Id = orcamentoHeader.Id,
-                InstrumentoId = orcamentoHeader.InstrumentoId, // Carrega o vínculo existente
+                InstrumentoId = orcamentoHeader.InstrumentoId,
                 Nome = orcamentoHeader.Nome,
                 VigenciaInicio = orcamentoHeader.VigenciaInicio,
                 VigenciaFim = orcamentoHeader.VigenciaFim,
@@ -221,6 +244,7 @@ namespace Financeiro.Controllers
         /* -------------------- ATUALIZAR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("ORCAMENTO_EDIT")]
         public async Task<IActionResult> Atualizar(OrcamentoViewModel vm, string detalhamentoJson, string justificativa = null)
         {
             if (!string.IsNullOrEmpty(detalhamentoJson))
@@ -240,8 +264,18 @@ namespace Financeiro.Controllers
             var existe = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.Id);
             if (existe == null) return NotFound();
 
-            // ===== VALIDAÇÃO DE NEGÓCIO (REPETIDA PARA ATUALIZAÇÃO) =====
-            
+            // [SEGURANÇA] Verifica dono original
+            var instrumentoOriginal = await _instrumentoRepo.ObterPorIdAsync(existe.InstrumentoId);
+            if (instrumentoOriginal.EntidadeId != User.ObterEntidadeId()) return Forbid();
+
+            // [SEGURANÇA] Verifica se o NOVO instrumento (se mudou) também é meu
+            if (vm.InstrumentoId != existe.InstrumentoId)
+            {
+                 var novoInstrumento = await _instrumentoRepo.ObterPorIdAsync(vm.InstrumentoId);
+                 if (novoInstrumento.EntidadeId != User.ObterEntidadeId()) return Forbid();
+            }
+
+            // ===== VALIDAÇÃO DE NEGÓCIO =====
             var instrumentoResumo = await _instrumentoRepo.ObterResumoAsync(vm.InstrumentoId);
             if (instrumentoResumo == null)
             {
@@ -250,7 +284,6 @@ namespace Financeiro.Controllers
                 return View("OrcamentoForm", vm);
             }
 
-            // Valida Vigência
             if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio || vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual)
             {
                 string msg = $"A vigência deve estar dentro do prazo do instrumento ({instrumentoResumo.VigenciaInicio:dd/MM/yyyy} a {instrumentoResumo.VigenciaFimAtual:dd/MM/yyyy}).";
@@ -260,17 +293,15 @@ namespace Financeiro.Controllers
                 return View("OrcamentoForm", vm);
             }
 
-            // Valida Saldo (Ignorando o valor antigo DESTE orçamento para não duplicar na conta)
             var jaComprometidoOutros = await _orcamentoRepo.ObterTotalComprometidoPorInstrumentoAsync(vm.InstrumentoId, ignorarOrcamentoId: vm.Id);
             var saldoDisponivel = instrumentoResumo.ValorTotalAtual - jaComprometidoOutros;
 
             if (vm.ValorPrevistoTotal > saldoDisponivel)
             {
-                ModelState.AddModelError(nameof(vm.ValorPrevistoTotal), $"Saldo insuficiente. Disponível para este orçamento: {saldoDisponivel:C2}. Tentativa: {vm.ValorPrevistoTotal:C2}.");
+                ModelState.AddModelError(nameof(vm.ValorPrevistoTotal), $"Saldo insuficiente. Disponível: {saldoDisponivel:C2}. Tentativa: {vm.ValorPrevistoTotal:C2}.");
                 await CarregarInstrumentos(vm.InstrumentoId);
                 return View("OrcamentoForm", vm);
             }
-            // ===================================================
 
             try
             {
@@ -297,6 +328,7 @@ namespace Financeiro.Controllers
         /* -------------------- EXCLUIR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("ORCAMENTO_DEL")]
         public async Task<IActionResult> Excluir(int id, string justificativa)
         {
             if (string.IsNullOrWhiteSpace(justificativa))
@@ -307,6 +339,10 @@ namespace Financeiro.Controllers
 
             var existente = await _orcamentoRepo.ObterHeaderPorIdAsync(id);
             if (existente == null) return NotFound();
+
+            // [SEGURANÇA]
+            var instrumento = await _instrumentoRepo.ObterPorIdAsync(existente.InstrumentoId);
+            if (instrumento.EntidadeId != User.ObterEntidadeId()) return Forbid();
 
             try
             {

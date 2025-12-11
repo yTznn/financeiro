@@ -11,10 +11,13 @@ namespace Financeiro.Repositorios
         Task AtualizarAsync(int id, OrcamentoViewModel vm);
         Task<Orcamento?> ObterHeaderPorIdAsync(int id);
         Task<IEnumerable<OrcamentoDetalhe>> ObterDetalhesPorOrcamentoIdAsync(int orcamentoId);
-        Task<IEnumerable<OrcamentoListViewModel>> ListarAsync();
+        
+        // [ALTERADO] Agora retorna paginado e filtrado por Entidade
+        Task<(IEnumerable<OrcamentoListViewModel> Itens, int TotalItens)> ListarPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina);
+        Task<IEnumerable<OrcamentoListViewModel>> ListarAtivosPorEntidadeAsync(int entidadeId);
+        
         Task ExcluirAsync(int id);
-
-        // [NOVO] Método para somar quanto já foi gasto do instrumento
         Task<decimal> ObterTotalComprometidoPorInstrumentoAsync(int instrumentoId, int? ignorarOrcamentoId = null);
+
     }
 }

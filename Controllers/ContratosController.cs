@@ -6,6 +6,7 @@ using System.Linq;
 using Financeiro.Servicos;
 using System;
 using Microsoft.AspNetCore.Authorization;
+using Financeiro.Extensions; // <--- ADICIONE ESTA LINHA
 
 namespace Financeiro.Controllers
 {
@@ -292,8 +293,13 @@ namespace Financeiro.Controllers
         {
             ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
             
-            // Busca orçamentos para popular o Dropdown na view
-            ViewBag.Orcamentos = await _orcamentoRepo.ListarAsync(); 
+            // --- CORREÇÃO AQUI ---
+            // 1. Obtém o ID da entidade do usuário logado
+            int entidadeId = User.ObterEntidadeId();
+
+            // 2. Busca apenas orçamentos ATIVOS e desta ENTIDADE
+            ViewBag.Orcamentos = await _orcamentoRepo.ListarAtivosPorEntidadeAsync(entidadeId); 
+            // ---------------------
 
             if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto))
             {

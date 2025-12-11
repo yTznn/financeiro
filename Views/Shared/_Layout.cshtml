@@ -191,7 +191,18 @@
 
                             <li class="menu-item"><a asp-controller="Naturezas" asp-action="Index" class="@(currentController == "Naturezas" ? "active" : "")"><i class='bx bx-purchase-tag-alt'></i><span class="links_name">Naturezas</span></a></li>
                             <li class="menu-item"><a asp-controller="Niveis" asp-action="Index" class="@(currentController == "Niveis" ? "active" : "")"><i class='bx bx-sitemap'></i><span class="links_name">Níveis</span></a></li>
-                            <li class="menu-item"><a asp-controller="Orcamentos" asp-action="Index" class="@(currentController == "Orcamentos" ? "active" : "")"><i class='bx bx-bar-chart-square'></i><span class="links_name">Orçamentos</span></a></li>
+                            
+                            @* --- ITEM PROTEGIDO: ORÇAMENTOS --- *@
+                            @if (User.TemPermissao("ORCAMENTO_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Orcamentos" asp-action="Index" class="@(currentController == "Orcamentos" ? "active" : "")">
+                                        <i class='bx bx-bar-chart-square'></i><span class="links_name">Orçamentos</span>
+                                    </a>
+                                </li>
+                            }
+                            @* ---------------------------------- *@
+
                             <li class="menu-item"><a asp-controller="Perfis" asp-action="Index" class="@(currentController == "Perfis" ? "active" : "")"><i class='bx bx-id-card'></i><span class="links_name">Perfis de Acesso</span></a></li>
                             <li class="menu-item"><a asp-controller="RecebimentosInstrumento" asp-action="RelatorioGeral" class="@(currentController == "RecebimentosInstrumento" ? "active" : "")"><i class='bx bxs-dollar-circle'></i><span class="links_name">Recebimentos</span></a></li>
                             <li class="menu-item"><a asp-controller="Usuarios" asp-action="Index" class="@(currentController == "Usuarios" ? "active" : "")"><i class='bx bx-group'></i><span class="links_name">Usuários</span></a></li>

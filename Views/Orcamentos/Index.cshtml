@@ -1,73 +1,246 @@
 @model IEnumerable<Financeiro.Models.ViewModels.OrcamentoListViewModel>
-@using System.Globalization;
+@using System.Globalization
+@using Financeiro.Extensions 
 
 @{
-    ViewData["Title"] = "Orçamentos";
-    var culturaBrasileira = new CultureInfo("pt-BR");
+    ViewData["Title"] = "Gestão de Orçamentos";
+    Layout = "_Layout";
+    var br = new CultureInfo("pt-BR");
+
+    // Cache de permissões
+    bool podeCriar  = User.TemPermissao("ORCAMENTO_ADD");
+    bool podeEditar = User.TemPermissao("ORCAMENTO_EDIT");
+    bool podeExcluir= User.TemPermissao("ORCAMENTO_DEL");
+
+    // Paginação
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>@ViewData["Title"]</h3>
-    <a asp-action="Novo" class="btn btn-primary">Novo Orçamento</a>
+<style>
+    /* Estilo dos Cards de Orçamento */
+    .card-orcamento {
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        height: 100%;
+        background: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+    .card-orcamento:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+        border-color: #dee2e6;
+    }
+    .card-orcamento.inativo {
+        background-color: #fcfcfc;
+        opacity: 0.9;
+    }
+    .card-header-custom {
+        padding: 1.25rem;
+        background: transparent;
+        border-bottom: 1px solid #f1f3f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+    .orcamento-nome {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #343a40;
+        margin-bottom: 0.2rem;
+    }
+    .orcamento-instrumento {
+        font-size: 0.85rem;
+        color: #868e96;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .card-body-custom {
+        padding: 1.25rem;
+    }
+    
+    /* Barras de Progresso */
+    .progress-thin {
+        height: 6px;
+        border-radius: 3px;
+        background-color: #e9ecef;
+        margin-top: 8px;
+    }
+    
+    /* Stats */
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .stat-label { color: #adb5bd; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+    .stat-value { font-weight: 600; color: #495057; }
+    .stat-value.money { font-family: 'Consolas', monospace; }
+    
+    /* Botões */
+    .btn-dots {
+        width: 32px; height: 32px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        color: #adb5bd; transition: all 0.2s;
+    }
+    .btn-dots:hover { background: #f1f3f5; color: #495057; }
+
+    /* Paginação */
+    .pagination .page-link {
+        border: none; color: #6c757d; border-radius: 50%; width: 40px; height: 40px;
+        display: flex; align-items: center; justify-content: center; margin: 0 5px; transition: all 0.2s;
+    }
+    .pagination .page-link:hover:not(.disabled) { background-color: #e9ecef; color: #0d6efd; }
+    .pagination .page-item.disabled .page-link { background-color: transparent; color: #dee2e6; }
+    .pagination .page-info { display: flex; align-items: center; font-size: 0.9rem; color: #6c757d; font-weight: 600; margin: 0 15px; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h2 class="mb-0 fw-bold text-dark">Orçamentos</h2>
+        <small class="text-muted">Planejamento financeiro da unidade</small>
+    </div>
+    
+    @if (podeCriar)
+    {
+        <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="bi bi-plus-lg me-2"></i>Novo Orçamento
+        </a>
+    }
 </div>
 
-<table class="table table-striped table-hover">
-    <thead class="table-dark">
-        <tr>
-            <th>Nome</th>
-            <th>Vigência</th>
-            <th>Valor Orçado</th>
-            <th>Comprometido</th>
-            <th>Saldo Disponível</th>
-            <th>Status</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (Model != null && Model.Any())
+@if (!Model.Any())
+{
+    <div class="col-12">
+        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+            <i class="bi bi-wallet2 display-4 text-light mb-3"></i>
+            <h5 class="text-muted">Nenhum orçamento encontrado</h5>
+            <p class="small text-muted mb-0">
+                @(podeCriar ? "Comece criando um novo planejamento para sua unidade." : "Não há registros disponíveis.")
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
+        @foreach (var item in Model)
         {
-            @foreach (var item in Model)
-            {
-                <tr>
-                    <td>@item.Nome</td>
-                    <td>@item.VigenciaInicio.ToShortDateString() a @item.VigenciaFim.ToShortDateString()</td>
-                    <td>@item.ValorPrevistoTotal.ToString("C", culturaBrasileira)</td>
-                    <td>@item.ValorComprometido.ToString("C", culturaBrasileira)</td>
-                    <td class="@(item.SaldoDisponivel < 0 ? "text-danger fw-bold" : "")">
-                        @item.SaldoDisponivel.ToString("C", culturaBrasileira)
-                    </td>
-                    <td>
-                        @if (item.Ativo)
+            var percentual = item.ValorPrevistoTotal > 0 ? (item.ValorComprometido / item.ValorPrevistoTotal) * 100 : 0;
+            var corBarra = percentual > 90 ? "bg-danger" : (percentual > 70 ? "bg-warning" : "bg-success");
+            var statusClass = item.Ativo ? "" : "inativo";
+
+            <div class="col">
+                <div class="card-orcamento @statusClass shadow-sm">
+                    <div class="card-header-custom">
+                        <div style="max-width: 85%;">
+                            <div class="orcamento-nome text-truncate" title="@item.Nome">@item.Nome</div>
+                            <div class="orcamento-instrumento" title="@item.InstrumentoNome">
+                                <i class="bi bi-file-earmark-text me-1"></i> @item.InstrumentoNome
+                            </div>
+                        </div>
+
+                        @if (podeEditar || podeExcluir)
                         {
-                            <span class="badge bg-success">Ativo</span>
+                            <div class="dropdown">
+                                <button class="btn btn-link btn-dots text-decoration-none" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                    <li><h6 class="dropdown-header">Ações</h6></li>
+                                    
+                                    @if (podeEditar)
+                                    {
+                                        <li>
+                                            <a class="dropdown-item py-2" asp-action="Editar" asp-route-id="@item.Id">
+                                                <i class="bi bi-pencil-square me-2 text-primary"></i>Editar / Detalhes
+                                            </a>
+                                        </li>
+                                    }
+                                    
+                                    @if (podeExcluir)
+                                    {
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button type="button" class="dropdown-item py-2 text-danger btn-excluir" 
+                                                    data-id="@item.Id" data-nome="@item.Nome">
+                                                <i class="bi bi-trash me-2"></i>Excluir
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
                         }
-                        else
+                    </div>
+
+                    <div class="card-body-custom">
+                        <div class="d-flex justify-content-between mb-3 small text-muted">
+                            <span><i class="bi bi-calendar-event me-1"></i> @item.VigenciaInicio.ToString("dd/MM/yy")</span>
+                            <span>até @item.VigenciaFim.ToString("dd/MM/yy")</span>
+                        </div>
+
+                        <div class="mb-2">
+                            <div class="stat-row">
+                                <span class="stat-label">Total Orçado</span>
+                                <span class="stat-value money text-primary">@item.ValorPrevistoTotal.ToString("C", br)</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Comprometido</span>
+                                <span class="stat-value money">@item.ValorComprometido.ToString("C", br)</span>
+                            </div>
+                            <div class="progress progress-thin mb-2">
+                                <div class="progress-bar @corBarra" role="progressbar" style="width: @Math.Min(percentual, 100)%" 
+                                     aria-valuenow="@percentual" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="stat-row mt-2 pt-2 border-top">
+                                <span class="stat-label text-dark">Saldo Disponível</span>
+                                <span class="stat-value money @(item.SaldoDisponivel < 0 ? "text-danger" : "text-success")">
+                                    @item.SaldoDisponivel.ToString("C", br)
+                                </span>
+                            </div>
+                        </div>
+
+                        @if (!item.Ativo)
                         {
-                            <span class="badge bg-danger">Inativo</span>
+                            <div class="mt-2 text-center">
+                                <span class="badge bg-secondary">Inativo</span>
+                            </div>
                         }
-                    </td>
-                    <td class="text-end">
-                        <a asp-action="Editar" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">
-                            Editar
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (totalPaginas > 1)
+    {
+        <div class="d-flex justify-content-center mt-5 mb-3">
+            <nav>
+                <ul class="pagination align-items-center shadow-sm bg-white rounded-pill p-1">
+                    <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual - 1)" aria-label="Anterior">
+                            <i class="bi bi-chevron-left"></i>
                         </a>
-                        <button type="button"
-                                class="btn btn-sm btn-outline-danger btn-excluir"
-                                data-id="@item.Id"
-                                data-nome="@item.Nome">
-                            Excluir
-                        </button>
-                    </td>
-                </tr>
-            }
-        }
-        else
-        {
-            <tr>
-                <td colspan="7" class="text-center">Nenhum orçamento cadastrado.</td>
-            </tr>
-        }
-    </tbody>
-</table>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-info">Página @paginaAtual de @totalPaginas</span>
+                    </li>
+                    <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual + 1)" aria-label="Próximo">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
+}
 
 <form id="form-exclusao" asp-action="Excluir" method="post" class="d-none">
     @Html.AntiForgeryToken()
@@ -76,62 +249,48 @@
 </form>
 
 @section Scripts {
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const hasSwal = typeof window.Swal !== 'undefined';
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-    // ---- SweetAlerts de TempData (sucesso/erro/alerta)
-    const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"] ?? TempData["MensagemSucesso"]));
-    const msgErro    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
-    const msgAlerta  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Alerta"]));
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // SweetAlerts de TempData
+            const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"] ?? TempData["MensagemSucesso"]));
+            const msgErro    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
+            
+            if (msgSucesso) Swal.fire({ icon:'success', title:'Sucesso', text: msgSucesso, timer: 3000, showConfirmButton: false });
+            if (msgErro)    Swal.fire({ icon:'error',   title:'Ops',     text: msgErro });
 
-    if (hasSwal) {
-        if (msgSucesso) Swal.fire({ icon:'success', title:'Sucesso', text: msgSucesso });
-        if (msgErro)    Swal.fire({ icon:'error',   title:'Ops',     text: msgErro });
-        if (msgAlerta)  Swal.fire({ icon:'warning', title:'Atenção', text: msgAlerta });
-    }
+            // Exclusão
+            const formExclusao = document.getElementById('form-exclusao');
+            const inputId      = document.getElementById('orcamentoIdExcluir');
+            const inputJust    = document.getElementById('justificativaExclusao');
 
-    // ---- Exclusão com justificativa (SweetAlert textarea)
-    const formExclusao = document.getElementById('form-exclusao');
-    const inputId      = document.getElementById('orcamentoIdExcluir');
-    const inputJust    = document.getElementById('justificativaExclusao');
+            document.querySelectorAll('.btn-excluir').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id   = btn.getAttribute('data-id');
+                    const nome = btn.getAttribute('data-nome') || '';
 
-    document.querySelectorAll('.btn-excluir').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const id   = btn.getAttribute('data-id');
-            const nome = btn.getAttribute('data-nome') || '';
+                    const { value: text, isConfirmed } = await Swal.fire({
+                        icon: 'question',
+                        title: 'Confirmar exclusão',
+                        html: `<p>Tem certeza que deseja excluir o orçamento <strong>${nome}</strong>?</p><p>Descreva a justificativa:</p>`,
+                        input: 'textarea',
+                        inputPlaceholder: 'Motivo da exclusão...',
+                        inputValidator: (value) => !value ? 'Por favor, informe a justificativa.' : undefined,
+                        showCancelButton: true,
+                        confirmButtonText: 'Excluir',
+                        confirmButtonColor: '#dc3545',
+                        cancelButtonText: 'Cancelar'
+                    });
 
-            if (!hasSwal) {
-                const ok = confirm(`Excluir o orçamento "${nome}"?`);
-                if (!ok) return;
-                const j = prompt('Informe uma justificativa para a exclusão:');
-                if (!j) return;
-                inputId.value = id;
-                inputJust.value = j;
-                formExclusao.submit();
-                return;
-            }
-
-            const { value: text, isConfirmed } = await Swal.fire({
-                icon: 'question',
-                title: 'Confirmar exclusão',
-                html: `<p>Tem certeza que deseja excluir o orçamento <strong>${nome}</strong>?</p><p>Descreva a justificativa:</p>`,
-                input: 'textarea',
-                inputPlaceholder: 'Motivo da exclusão...',
-                inputAttributes: { 'aria-label': 'Motivo da exclusão' },
-                inputValidator: (value) => !value ? 'Por favor, informe a justificativa.' : undefined,
-                showCancelButton: true,
-                confirmButtonText: 'Excluir',
-                cancelButtonText: 'Cancelar'
+                    if (isConfirmed && text) {
+                        inputId.value = id;
+                        inputJust.value = text;
+                        formExclusao.submit();
+                    }
+                });
             });
-
-            if (isConfirmed && text) {
-                inputId.value = id;
-                inputJust.value = text;
-                formExclusao.submit();
-            }
         });
-    });
-});
-</script>
+    </script>
 }
