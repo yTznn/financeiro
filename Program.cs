@@ -118,6 +118,7 @@ builder.Services.AddScoped<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepos
 builder.Services.AddScoped<IInstrumentoVersaoService, InstrumentoVersaoService>();
 builder.Services.AddScoped<IRecebimentoInstrumentoRepositorio, RecebimentoInstrumentoRepositorio>();
 builder.Services.AddScoped<IPermissaoRepositorio, PermissaoRepositorio>();
+builder.Services.AddScoped<IFornecedorRepositorio, FornecedorRepositorio>();
 #endregion
 
 var app = builder.Build();

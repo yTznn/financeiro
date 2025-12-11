@@ -1,37 +1,36 @@
 using Microsoft.AspNetCore.Mvc;
-using Financeiro.Repositorios; // Precisaremos do repositório de contrato que busca na View
+using Financeiro.Repositorios; // Agora usa IFornecedorRepositorio
 using System.Threading.Tasks;
-using System; // Necessário para Math.Ceiling
+using System;
 using Microsoft.AspNetCore.Authorization;
+using Financeiro.Atributos;
 
 namespace Financeiro.Controllers
 {
     [Authorize]
-
     public class FornecedoresController : Controller
     {
-        private readonly IContratoRepositorio _contratoRepo;
+        // Mudança aqui: Injetamos o especialista em Fornecedores
+        private readonly IFornecedorRepositorio _fornecedorRepo;
 
-        public FornecedoresController(IContratoRepositorio contratoRepo)
+        public FornecedoresController(IFornecedorRepositorio fornecedorRepo)
         {
-            _contratoRepo = contratoRepo;
+            _fornecedorRepo = fornecedorRepo;
         }
 
-        // Ação para a nova lista unificada de fornecedores
         [HttpGet]
+        [AutorizarPermissao("FORNECEDOR_VIEW")]
         public async Task<IActionResult> Index(string busca = "", int pagina = 1)
         {
-            // Definimos o tamanho da página aqui. Agora você pode mudar facilmente quando quiser.
-            const int tamanhoPagina = 3;
+            const int tamanhoPagina = 3; 
 
-            // Chamamos o novo método do repositório, passando o tamanho da página
-            var (itens, totalItens) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(busca, pagina, tamanhoPagina);
+            if (pagina < 1) pagina = 1;
 
-            // Enviamos para a View todas as informações que ela precisa para a busca e paginação numerada
+            // Chama o novo repositório
+            var (itens, totalItens) = await _fornecedorRepo.BuscarTodosPaginadoAsync(busca ?? "", pagina, tamanhoPagina);
+
             ViewBag.BuscaAtual = busca;
             ViewBag.PaginaAtual = pagina;
-            
-            // Calculamos o número total de páginas
             ViewBag.TotalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
 
             return View(itens);

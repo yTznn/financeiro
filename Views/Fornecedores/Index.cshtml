@@ -1,34 +1,33 @@
-@model IEnumerable<Financeiro.Models.VwFornecedor>
-@using System.Linq
+@model IEnumerable<Financeiro.Models.ViewModels.FornecedorViewModel>
+@using Financeiro.Extensions 
 
 @{
     ViewData["Title"] = "Fornecedores";
     Layout = "_Layout";
-    
-    string buscaAtual = ViewBag.BuscaAtual;
-    int paginaAtual = ViewBag.PaginaAtual;
+
+    // Permissões
+    bool podeCriar  = User.TemPermissao("FORNECEDOR_ADD");
+    bool podeEditar = User.TemPermissao("FORNECEDOR_EDIT");
+    bool podeExcluir= User.TemPermissao("FORNECEDOR_DEL");
+
+    // Paginação e Busca
+    int paginaAtual  = ViewBag.PaginaAtual ?? 1;
     int totalPaginas = ViewBag.TotalPaginas ?? 1;
+    string buscaAtual = ViewBag.BuscaAtual ?? "";
 }
 
 @functions {
-    string FormatCnpj(string? cnpj)
-    {
+    string FormatCnpj(string? cnpj) {
         if (string.IsNullOrWhiteSpace(cnpj)) return "";
         var d = new string(cnpj.Where(char.IsDigit).ToArray());
-        if (d.Length != 14) return cnpj ?? "";
-        return $"{d[..2]}.{d.Substring(2, 3)}.{d.Substring(5, 3)}/{d.Substring(8, 4)}-{d.Substring(12, 2)}";
+        return d.Length != 14 ? cnpj : $"{d[..2]}.{d.Substring(2, 3)}.{d.Substring(5, 3)}/{d.Substring(8, 4)}-{d.Substring(12, 2)}";
     }
-
-    string FormatCpf(string? cpf)
-    {
+    string FormatCpf(string? cpf) {
         if (string.IsNullOrWhiteSpace(cpf)) return "";
         var d = new string(cpf.Where(char.IsDigit).ToArray());
-        if (d.Length != 11) return cpf ?? "";
-        return $"{d[..3]}.{d.Substring(3, 3)}.{d.Substring(6, 3)}-{d.Substring(9, 2)}";
+        return d.Length != 11 ? cpf : $"{d[..3]}.{d.Substring(3, 3)}.{d.Substring(6, 3)}-{d.Substring(9, 2)}";
     }
-    
-    string FormatPhoneBr(string? phone)
-    {
+    string FormatPhoneBr(string? phone) {
         if (string.IsNullOrWhiteSpace(phone)) return "";
         var d = new string(phone.Where(char.IsDigit).ToArray());
         if (d.Length == 10) return $"({d[..2]}) {d.Substring(2, 4)}-{d.Substring(6, 4)}";
@@ -42,317 +41,232 @@
     .fornecedor-card:hover { transform: translateY(-1px); box-shadow: 0 .25rem .75rem rgba(16, 36, 68, .08); }
     .pj-card { border-left: 4px solid var(--blue); }
     .pf-card { border-left: 4px solid var(--cyan); }
+    
     .doc-number { font-variant-numeric: tabular-nums; letter-spacing: .2px; }
-    .addr-grid .label { color: #6c757d; font-size: .82rem; text-transform: uppercase; letter-spacing: .02em; }
-    .addr-grid .value { color: var(--dark); font-weight: 600; font-size: 1.05rem; line-height: 1.3; }
-    .acc-item { border: 1px solid #e9ecef; border-radius: .5rem; padding: .6rem .75rem; display: flex; align-items: start; gap: .5rem; }
-    .acc-main { flex: 1; }
-    .acc-muted { color: #6c757d; font-size: .85rem; }
-    .acc-actions .btn { padding: .25rem .5rem; }
-    .acc-chip { font-size: .75rem; padding: .15rem .4rem; border-radius: 999px; }
-    .chip-principal { background: #fff3cd; color: #8a6d3b; border: 1px solid #ffe8a1; }
-    .secret { filter: blur(3px); transition: filter .15s ease; }
-    .secret.show { filter: none; }
+    
+    /* Paginação */
+    .pagination .page-link {
+        border: none; color: #6c757d; border-radius: 50%; width: 40px; height: 40px;
+        display: flex; align-items: center; justify-content: center; margin: 0 5px; transition: all 0.2s;
+    }
+    .pagination .page-link:hover:not(.disabled) { background-color: #e9ecef; color: #0d6efd; }
+    .pagination .page-item.disabled .page-link { background-color: transparent; color: #dee2e6; }
+    .pagination .page-info { display: flex; align-items: center; font-size: 0.9rem; color: #6c757d; font-weight: 600; margin: 0 15px; }
 </style>
 
-<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+    <div>
+        <h2 class="mb-0 fw-bold text-dark">
+            <i class="bx bx-briefcase-alt-2 me-2"></i> Fornecedores
+        </h2>
+        <small class="text-muted">Gestão unificada de PF e PJ</small>
+    </div>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h2 class="mb-0 fw-bold" style="color:var(--dark);">
-        <i class="bx bx-briefcase-alt-2 me-2"></i> Gerencie seus Fornecedores
-    </h2>
-    <a asp-controller="Escolhas" asp-action="Index" class="btn btn-primary">
-        <i class='bx bx-plus-circle'></i> Novo Fornecedor
-    </a>
+    <div class="d-flex gap-2">
+        <form method="get" class="d-flex shadow-sm rounded-pill bg-white border ps-3 p-1">
+            <input type="text" name="busca" value="@buscaAtual" class="form-control border-0 shadow-none bg-transparent" placeholder="Buscar..." aria-label="Buscar">
+            <button class="btn btn-link text-primary" type="submit"><i class="bx bx-search"></i></button>
+            @if (!string.IsNullOrEmpty(buscaAtual))
+            {
+                <a asp-action="Index" class="btn btn-link text-danger"><i class="bx bx-x"></i></a>
+            }
+        </form>
+
+        @if (podeCriar)
+        {
+            <div class="dropdown">
+                <button class="btn btn-primary rounded-pill px-4 shadow-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bx bx-plus-circle me-1"></i> Novo
+                </button>
+                <ul class="dropdown-menu shadow border-0">
+                    <li>
+                        <a class="dropdown-item py-2" asp-controller="PessoasFisicas" asp-action="Novo">
+                            <i class="bx bx-user me-2 text-primary"></i>Pessoa Física
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item py-2" asp-controller="PessoasJuridicas" asp-action="Novo">
+                            <i class="bx bx-building me-2 text-success"></i>Pessoa Jurídica
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        }
+    </div>
 </div>
 
-<form asp-action="Index" method="get" class="mb-4">
-    <div class="input-group">
-        <input type="text" name="busca" class="form-control" placeholder="Buscar por nome ou documento..." value="@buscaAtual" />
-        <button class="btn btn-outline-secondary" type="submit"><i class='bx bx-search'></i> Buscar</button>
+@if (!Model.Any())
+{
+    <div class="col-12">
+        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+            <i class="bx bx-user-pin display-4 text-light mb-3"></i>
+            <h5 class="text-muted">Nenhum fornecedor encontrado</h5>
+            @if (!string.IsNullOrEmpty(buscaAtual))
+            {
+                <p class="small text-muted">Tente refazer a busca com outros termos.</p>
+            }
+        </div>
     </div>
-</form>
+}
+else
+{
+    <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
+        @foreach (var item in Model)
+        {
+            var controllerDestino = item.TipoPessoa == "PF" ? "PessoasFisicas" : "PessoasJuridicas";
+            var cardClass = item.TipoPessoa == "PF" ? "pf-card" : "pj-card";
+            var docFormatado = item.TipoPessoa == "PF" ? FormatCpf(item.Documento) : FormatCnpj(item.Documento);
+            var icone = item.TipoPessoa == "PF" ? "bx-user" : "bx-building";
+            var badgeColor = item.TipoPessoa == "PF" ? "bg-info text-dark" : "bg-primary";
 
-<form id="af-token-form" class="d-none">@Html.AntiForgeryToken()</form>
+            <div class="col">
+                <div class="card h-100 shadow-sm border-0 fornecedor-card @cardClass">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <span class="badge @badgeColor mb-1"><i class="bx @icone me-1"></i> @item.TipoPessoa</span>
+                                <h5 class="card-title fw-bold text-dark mb-0 text-truncate" title="@item.Nome">
+                                    @item.Nome
+                                </h5>
+                            </div>
+                        </div>
 
-<div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
-    @foreach (var item in Model)
-    {
-        var controller = item.Tipo == "PJ" ? "PessoasJuridicas" : "PessoasFisicas";
-        var documentoFormatado = item.Tipo == "PJ" ? FormatCnpj(item.Documento) : FormatCpf(item.Documento);
-        var cardClass = item.Tipo == "PJ" ? "pj-card" : "pf-card";
-        var key = $"{item.Tipo}-{item.FornecedorId}"; // chave única para evitar colisão de IDs
+                        <div class="small text-muted mb-3 doc-number">
+                            <i class='bx bx-id-card me-1'></i> @docFormatado
+                        </div>
 
-        <div class="col">
-            <div class="card h-100 shadow-sm border-0 fornecedor-card @cardClass"
-                 data-id="@item.FornecedorId"
-                 data-tipo="@item.Tipo">
-                <div class="card-body d-flex flex-column">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div>
-                            @if (item.Tipo == "PJ")
+                        <div class="small text-muted d-flex flex-column gap-1 mt-auto">
+                            @if (!string.IsNullOrEmpty(item.Email))
                             {
-                                <div class="fw-semibold" style="color:var(--dark);">@item.Nome</div>
-                                <div class="small text-muted">@item.NomeFantasia</div>
+                                <div class="text-truncate" title="@item.Email">
+                                    <i class="bx bx-envelope me-2"></i> @item.Email
+                                </div>
                             }
-                            else
+                            @if (!string.IsNullOrEmpty(item.Telefone))
                             {
-                                <h5 class="card-title mb-1">@item.Nome</h5>
+                                <div>
+                                    <i class="bx bx-phone me-2"></i> @FormatPhoneBr(item.Telefone)
+                                </div>
                             }
                         </div>
-                        <span class="badge bg-@(item.SituacaoAtiva ? (item.Tipo == "PJ" ? "primary" : "success") : "secondary")">
-                            @(item.SituacaoAtiva ? (item.Tipo == "PJ" ? "Ativa" : "Ativo") : "Inativo")
-                        </span>
                     </div>
 
-                    <div class="small text-muted mb-2 doc-number"><i class='bx bx-id-card me-1'></i> @documentoFormatado</div>
-                    
-                    @if (item.Tipo == "PF")
-                    {
-                        <div class="mt-2 small">
-                            @if (!string.IsNullOrEmpty(item.Email)) { <div><i class="bx bx-envelope me-1"></i>@item.Email</div> }
-                            @if (!string.IsNullOrEmpty(item.Telefone)) { <div class="doc-number"><i class="bx bx-phone me-1"></i>@FormatPhoneBr(item.Telefone)</div> }
-                        </div>
-                    }
+                    <div class="card-footer bg-transparent border-0 pt-3 pb-3">
+                        <div class="d-flex justify-content-end gap-2">
+                            @* Endereços e Contas são visualização/edição, então precisam de permissão de EDIT ou VIEW *@
+                            <div class="btn-group">
+                                <a class="btn btn-sm btn-outline-secondary" title="Endereços"
+                                   asp-controller="Enderecos"
+                                   asp-action="@(item.TipoPessoa == "PJ" ? "GerenciarPessoaJuridica" : "GerenciarPessoaFisica")"
+                                   asp-route-pessoaJuridicaId="@(item.TipoPessoa == "PJ" ? item.Id : null)"
+                                   asp-route-pessoaFisicaId="@(item.TipoPessoa == "PF" ? item.Id : null)">
+                                    <i class='bx bx-map'></i>
+                                </a>
+                                <a class="btn btn-sm btn-outline-secondary" title="Contas Bancárias"
+                                   asp-controller="ContasBancarias"
+                                   asp-action="@(item.TipoPessoa == "PJ" ? "IndexPJ" : "IndexPF")"
+                                   asp-route-pessoaId="@item.Id">
+                                    <i class='bx bx-credit-card'></i> @* <--- ÍCONE ALTERADO AQUI *@
+                                </a>
+                            </div>
 
-                    <div class="mt-3">
-                        <div class="small text-muted mb-1"><i class="bx bx-map me-1"></i> Endereço principal</div>
-                        <!-- IDs agora incluem o tipo para serem únicos -->
-                        <div id="addr-@key" class="text-muted">
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…
-                        </div>
-                    </div>
+                            @if (podeEditar)
+                            {
+                                <a asp-controller="@controllerDestino" asp-action="Editar" asp-route-id="@item.Id" 
+                                   class="btn btn-sm btn-outline-primary" title="Editar">
+                                    <i class="bx bx-pencil"></i>
+                                </a>
+                            }
 
-                    <div class="mt-3">
-                        <div class="small text-muted mb-1"><i class="bx bx-bank me-1"></i> Conta bancária (principal)</div>
-                        <!-- IDs agora incluem o tipo para serem únicos -->
-                        <div id="acc-@key" class="small">
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span> Carregando…
+                            @if (podeExcluir)
+                            {
+                                <form asp-controller="@controllerDestino" 
+                                      asp-action="Excluir" 
+                                      asp-route-id="@item.Id" 
+                                      method="post" 
+                                      class="d-inline js-delete-form"
+                                      data-nome="@item.Nome"
+                                      data-tipo="@item.TipoPessoa">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                        <i class="bx bx-trash"></i>
+                                    </button>
+                                </form>
+                            }
                         </div>
-                        
-                        <div class="mt-2 d-flex gap-2">
-                             <a class="btn btn-sm btn-outline-success"
-                                asp-controller="ContasBancarias"
-                                asp-action="Novo"
-                                asp-route-pessoaId="@item.FornecedorId"
-                                asp-route-pf="@(item.Tipo == "PF" ? "true" : "false")">
-                                <i class='bx bx-plus-circle'></i> Nova conta
-                            </a>
-                             <a class="btn btn-sm btn-outline-secondary"
-                                asp-controller="ContasBancarias"
-                                asp-action="@(item.Tipo == "PJ" ? "IndexPJ" : "IndexPF")"
-                                asp-route-pessoaId="@item.FornecedorId">
-                                <i class='bx bx-list-ul'></i> Ver todas
-                            </a>
-                        </div>
-                    </div>
-
-                    <div class="mt-auto"></div>
-                </div>
-
-                <div class="card-footer bg-transparent border-0 pt-3 pb-3">
-                    <div class="d-flex flex-wrap gap-2">
-                        <a class="btn btn-sm btn-outline-secondary"
-                           asp-controller="Enderecos"
-                           asp-action="@(item.Tipo == "PJ" ? "GerenciarPessoaJuridica" : "GerenciarPessoaFisica")"
-                           asp-route-pessoaJuridicaId="@(item.Tipo == "PJ" ? item.FornecedorId : null)"
-                           asp-route-pessoaFisicaId="@(item.Tipo == "PF" ? item.FornecedorId : null)">
-                            <i class='bx bx-map'></i> Endereços
-                        </a>
-                        <a class="btn btn-sm btn-outline-primary"
-                           asp-controller="@controller"
-                           asp-action="Editar"
-                           asp-route-id="@item.FornecedorId">
-                            <i class='bx bx-pencil'></i> Editar
-                        </a>
-                        <form asp-controller="@controller"
-                              asp-action="Excluir"
-                              asp-route-id="@item.FornecedorId"
-                              method="post"
-                              class="d-inline js-delete-form"
-                              data-nome="@item.Nome"
-                              data-tipo="@item.Tipo">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class='bx bx-trash'></i> Excluir</button>
-                        </form>
                     </div>
                 </div>
             </div>
+        }
+    </div>
+
+    @if (totalPaginas > 1)
+    {
+        <div class="d-flex justify-content-center mt-5 mb-3">
+            <nav>
+                <ul class="pagination align-items-center shadow-sm bg-white rounded-pill p-1">
+                    <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-pagina="@(paginaAtual - 1)" asp-route-busca="@buscaAtual" aria-label="Anterior">
+                            <i class="bx bx-chevron-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-info">Página @paginaAtual de @totalPaginas</span>
+                    </li>
+                    <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-pagina="@(paginaAtual + 1)" asp-route-busca="@buscaAtual" aria-label="Próximo">
+                            <i class="bx bx-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
         </div>
     }
-</div>
-
-@if (totalPaginas > 1)
-{
-    <nav class="mt-4">
-        <ul class="pagination justify-content-center">
-            @for (int i = 1; i <= totalPaginas; i++)
-            {
-                <li class="page-item @(i == paginaAtual ? "active" : "")">
-                    <a class="page-link" asp-action="Index" asp-route-pagina="@i" asp-route-busca="@buscaAtual">@i</a>
-                </li>
-            }
-        </ul>
-    </nav>
 }
 
 @section Scripts {
-<script>
-(function () {
-    const base = '@Url.Content("~")'.replace(/\/?$/, '/');
-
-    function swalMsg(message, type) {
-        if (window.Swal?.fire) {
-            Swal.fire({ text: message || "", icon: type || "info", toast: true, position: 'top-end', showConfirmButton: false, timer: 3500 });
-        } else { alert(message || ""); }
-    }
-
-    function swalConfirm(opts) {
-        if (window.Swal?.fire) {
-            return Swal.fire({
-                title: opts.title || "Confirmar?", text: opts.text || "", icon: "warning",
-                showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: opts.confirmText || "Sim",
-                cancelButtonText: opts.cancelText || "Cancelar"
-            });
-        }
-        return Promise.resolve({ isConfirmed: confirm(opts.text || "Confirmar?") });
-    }
-
-    (function fireToastsFromTempData() {
-        const flags = document.getElementById("pageFlags");
-        if (!flags) return;
-        const ok = (flags.dataset.success || "").trim();
-        const erro = (flags.dataset.error || "").trim();
-        if (ok) swalMsg(ok, "success");
-        if (erro) swalMsg(erro, "error");
-    })();
-
-    function formatCep(cep) {
-        if (!cep) return '';
-        const d = ('' + cep).replace(/\D/g, '');
-        return d.replace(/^(\d{5})(\d{3})$/, '$1-$2');
-    }
-
-    function mask(val) {
-        if (!val) return '';
-        const t = String(val);
-        if (t.length <= 2) return '*'.repeat(t.length);
-        return t[0] + '*'.repeat(t.length - 2) + t[t.length - 1];
-    }
-    
-    function formatEnderecoPf(e) {
-        if (!e) return "<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>";
-        const logradouro = e.Logradouro ?? e.logradouro ?? '';
-        const numero = e.Numero ?? e.numero ?? '';
-        const bairro = e.Bairro ?? e.bairro ?? '';
-        const municipio = e.Municipio ?? e.municipio ?? '';
-        const uf = e.Uf ?? e.uf ?? '';
-        const cep = e.Cep ?? e.cep ?? '';
-        const l1 = [logradouro, numero].filter(Boolean).join(', ');
-        const l2 = [bairro, municipio].filter(Boolean).join(' - ');
-        const l3 = [uf, formatCep(cep)].filter(Boolean).join(' • ');
-        return [l1, l2, l3].filter(Boolean).join("<br>");
-    }
-
-    function renderEnderecoPj(slot, endereco) {
-        const e = endereco || {};
-        const _ = (a,b) => a ?? b ?? '';
-        slot.innerHTML = `<div class="addr-grid"><div class="row gx-2 gy-1">` +
-            `<div class="col-12"><div class="label">Logradouro</div><div class="value">${_(e.Logradouro, e.logradouro)}</div></div>` +
-            `<div class="col-4 col-sm-3"><div class="label">Número</div><div class="value">${_(e.Numero, e.numero)}</div></div>` +
-            `<div class="col-8 col-sm-9"><div class="label">Complemento</div><div class="value">${_(e.Complemento, e.complemento)}</div></div>` +
-            `<div class="col-4 col-sm-3"><div class="label">CEP</div><div class="value">${formatCep(_(e.Cep, e.cep))}</div></div>` +
-            `<div class="col-8 col-sm-3"><div class="label">Bairro</div><div class="value">${_(e.Bairro, e.bairro)}</div></div>` +
-            `<div class="col-8 col-sm-4"><div class="label">Município</div><div class="value">${_(e.Municipio, e.municipio)}</div></div>` +
-            `<div class="col-4 col-sm-2"><div class="label">UF</div><div class="value">${_(e.Uf, e.uf)}</div></div>` +
-            `</div></div>`;
-    }
-
-    function renderPrincipalAccount(slot, acc, pessoaId, tipo) {
-        if (!acc) {
-            slot.innerHTML = `<span class='badge bg-secondary'><i class='bx bx-minus me-1'></i> Sem principal</span>`;
-            return;
-        }
-        const banco = acc.banco ?? acc.Banco ?? '';
-        const agencia = acc.agencia ?? acc.Agencia ?? '';
-        const conta = acc.conta ?? acc.Conta ?? '';
-        const pix = acc.chavePix ?? acc.ChavePix ?? '';
-        const vinculoId = acc.vinculoId ?? acc.VinculoId;
-        const urlEditar = `${base}ContasBancarias/Editar?vinculoId=${vinculoId}`;
-        const urlVerTodas = `${base}ContasBancarias/${tipo === 'PJ' ? 'IndexPJ' : 'IndexPF'}?pessoaId=${pessoaId}`;
-        
-        slot.innerHTML = `<div class="acc-item" data-vinculo="${vinculoId}"><div class="acc-main">` +
-            `<div><strong>${banco || '(Sem banco)'}</strong><span class="acc-chip chip-principal ms-2"><i class='bx bxs-star me-1'></i> Principal</span></div>` +
-            `<div class="acc-muted">Agência: <span class="secret" data-secret>${mask(agencia)}</span> · Conta: <span class="secret" data-secret>${mask(conta)}</span>` +
-            `${pix ? ` · Pix: <span class="secret" data-secret>${mask(pix)}</span>` : ``}</div></div>` +
-            `<div class="acc-actions d-flex gap-1"><button class="btn btn-light border toggle-visibility" title="Mostrar/ocultar"><i class='bx bx-low-vision'></i></button>` +
-            `<a class="btn btn-light border" href="${urlEditar}" title="Editar"><i class='bx bx-pencil'></i></a>` +
-            `<a class="btn btn-light border" href="${urlVerTodas}" title="Ver todas"><i class='bx bx-list-ul'></i></a></div></div>`;
-
-        slot.querySelector('.toggle-visibility')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            slot.querySelectorAll('[data-secret]').forEach(s => s.classList.toggle('show'));
-        });
-    }
-
-    document.querySelectorAll(".fornecedor-card").forEach(function (card) {
-        const id = card.dataset.id;
-        const tipo = card.dataset.tipo; // "PJ" ou "PF"
-        if (!id || !tipo) return;
-
-        const key = `${tipo}-${id}`; // chave única (evita colisão de ids)
-        const fetchOptions = {
-            headers: { "X-Requested-With": "XMLHttpRequest" }
-        };
-        
-        // ENDEREÇO
-        const slotAddr = document.getElementById(`addr-${key}`);
-        const addrUrl = `${base}Enderecos/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
-        
-        fetch(addrUrl, fetchOptions)
-            .then(r => r.ok ? r.json() : Promise.reject(r))
-            .then(j => {
-                if (!slotAddr) return;
-                if (!j || !j.sucesso || !j.possuiPrincipal) {
-                    slotAddr.innerHTML = `<span class="badge bg-secondary"><i class='bx bx-minus me-1'></i> Sem principal</span>`;
-                    return;
-                }
-                if (tipo === 'PJ') {
-                    renderEnderecoPj(slotAddr, j.endereco);
-                } else {
-                    slotAddr.innerHTML = formatEnderecoPf(j.endereco);
-                }
-            })
-            .catch(() => { if (slotAddr) { slotAddr.classList.add("text-danger"); slotAddr.textContent = "Erro ao carregar"; } });
-
-        // CONTA BANCÁRIA
-        const slotAcc = document.getElementById(`acc-${key}`);
-        const accUrl = `${base}ContasBancarias/${tipo === 'PJ' ? 'PessoaJuridica' : 'PessoaFisica'}/${id}/Principal`;
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const hasSwal = typeof window.Swal !== 'undefined';
             
-        fetch(accUrl, fetchOptions)
-            .then(r => r.ok ? r.json() : Promise.reject(r))
-            .then(j => {
-                if (!slotAcc) return;
-                if (!j || !j.sucesso) throw new Error("API response not successful");
-                renderPrincipalAccount(slotAcc, j.possuiPrincipal ? j.conta : null, id, tipo);
-            })
-            .catch(() => { if (slotAcc) { slotAcc.classList.add("text-danger"); slotAcc.textContent = "Erro ao carregar"; } });
-    });
+            // Feedback do TempData
+            const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"]));
+            const msgErro    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
 
-    document.addEventListener("submit", function (e) {
-        const form = e.target;
-        if (!form.matches(".js-delete-form")) return;
+            if (msgSucesso) Swal.fire({ icon:'success', title:'Sucesso', text: msgSucesso, timer: 3000, showConfirmButton: false });
+            if (msgErro)    Swal.fire({ icon:'error',   title:'Atenção', text: msgErro });
 
-        e.preventDefault();
-        const nome = form.dataset.nome || "este item";
-        const tipo = form.dataset.tipo;
-        
-        const title = tipo === 'PJ' ? "Excluir fornecedor PJ?" : "Excluir pessoa física?";
-        const text = `Tem certeza que deseja excluir "${nome}"? Essa ação é irreversível.`;
-        
-        swalConfirm({ title: title, text: text, confirmText: "Sim, excluir" })
-            .then(res => { if (res?.isConfirmed) { form.submit(); } });
-    });
-})();
-</script>
+            // Lógica de Exclusão
+            document.querySelectorAll('.js-delete-form').forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const nome = this.dataset.nome;
+                    const tipo = this.dataset.tipo; 
+                    
+                    const title = tipo === 'PJ' ? "Excluir Pessoa Jurídica?" : "Excluir Pessoa Física?";
+                    const text = `Tem certeza que deseja excluir <strong>${nome}</strong>?<br>Esta ação não poderá ser desfeita.`;
+
+                    if (hasSwal) {
+                        Swal.fire({
+                            title: title,
+                            html: text,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#dc3545',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: 'Sim, excluir',
+                            cancelButtonText: 'Cancelar'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                this.submit();
+                            }
+                        });
+                    } else if (confirm(`Excluir ${nome}?`)) {
+                        this.submit();
+                    }
+                });
+            });
+        });
+    </script>
 }

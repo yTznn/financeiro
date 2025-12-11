@@ -20,7 +20,6 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
-        // [NOVO] Implementação do cálculo de saldo comprometido do orçamento
         public async Task<decimal> ObterTotalComprometidoPorOrcamentoAsync(int orcamentoId, int? ignorarContratoId = null)
         {
             using var conn = _factory.CreateConnection();
@@ -141,18 +140,9 @@ namespace Financeiro.Repositorios
 
         public async Task ExcluirAsync(int id)
         {
-            // CORREÇÃO AQUI: Tratamento da Cascata Financeira
-            
-            // 1. Desvincula lançamentos financeiros (Transforma em "Sem Contrato")
-            // Isso evita o erro de FK e preserva o histórico de pagamentos
             const string sqlDesvincularFinanceiro = "UPDATE MovimentacaoRateio SET ContratoId = NULL WHERE ContratoId = @id;";
-            
-            // 2. Deleta dependências diretas do contrato
-            // (Seu banco já tem DELETE CASCADE configurado, mas deixar explícito garante funcionamento)
             const string sqlNatureza = "DELETE FROM ContratoNatureza WHERE ContratoId = @id;";
             const string sqlVersao = "DELETE FROM ContratoVersao WHERE ContratoId = @id;";
-            
-            // 3. Deleta o contrato
             const string sqlContrato = "DELETE FROM Contrato WHERE Id = @id;";
             
             using var conn = _factory.CreateConnection();
@@ -160,7 +150,6 @@ namespace Financeiro.Repositorios
             using var tx = conn.BeginTransaction();
             try
             {
-                // Executa na ordem correta
                 await conn.ExecuteAsync(sqlDesvincularFinanceiro, new { id }, tx);
                 await conn.ExecuteAsync(sqlNatureza, new { id }, tx);
                 await conn.ExecuteAsync(sqlVersao, new { id }, tx);
@@ -244,8 +233,10 @@ namespace Financeiro.Repositorios
             }
         }
 
-        public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int pagina, int tamanhoPagina = 10)
+        // [ALTERADO] Método atualizado para filtrar por EntidadeId
+        public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina = 10)
         {
+            // O filtro mágico: JOIN com Orcamento e Instrumento para chegar na Entidade
             const string sql = @"
                 SELECT 
                     c.*, 
@@ -256,14 +247,25 @@ namespace Financeiro.Repositorios
                     PessoaJuridica pj ON c.PessoaJuridicaId = pj.Id
                 LEFT JOIN 
                     PessoaFisica pf ON c.PessoaFisicaId = pf.Id
+                INNER JOIN
+                    Orcamento o ON c.OrcamentoId = o.Id
+                INNER JOIN
+                    Instrumento i ON o.InstrumentoId = i.Id
+                WHERE 
+                    i.EntidadeId = @entidadeId  -- <--- O segredo do isolamento
                 ORDER BY 
                     c.AnoContrato DESC, c.NumeroContrato DESC
                 OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
 
-                SELECT COUNT(Id) FROM Contrato;";
+                -- Contagem também filtrada
+                SELECT COUNT(c.Id) 
+                FROM Contrato c
+                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
+                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                WHERE i.EntidadeId = @entidadeId;";
             
             using var conn = _factory.CreateConnection();
-            using var multi = await conn.QueryMultipleAsync(sql, new { Offset = (pagina - 1) * tamanhoPagina, TamanhoPagina = tamanhoPagina });
+            using var multi = await conn.QueryMultipleAsync(sql, new { entidadeId, Offset = (pagina - 1) * tamanhoPagina, TamanhoPagina = tamanhoPagina });
 
             var itens = multi.Read<Contrato, string, ContratoListaViewModel>(
                 (contrato, fornecedorNome) => new ContratoListaViewModel { Contrato = contrato, FornecedorNome = fornecedorNome },

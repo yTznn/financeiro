@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
@@ -7,6 +6,7 @@ using Financeiro.Repositorios;
 using Financeiro.Validacoes;
 using Financeiro.Servicos;
 using Microsoft.AspNetCore.Authorization;
+using Financeiro.Atributos; // Necessário para [AutorizarPermissao]
 
 namespace Financeiro.Controllers
 {
@@ -30,12 +30,23 @@ namespace Financeiro.Controllers
             _logService = logService;
         }
 
+        /* --- REDIRECIONAMENTO DE SEGURANÇA --- */
         [HttpGet]
+        public IActionResult Index()
+        {
+            // Se tentarem acessar /PessoasFisicas/Index, joga para a lista unificada
+            return RedirectToAction("Index", "Fornecedores");
+        }
+        /* ------------------------------------- */
+
+        [HttpGet]
+        [AutorizarPermissao("FORNECEDOR_ADD")]
         public IActionResult Novo()
             => View("PessoaForm", new PessoaFisicaViewModel());
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("FORNECEDOR_ADD")]
         public async Task<IActionResult> Salvar(PessoaFisicaViewModel vm)
         {
             var res = _validador.Validar(vm);
@@ -59,7 +70,6 @@ namespace Financeiro.Controllers
                 );
 
                 TempData["Sucesso"] = "Pessoa Física criada com sucesso!";
-                // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
                 return RedirectToAction("Index", "Fornecedores");
             }
             catch (Exception ex)
@@ -74,6 +84,7 @@ namespace Financeiro.Controllers
         }
 
         [HttpGet]
+        [AutorizarPermissao("FORNECEDOR_EDIT")]
         public async Task<IActionResult> Editar(int id)
         {
             var pf = await _repo.ObterPorIdAsync(id);
@@ -96,6 +107,7 @@ namespace Financeiro.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("FORNECEDOR_EDIT")]
         public async Task<IActionResult> Atualizar(int id, PessoaFisicaViewModel vm)
         {
             if (id != vm.Id) return BadRequest();
@@ -125,7 +137,6 @@ namespace Financeiro.Controllers
                 );
 
                 TempData["Sucesso"] = "Pessoa Física atualizada com sucesso!";
-                // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
                 return RedirectToAction("Index", "Fornecedores");
             }
             catch (Exception ex)
@@ -135,31 +146,9 @@ namespace Financeiro.Controllers
             }
         }
 
-        [HttpGet]
-        public async Task<IActionResult> Index()
-        {
-            // Este método não é mais usado para exibir a lista principal, 
-            // mas pode ser mantido caso alguma outra funcionalidade dependa dele.
-            // O ideal seria removê-lo se não houver mais uso.
-            var pessoas = await _repo.ListarAsync();
-            var lista = new List<PessoaFisicaListaViewModel>();
-
-            foreach (var p in pessoas)
-            {
-                var possuiConta = await _contaRepo.ObterPorPessoaFisicaAsync(p.Id) != null;
-
-                lista.Add(new PessoaFisicaListaViewModel
-                {
-                    Pessoa      = p,
-                    PossuiConta = possuiConta
-                });
-            }
-
-            return View(lista);
-        }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("FORNECEDOR_DEL")]
         public async Task<IActionResult> Excluir(int id)
         {
             try
@@ -168,7 +157,6 @@ namespace Financeiro.Controllers
                 if (possuiContrato)
                 {
                     TempData["Erro"] = "Não é possível excluir: existem contratos vinculados a esta Pessoa.";
-                    // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
                     return RedirectToAction("Index", "Fornecedores");
                 }
 
@@ -190,7 +178,6 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = $"Não foi possível excluir: {ex.Message}";
             }
 
-            // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
             return RedirectToAction("Index", "Fornecedores");
         }
     }

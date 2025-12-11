@@ -170,7 +170,16 @@
                             }
                             @* -------------------------------- *@
 
-                            <li class="menu-item"><a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")"><i class='bx bx-package'></i><span class="links_name">Fornecedores</span></a></li>
+                            @* --- ITEM PROTEGIDO: FORNECEDORES --- *@
+                            @if (User.TemPermissao("FORNECEDOR_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")">
+                                        <i class='bx bx-package'></i><span class="links_name">Fornecedores</span>
+                                    </a>
+                                </li>
+                            }
+                            @* ------------------------------------ *@
                             
                             @* --- ITEM PROTEGIDO: INSTRUMENTOS --- *@
                             @if (User.TemPermissao("INSTRUMENTO_VIEW"))

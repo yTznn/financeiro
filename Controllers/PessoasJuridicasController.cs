@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models.ViewModels;
@@ -7,6 +6,7 @@ using Financeiro.Repositorios;
 using Financeiro.Validacoes;
 using Financeiro.Servicos;
 using Microsoft.AspNetCore.Authorization;
+using Financeiro.Atributos; // Necessário para [AutorizarPermissao]
 
 namespace Financeiro.Controllers
 {
@@ -34,12 +34,23 @@ namespace Financeiro.Controllers
             _logService = logService;
         }
 
+        /* --- REDIRECIONAMENTO DE SEGURANÇA --- */
         [HttpGet]
+        public IActionResult Index()
+        {
+            // Se tentarem acessar /PessoasJuridicas/Index, joga para a lista unificada
+            return RedirectToAction("Index", "Fornecedores");
+        }
+        /* ------------------------------------- */
+
+        [HttpGet]
+        [AutorizarPermissao("FORNECEDOR_ADD")]
         public IActionResult Novo()
             => View("PessoaForm", new PessoaJuridicaViewModel());
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("FORNECEDOR_ADD")]
         public async Task<IActionResult> Salvar(PessoaJuridicaViewModel vm)
         {
             var res = _validador.Validar(vm);
@@ -65,7 +76,6 @@ namespace Financeiro.Controllers
                 );
 
                 TempData["Sucesso"] = "Pessoa Jurídica criada com sucesso!";
-                // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
                 return RedirectToAction("Index", "Fornecedores");
             }
             catch (Exception ex)
@@ -76,6 +86,7 @@ namespace Financeiro.Controllers
         }
 
         [HttpGet]
+        [AutorizarPermissao("FORNECEDOR_EDIT")]
         public async Task<IActionResult> Editar(int id)
         {
             var pj = await _repo.ObterPorIdAsync(id);
@@ -97,6 +108,7 @@ namespace Financeiro.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("FORNECEDOR_EDIT")]
         public async Task<IActionResult> Atualizar(int id, PessoaJuridicaViewModel vm)
         {
             if (id != vm.Id) return BadRequest();
@@ -126,7 +138,6 @@ namespace Financeiro.Controllers
                 );
 
                 TempData["Sucesso"] = "Pessoa Jurídica atualizada com sucesso!";
-                // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
                 return RedirectToAction("Index", "Fornecedores");
             }
             catch (Exception ex)
@@ -136,37 +147,9 @@ namespace Financeiro.Controllers
             }
         }
 
-        [HttpGet]
-        public async Task<IActionResult> Index(int pagina = 1)
-        {
-            // Este método Index original não é mais a view principal de listagem.
-            // Pode ser removido se não for mais utilizado por nenhuma outra parte do sistema.
-            const int itensPorPagina = 3;
-
-            var (pessoas, totalRegistros) = await _repo.ListarPaginadoAsync(pagina, itensPorPagina);
-            var lista = new List<PessoaJuridicaListaViewModel>();
-
-            foreach (var p in pessoas)
-            {
-                var possuiEnd   = await _endRepo.ObterPorPessoaAsync(p.Id) != null;
-                var possuiConta = await _contaRepo.ObterPorPessoaJuridicaAsync(p.Id) != null;
-
-                lista.Add(new PessoaJuridicaListaViewModel
-                {
-                    Pessoa         = p,
-                    PossuiEndereco = possuiEnd,
-                    PossuiConta    = possuiConta
-                });
-            }
-
-            ViewBag.PaginaAtual  = pagina;
-            ViewBag.TotalPaginas = (int)Math.Ceiling((double)totalRegistros / itensPorPagina);
-
-            return View(lista);
-        }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("FORNECEDOR_DEL")]
         public async Task<IActionResult> Excluir(int id)
         {
             try
@@ -175,7 +158,6 @@ namespace Financeiro.Controllers
                 if (possuiContrato)
                 {
                     TempData["Erro"] = "Não é possível excluir: existem contratos vinculados a esta Pessoa.";
-                    // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
                     return RedirectToAction("Index", "Fornecedores");
                 }
 
@@ -197,7 +179,6 @@ namespace Financeiro.Controllers
                 TempData["Erro"] = $"Não foi possível excluir: {ex.Message}";
             }
 
-            // <<< CORRIGIDO: Redireciona para o controller de Fornecedores
             return RedirectToAction("Index", "Fornecedores");
         }
     }
