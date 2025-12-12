@@ -1,16 +1,80 @@
 @model IEnumerable<Financeiro.Models.ViewModels.ContratoListaViewModel>
 @using System.Globalization
+@using Financeiro.Extensions 
 
 @{
-    ViewData["Title"] = "Contratos";
-    var culturaBrasileira = new CultureInfo("pt-BR");
-    int totalPaginas = ViewBag.TotalPaginas;
-    int paginaAtual  = ViewBag.PaginaAtual;
+    ViewData["Title"] = "Gestão de Contratos";
+    Layout = "_Layout";
+    var br = new CultureInfo("pt-BR");
+
+    // Cache de permissões
+    bool podeCriar  = User.TemPermissao("CONTRATO_ADD");
+    bool podeEditar = User.TemPermissao("CONTRATO_EDIT");
+    bool podeExcluir= User.TemPermissao("CONTRATO_DEL");
+
+    // Paginação
+    int paginaAtual  = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
-<div id="pageFlags"
-     data-success="@TempData["Sucesso"]"
-     data-error="@TempData["Erro"]"></div>
+<style>
+    /* Estilo Premium para os Cards */
+    .card-contrato {
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        height: 100%;
+        background: #fff;
+        position: relative;
+    }
+    .card-contrato:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+        border-color: #dee2e6;
+    }
+    .card-header-custom {
+        padding: 1rem 1.25rem;
+        background: transparent;
+        border-bottom: 1px solid #f1f3f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .contrato-numero {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #343a40;
+    }
+    .contrato-status { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .card-body-custom { padding: 1.25rem; }
+    .fornecedor-nome { font-weight: 600; color: #495057; margin-bottom: 0.5rem; display: block; }
+    .info-row { display: flex; align-items: center; gap: 0.5rem; color: #6c757d; font-size: 0.9rem; margin-bottom: 0.3rem; }
+    .valor-destaque { font-size: 1.2rem; font-weight: 700; color: #0d6efd; margin-top: 1rem; display: block; }
+
+    /* Paginação */
+    .pagination .page-link {
+        border: none; color: #6c757d; border-radius: 50%; width: 40px; height: 40px;
+        display: flex; align-items: center; justify-content: center; margin: 0 5px; transition: all 0.2s;
+    }
+    .pagination .page-link:hover:not(.disabled) { background-color: #e9ecef; color: #0d6efd; }
+    .pagination .page-item.disabled .page-link { background-color: transparent; color: #dee2e6; }
+    .pagination .page-info { display: flex; align-items: center; font-size: 0.9rem; color: #6c757d; font-weight: 600; margin: 0 15px; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h2 class="mb-0 fw-bold text-dark">Contratos</h2>
+        <small class="text-muted">Gestão de contratos e aditivos da unidade</small>
+    </div>
+    
+    @if (podeCriar)
+    {
+        <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <i class="bi bi-plus-lg me-2"></i>Novo Contrato
+        </a>
+    }
+</div>
 
 <form id="deleteForm" method="post" asp-action="Excluir" class="d-none">
     @Html.AntiForgeryToken()
@@ -18,168 +82,196 @@
     <input type="hidden" name="justificativa" id="delete-justificativa" />
 </form>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>@ViewData["Title"]</h3>
-    <a asp-action="Novo" class="btn btn-primary">Novo Contrato</a>
-</div>
-
 @if (Model != null && Model.Any())
 {
-    <div class="row g-3">
+    <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3">
         @foreach (var item in Model)
         {
-            <div class="col-12 col-md-3">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <h5 class="card-title mb-1">
-                            Contrato @item.Contrato.NumeroContrato.ToString("D2")-@item.Contrato.AnoContrato
-                        </h5>
-                        <div class="small text-muted mb2">@item.FornecedorNome</div>
+            var statusClass = item.Contrato.Ativo ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger";
+            var statusText = item.Contrato.Ativo ? "Ativo" : "Inativo";
 
-                        <div><strong>Objeto:</strong> @item.Contrato.ObjetoContrato</div>
-
-                        <div class="mt-1">
-                            <i class="bi bi-calendar-event me-1"></i>
-                            @item.Contrato.DataInicio.ToShortDateString() a @item.Contrato.DataFim.ToShortDateString()
+            <div class="col">
+                <div class="card-contrato shadow-sm">
+                    <div class="card-header-custom">
+                        <div class="contrato-numero">
+                            <i class="bi bi-file-text me-1 text-secondary"></i>
+                            @item.Contrato.NumeroContrato.ToString("D2")/@item.Contrato.AnoContrato
                         </div>
-
-                        <div>
-                            <i class="bi bi-currency-dollar me-1"></i>
-                            @item.Contrato.ValorContrato.ToString("C", culturaBrasileira)
-                        </div>
-
-                        <div class="mt-1">
-                            @if (item.Contrato.Ativo)
-                            {
-                                <span class="badge bg-success">Ativo</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-danger">Inativo</span>
-                            }
-                        </div>
+                        <span class="badge @statusClass contrato-status">@statusText</span>
                     </div>
-                    <div class="card-footer d-flex justify-content-between">
-                        <a asp-action="Editar"
-                           asp-route-id="@item.Contrato.Id"
-                           class="btn btn-sm btn-outline-primary">Editar</a>
 
-                        <button type="button"
-                                class="btn btn-sm btn-outline-info"
-                                data-ver-aditivos="@item.Contrato.Id"
-                                data-count="@item.QuantidadeAditivos">
-                            Ver Aditivos (@item.QuantidadeAditivos)
-                        </button>
-                        
-                        <button type="button"
-                                class="btn btn-sm btn-outline-danger"
-                                data-contrato-id="@item.Contrato.Id"
-                                data-contrato-info="Contrato @item.Contrato.NumeroContrato.ToString("D2")-@item.Contrato.AnoContrato">
-                            Excluir
-                        </button>
+                    <div class="card-body-custom">
+                        <span class="fornecedor-nome text-truncate" title="@item.FornecedorNome">
+                            <i class="bi bi-building me-1"></i> @item.FornecedorNome
+                        </span>
+
+                        <div class="info-row" title="Vigência">
+                            <i class="bi bi-calendar-range"></i>
+                            @item.Contrato.DataInicio.ToString("dd/MM/yy") a @item.Contrato.DataFim.ToString("dd/MM/yy")
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(item.Contrato.ObjetoContrato))
+                        {
+                            <div class="text-muted small mt-2 text-truncate" title="@item.Contrato.ObjetoContrato">
+                                @item.Contrato.ObjetoContrato
+                            </div>
+                        }
+
+                        <span class="valor-destaque">
+                            @item.Contrato.ValorContrato.ToString("C", br)
+                        </span>
+                    </div>
+
+                    <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            
+                            @* Botão Aditivos (Visualização permitida para todos com VIEW) *@
+                            <button type="button" class="btn btn-sm btn-light text-primary border"
+                                    data-ver-aditivos="@item.Contrato.Id"
+                                    data-count="@item.QuantidadeAditivos"
+                                    title="Ver Histórico de Aditivos">
+                                <i class="bi bi-clock-history me-1"></i> Aditivos 
+                                <span class="badge bg-primary ms-1">@item.QuantidadeAditivos</span>
+                            </button>
+
+                            <div class="btn-group">
+                                @if (podeEditar)
+                                {
+                                    <a asp-action="Editar" asp-route-id="@item.Contrato.Id" class="btn btn-sm btn-outline-primary" title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                }
+                                
+                                @if (podeExcluir)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            data-contrato-id="@item.Contrato.Id"
+                                            data-contrato-info="Contrato @item.Contrato.NumeroContrato/@item.Contrato.AnoContrato"
+                                            title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                }
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         }
     </div>
+
+    @if (totalPaginas > 1)
+    {
+        <div class="d-flex justify-content-center mt-5 mb-3">
+            <nav>
+                <ul class="pagination align-items-center shadow-sm bg-white rounded-pill p-1">
+                    <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual - 1)" aria-label="Anterior">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-info">Página @paginaAtual de @totalPaginas</span>
+                    </li>
+                    <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-p="@(paginaAtual + 1)" aria-label="Próximo">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
 }
 else
 {
-    <div class="alert alert-info">Nenhum contrato cadastrado.</div>
-}
-
-@if (totalPaginas > 1)
-{
-    <nav class="mt-3">
-        <ul class="pagination justify-content-center">
-            @for (var i = 1; i <= totalPaginas; i++)
-            {
-                <li class="page-item @(i == paginaAtual ? "active" : "")">
-                    <a class="page-link" asp-action="Index" asp-route-pagina="@i">@i</a>
-                </li>
-            }
-        </ul>
-    </nav>
+    <div class="col-12">
+        <div class="text-center py-5 bg-white rounded-3 shadow-sm border border-dashed">
+            <i class="bi bi-file-earmark-text display-4 text-light mb-3"></i>
+            <h5 class="text-muted">Nenhum contrato encontrado</h5>
+            <p class="small text-muted mb-0">
+                @(podeCriar ? "Registre um novo contrato para começar." : "Não há registros disponíveis nesta unidade.")
+            </p>
+        </div>
+    </div>
 }
 
 @section Scripts {
-<style>
-    /* estilos existentes ... */
-</style>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-<script>
-    // SweetAlert (TempData)
-    (function(){
-        const flags = document.getElementById("pageFlags");
-        if (!flags) return;
-        const ok   = (flags.dataset.success || "").trim();
-        const err  = (flags.dataset.error   || "").trim();
-        if (ok)  Swal.fire({ text: ok,  icon:"success" });
-        if (err) Swal.fire({ text: err, icon:"error"   });
-    })();
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // SweetAlert (TempData)
+            const flags = document.getElementById("pageFlags"); // Se você usa uma div escondida para flags
+            // OU direto do Razor como fizemos antes:
+            const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"]));
+            const msgErro    = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
 
-    // =========================================================================
-    // --- LÓGICA DE EXCLUSÃO ALTERADA ---
-    // =========================================================================
-    document.addEventListener("click", async function(e){
-        const delBtn = e.target.closest("button[data-contrato-id]");
-        if (delBtn){
-            const id = delBtn.getAttribute("data-contrato-id");
-            const info = delBtn.getAttribute("data-contrato-info");
+            if (msgSucesso) Swal.fire({ text: msgSucesso, icon:"success", timer: 3000, showConfirmButton: false });
+            if (msgErro)    Swal.fire({ text: msgErro,    icon:"error" });
 
-            const result = await Swal.fire({
-                title: "Confirmar Exclusão",
-                html: `Você tem certeza que deseja excluir o <strong>${info}</strong>?<br><br><b>Esta ação é irreversível. Por favor, forneça uma justificativa obrigatória:</b>`,
-                icon: "warning",
-                input: 'textarea',
-                inputPlaceholder: 'Descreva o motivo da exclusão...',
-                showCancelButton: true,
-                confirmButtonText: "Sim, excluir!",
-                cancelButtonText: "Cancelar",
-                confirmButtonColor: '#d33',
-                inputValidator: (value) => {
-                    if (!value || value.trim() === '') {
-                        return 'A justificativa é obrigatória!'
+            // --- LÓGICA DE EXCLUSÃO ---
+            document.addEventListener("click", async function(e){
+                const delBtn = e.target.closest("button[data-contrato-id]");
+                if (delBtn){
+                    const id = delBtn.getAttribute("data-contrato-id");
+                    const info = delBtn.getAttribute("data-contrato-info");
+
+                    const result = await Swal.fire({
+                        title: "Confirmar Exclusão",
+                        html: `Você tem certeza que deseja excluir o <strong>${info}</strong>?<br><br><b>Esta ação é irreversível. A justificativa é obrigatória:</b>`,
+                        icon: "warning",
+                        input: 'textarea',
+                        inputPlaceholder: 'Descreva o motivo...',
+                        showCancelButton: true,
+                        confirmButtonText: "Sim, excluir!",
+                        cancelButtonText: "Cancelar",
+                        confirmButtonColor: '#d33',
+                        inputValidator: (value) => {
+                            if (!value || value.trim() === '') return 'A justificativa é obrigatória!'
+                        }
+                    });
+
+                    if (result.isConfirmed && result.value) {
+                        document.getElementById("delete-id").value = id;
+                        document.getElementById("delete-justificativa").value = result.value;
+                        document.getElementById("deleteForm").submit();
                     }
                 }
             });
 
-            if (result.isConfirmed && result.value) {
-                // Preenche o ID e a Justificativa no formulário oculto
-                document.getElementById("delete-id").value = id;
-                document.getElementById("delete-justificativa").value = result.value;
-                // Envia o formulário
-                document.getElementById("deleteForm").submit();
-            }
-        }
-    });
+            // --- VER ADITIVOS ---
+            document.addEventListener("click", async function(e){
+                const btn = e.target.closest("button[data-ver-aditivos]");
+                if (!btn) return;
 
-    // Ver aditivos (via AJAX + SweetAlert)
-    // ... seu código para ver aditivos permanece o mesmo ...
-    document.addEventListener("click", async function(e){
-        const btn = e.target.closest("button[data-ver-aditivos]");
-        if (!btn) return;
+                const contratoId = btn.getAttribute("data-ver-aditivos");
+                const qtd        = btn.getAttribute("data-count");
 
-        const contratoId = btn.getAttribute("data-ver-aditivos");
-        const qtd        = btn.getAttribute("data-count");
+                if(qtd === "0"){
+                    Swal.fire({ icon:"info", text:"Este contrato não possui aditivos.", timer: 2000, showConfirmButton: false });
+                    return;
+                }
 
-        if(qtd === "0"){
-            Swal.fire({ icon:"info", text:"Este contrato não possui aditivos." });
-            return;
-        }
+                const url = '@Url.Action("Historico", "Contratos")' + '?id=' + contratoId;
+                try {
+                    const result = await fetch(url);
+                    const html   = await result.text();
 
-        const url    = '@Url.Action("Historico", "Contratos")' + '?id=' + contratoId;
-        const result = await fetch(url);
-        const html   = await result.text();
-
-        Swal.fire({
-            title:"Aditivos do contrato",
-            html: `<div class="swal-aditivos">${html}</div>`,
-            width: 850,
-            customClass: { title: 'swal-title-no-wrap' },
-            showCloseButton:true,
-            showConfirmButton:false
+                    Swal.fire({
+                        title: "Histórico de Aditivos",
+                        html: `<div class="swal-aditivos text-start">${html}</div>`,
+                        width: 850,
+                        showCloseButton: true,
+                        showConfirmButton: false
+                    });
+                } catch {
+                    Swal.fire({ icon:"error", text:"Erro ao carregar histórico." });
+                }
+            });
         });
-    });
-</script>
+    </script>
+    <style>
+        .swal-aditivos { max-height: 400px; overflow-y: auto; }
+    </style>
 }

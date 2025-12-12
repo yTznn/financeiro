@@ -7,5 +7,6 @@ namespace Financeiro.Models
     {
         public int ContratoId { get; set; }
         public int NaturezaId { get; set; }
+        public decimal Valor { get; set; }
     }
 }

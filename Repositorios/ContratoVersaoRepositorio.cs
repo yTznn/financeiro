@@ -3,7 +3,9 @@ using Financeiro.Infraestrutura;
 using Financeiro.Models;
 using System;
 using System.Collections.Generic;
+using System.Data; // Importante para Transaction
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace Financeiro.Repositorios
 {
@@ -16,16 +18,46 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
-        public async Task InserirAsync(ContratoVersao versao)
+        // [ALTERADO] Agora retorna int (o ID da versão criada)
+        public async Task<int> InserirAsync(ContratoVersao versao)
         {
             const string sql = @"
                 INSERT INTO ContratoVersao 
                     (ContratoId, Versao, ObjetoContrato, DataInicio, DataFim, ValorContrato, TipoAditivo, Observacao, DataRegistro, DataInicioAditivo)
                 VALUES 
-                    (@ContratoId, @Versao, @ObjetoContrato, @DataInicio, @DataFim, @ValorContrato, @TipoAditivo, @Observacao, @DataRegistro, @DataInicioAditivo);";
+                    (@ContratoId, @Versao, @ObjetoContrato, @DataInicio, @DataFim, @ValorContrato, @TipoAditivo, @Observacao, @DataRegistro, @DataInicioAditivo);
+                SELECT CAST(SCOPE_IDENTITY() as int);";
 
             using var conn = _factory.CreateConnection();
-            await conn.ExecuteAsync(sql, versao);
+            return await conn.QuerySingleAsync<int>(sql, versao);
+        }
+
+        // [NOVO] Método para salvar o "detalhe" (rateio) da versão
+        public async Task InserirNaturezasHistoricoAsync(int contratoVersaoId, IEnumerable<ContratoVersaoNatureza> itens)
+        {
+            const string sql = @"
+                INSERT INTO ContratoVersaoNatureza (ContratoVersaoId, NaturezaId, Valor)
+                VALUES (@ContratoVersaoId, @NaturezaId, @Valor)";
+
+            using var conn = _factory.CreateConnection();
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+            
+            try
+            {
+                foreach (var item in itens)
+                {
+                    // Garante o vínculo correto
+                    item.ContratoVersaoId = contratoVersaoId; 
+                    await conn.ExecuteAsync(sql, item, trans);
+                }
+                trans.Commit();
+            }
+            catch
+            {
+                trans.Rollback();
+                throw;
+            }
         }
 
         public async Task<ContratoVersao?> ObterVersaoAtualAsync(int contratoId)
@@ -87,29 +119,115 @@ namespace Financeiro.Repositorios
 
         public async Task ExcluirAsync(int versaoId)
         {
-            const string sql = "DELETE FROM ContratoVersao WHERE Id = @versaoId;";
+            // [ALTERADO] Precisa apagar os filhos (Naturezas) antes do pai (Versão)
+            const string sqlFilhos = "DELETE FROM ContratoVersaoNatureza WHERE ContratoVersaoId = @versaoId;";
+            const string sqlPai = "DELETE FROM ContratoVersao WHERE Id = @versaoId;";
+            
             using var conn = _factory.CreateConnection();
-            await conn.ExecuteAsync(sql, new { versaoId });
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+            try
+            {
+                await conn.ExecuteAsync(sqlFilhos, new { versaoId }, trans);
+                await conn.ExecuteAsync(sqlPai, new { versaoId }, trans);
+                trans.Commit();
+            }
+            catch
+            {
+                trans.Rollback();
+                throw;
+            }
         }
 
-        // Método usado ao cancelar um aditivo para voltar o contrato ao estado anterior
         public async Task RestaurarContratoAPartirDaVersaoAsync(ContratoVersao versaoAnterior)
         {
-            const string sql = @"
+            // 1. Restaura o Cabeçalho do Contrato
+            const string sqlHeader = @"
                 UPDATE Contrato
                 SET  ValorContrato  = @ValorContrato,
                      DataFim        = @DataFim,
+                     DataInicio     = @DataInicio, -- Importante restaurar inicio também caso tenha mudado
                      ObjetoContrato = @ObjetoContrato
                 WHERE Id = @ContratoId;";
 
+            // 2. Restaura as Naturezas (Apaga as atuais do contrato e insere as do histórico)
+            // Note que aqui pegamos da tabela ContratoVersaoNatureza e jogamos na ContratoNatureza
+            const string sqlRestaurarNaturezas = @"
+                DELETE FROM ContratoNatureza WHERE ContratoId = @ContratoId;
+
+                INSERT INTO ContratoNatureza (ContratoId, NaturezaId, Valor)
+                SELECT @ContratoId, NaturezaId, Valor
+                FROM ContratoVersaoNatureza
+                WHERE ContratoVersaoId = @VersaoId;";
+
             using var conn = _factory.CreateConnection();
-            await conn.ExecuteAsync(sql, new
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+
+            try
             {
-                versaoAnterior.ValorContrato,
-                versaoAnterior.DataFim,
-                versaoAnterior.ObjetoContrato,
-                versaoAnterior.ContratoId
-            });
+                // Restaura Header
+                await conn.ExecuteAsync(sqlHeader, new
+                {
+                    versaoAnterior.ValorContrato,
+                    versaoAnterior.DataFim,
+                    versaoAnterior.DataInicio,
+                    versaoAnterior.ObjetoContrato,
+                    versaoAnterior.ContratoId
+                }, trans);
+
+                // Restaura Rateio
+                await conn.ExecuteAsync(sqlRestaurarNaturezas, new 
+                { 
+                    ContratoId = versaoAnterior.ContratoId, 
+                    VersaoId = versaoAnterior.Id // ID da linha na tabela ContratoVersao
+                }, trans);
+
+                trans.Commit();
+            }
+            catch
+            {
+                trans.Rollback();
+                throw;
+            }
+        }
+        public async Task<IEnumerable<ContratoNatureza>> ListarNaturezasPorContratoAsync(int contratoId)
+        {
+            const string sql = "SELECT * FROM ContratoNatureza WHERE ContratoId = @contratoId;";
+            
+            using var conn = _factory.CreateConnection();
+            return await conn.QueryAsync<ContratoNatureza>(sql, new { contratoId });
+        }
+        public async Task RecriarNaturezasHistoricoAsync(int contratoVersaoId, IEnumerable<ContratoVersaoNatureza> novosItens)
+        {
+            using var conn = _factory.CreateConnection();
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+
+            try
+            {
+                // 1. Limpa os itens antigos dessa versão específica (o snapshot "errado")
+                const string sqlDelete = "DELETE FROM ContratoVersaoNatureza WHERE ContratoVersaoId = @contratoVersaoId;";
+                await conn.ExecuteAsync(sqlDelete, new { contratoVersaoId }, trans);
+
+                // 2. Insere os novos itens corrigidos
+                const string sqlInsert = @"
+                    INSERT INTO ContratoVersaoNatureza (ContratoVersaoId, NaturezaId, Valor)
+                    VALUES (@ContratoVersaoId, @NaturezaId, @Valor)";
+
+                foreach (var item in novosItens)
+                {
+                    item.ContratoVersaoId = contratoVersaoId; // Garante amarração
+                    await conn.ExecuteAsync(sqlInsert, item, trans);
+                }
+
+                trans.Commit();
+            }
+            catch
+            {
+                trans.Rollback();
+                throw;
+            }
         }
     }
 }

@@ -47,7 +47,7 @@ namespace Financeiro.Repositorios
                 {
                     PessoaFisicaId = pessoaFisicaId,
                     PessoaJuridicaId = pessoaJuridicaId,
-                    NumeroContrato = vm.NumeroContrato,
+                    NumeroContrato = vm.NumeroContrato, // INT
                     AnoContrato = vm.AnoContrato,
                     ObjetoContrato = vm.ObjetoContrato,
                     DataAssinatura = vm.DataAssinatura,
@@ -94,7 +94,7 @@ namespace Financeiro.Repositorios
                     Id = vm.Id,
                     PessoaFisicaId = pessoaFisicaId,
                     PessoaJuridicaId = pessoaJuridicaId,
-                    NumeroContrato = vm.NumeroContrato,
+                    NumeroContrato = vm.NumeroContrato, // INT
                     AnoContrato = vm.AnoContrato,
                     ObjetoContrato = vm.ObjetoContrato,
                     DataAssinatura = vm.DataAssinatura,
@@ -163,6 +163,18 @@ namespace Financeiro.Repositorios
                 throw;
             }
         }
+        public async Task AtualizarVigenciaEValorAsync(int contratoId, DateTime inicio, DateTime fim, decimal valorTotal)
+        {
+            const string sql = @"
+                UPDATE Contrato 
+                SET DataInicio = @inicio, 
+                    DataFim = @fim, 
+                    ValorContrato = @valorTotal
+                WHERE Id = @contratoId";
+
+            using var conn = _factory.CreateConnection();
+            await conn.ExecuteAsync(sql, new { contratoId, inicio, fim, valorTotal });
+        }
 
         public async Task<ContratoViewModel?> ObterParaEdicaoAsync(int id)
         {
@@ -197,7 +209,7 @@ namespace Financeiro.Repositorios
             {
                 Id = contrato.Id,
                 FornecedorIdCompleto = contrato.PessoaFisicaId.HasValue ? $"PF-{contrato.PessoaFisicaId}" : $"PJ-{contrato.PessoaJuridicaId}",
-                NumeroContrato = contrato.NumeroContrato,
+                NumeroContrato = contrato.NumeroContrato, // INT
                 AnoContrato = contrato.AnoContrato,
                 ObjetoContrato = contrato.ObjetoContrato,
                 DataAssinatura = contrato.DataAssinatura,
@@ -233,10 +245,8 @@ namespace Financeiro.Repositorios
             }
         }
 
-        // [ALTERADO] Método atualizado para filtrar por EntidadeId
         public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina = 10)
         {
-            // O filtro mágico: JOIN com Orcamento e Instrumento para chegar na Entidade
             const string sql = @"
                 SELECT 
                     c.*, 
@@ -252,12 +262,11 @@ namespace Financeiro.Repositorios
                 INNER JOIN
                     Instrumento i ON o.InstrumentoId = i.Id
                 WHERE 
-                    i.EntidadeId = @entidadeId  -- <--- O segredo do isolamento
+                    i.EntidadeId = @entidadeId
                 ORDER BY 
                     c.AnoContrato DESC, c.NumeroContrato DESC
                 OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
 
-                -- Contagem também filtrada
                 SELECT COUNT(c.Id) 
                 FROM Contrato c
                 INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
@@ -278,19 +287,37 @@ namespace Financeiro.Repositorios
             return (itens, totalPaginas);
         }
 
-        public async Task<int> SugerirProximoNumeroAsync(int ano)
+        // [CORRIGIDO] Sugere número baseado na Entidade
+        public async Task<int> SugerirProximoNumeroAsync(int ano, int entidadeId)
         {
-            const string sql = "SELECT ISNULL(MAX(NumeroContrato), 0) FROM Contrato WHERE AnoContrato = @ano;";
+            const string sql = @"
+                SELECT ISNULL(MAX(c.NumeroContrato), 0) 
+                FROM Contrato c
+                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
+                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                WHERE c.AnoContrato = @ano
+                  AND i.EntidadeId = @entidadeId;";
+                  
             using var conn = _factory.CreateConnection();
-            var ultimoNumero = await conn.QuerySingleAsync<int>(sql, new { ano });
+            var ultimoNumero = await conn.QuerySingleAsync<int>(sql, new { ano, entidadeId });
             return ultimoNumero + 1;
         }
 
-        public async Task<bool> VerificarUnicidadeAsync(int numero, int ano, int idAtual = 0)
+        // [CORRIGIDO] Verifica duplicidade baseada na Entidade
+        public async Task<bool> VerificarUnicidadeAsync(int numero, int ano, int entidadeId, int idAtual = 0)
         {
-            const string sql = "SELECT COUNT(1) FROM Contrato WHERE NumeroContrato = @numero AND AnoContrato = @ano AND Id != @idAtual;";
+            const string sql = @"
+                SELECT COUNT(1) 
+                FROM Contrato c
+                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
+                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                WHERE c.NumeroContrato = @numero 
+                  AND c.AnoContrato = @ano 
+                  AND i.EntidadeId = @entidadeId
+                  AND c.Id != @idAtual;";
+                  
             using var conn = _factory.CreateConnection();
-            return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, idAtual });
+            return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, entidadeId, idAtual });
         }
         
         public async Task<(IEnumerable<VwFornecedor> Itens, int TotalItens)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina)
@@ -356,6 +383,13 @@ namespace Financeiro.Repositorios
             if (tipo == "PJ") return (null, id);
             
             return (null, null);
+        }
+        public async Task<IEnumerable<ContratoNatureza>> ListarNaturezasPorContratoAsync(int contratoId)
+        {
+            const string sql = "SELECT * FROM ContratoNatureza WHERE ContratoId = @contratoId;";
+            
+            using var conn = _factory.CreateConnection();
+            return await conn.QueryAsync<ContratoNatureza>(sql, new { contratoId });
         }
     }
 }

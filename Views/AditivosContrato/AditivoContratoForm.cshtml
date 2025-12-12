@@ -5,7 +5,7 @@
 @{
     ViewBag.Title  = "Registrar Aditivo de Contrato";
     Layout         = "_Layout";
-    var versaoAtual = ViewBag.VersaoAtual as ContratoVersao;
+    var versaoAtual = ViewBag.VersaoAtual as ContratoVersao; // Ajustado para ContratoVersao (conforme seu modelo)
     var br = new CultureInfo("pt-BR");
 }
 
@@ -67,7 +67,7 @@
           novalidate
           data-valor-atual="@((versaoAtual?.ValorContrato ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))"
           data-fim-atual="@(versaoAtual?.DataFim.ToString("yyyy-MM-dd") ?? "")">
-       
+        
         @Html.AntiForgeryToken()
         <input asp-for="ContratoId" type="hidden" />
 
@@ -93,7 +93,7 @@
                 <span class="input-group-text">R$</span>
                 <input asp-for="NovoValor" type="text" class="form-control money" id="NovoValor" />
             </div>
-           
+            
             <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" asp-for="EhValorMensal" id="EhValorMensal">
                 <label class="form-check-label text-muted small" for="EhValorMensal">
@@ -118,13 +118,14 @@
             <span asp-validation-for="NovoObjeto" class="text-danger small"></span>
         </div>
 
+        @* [CORREÇÃO] Campo Justificativa Adicionado *@
         <div class="col-12">
-            <label asp-for="Observacao" class="form-label fw-semibold">Observações</label>
-            <textarea asp-for="Observacao"
+            <label asp-for="Justificativa" class="form-label fw-semibold">Justificativa / Observação</label>
+            <textarea asp-for="Justificativa"
                       class="form-control"
-                      placeholder="Observações adicionais..."
+                      placeholder="Descreva o motivo do aditivo..."
                       rows="2"></textarea>
-            <span asp-validation-for="Observacao" class="text-danger small"></span>
+            <span asp-validation-for="Justificativa" class="text-danger small"></span>
         </div>
 
         <div class="col-12 d-flex gap-2 pt-2">
@@ -148,7 +149,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Aceitar formato PT-BR no validator
+        // Aceitar formato PT-BR no validator do jQuery
         if (window.jQuery && $.validator) {
             $.validator.methods.number = function (value, element) {
                 return this.optional(element) ||
@@ -194,10 +195,10 @@
 
         function parsePtBr(s){
             if(!s) return 0;
-            if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+            // Remove pontos de milhar e troca vírgula decimal por ponto para cálculo JS
             return Number((s || '').replace(/\./g,'').replace(',','.')) || 0;
         }
-       
+        
         function fmtBr(n){
             try { return Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
             catch { return 'R$ ' + (n || 0).toFixed(2); }
@@ -224,9 +225,9 @@
             if (chkMensal && chkMensal.checked) {
                 const dataFinalConsiderada = (novaFim && novaFim.value) ? novaFim.value : fimAtualStr;
                 const dataInicialConsiderada = (iniAditivo && iniAditivo.value) ? iniAditivo.value : new Date().toISOString().slice(0, 10);
-               
+                
                 const meses = mesesEntre(dataInicialConsiderada, dataFinalConsiderada);
-               
+                
                 if(meses > 0) {
                     const deltaTotal = delta * meses;
                     preview.innerHTML = `<small class='d-block mb-1'>Cálculo Mensal: ${fmtBr(delta)} x ${meses} meses = <strong>${fmtBr(deltaTotal)}</strong></small>`;
@@ -259,8 +260,9 @@
             atualizarAjudaValor(tipo);
             atualizarPreview();
         }
-       
+        
         function formatarMoedaInput(el) {
+            // Apenas formata visualmente, mantendo o valor para envio
             const v = parsePtBr(el.value);
             if(v) el.value = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
@@ -274,7 +276,7 @@
         chkMensal?.addEventListener('change', atualizarPreview);
         iniAditivo?.addEventListener('change', atualizarPreview);
         novaFim?.addEventListener('change', atualizarPreview);
-       
+        
         aplicarTipo();
 
         const summary = document.getElementById("validationSummary");
@@ -283,20 +285,18 @@
         form?.addEventListener('submit', async (e) => {
             if (window.jQuery && !$(form).valid()) return;
 
-            // [CORREÇÃO JAVASCRIPT AQUI]
+            // [VALIDAÇÃO FINAL NO JS]
             if (campoValor && campoValor.style.display !== 'none' && inpValor) {
-                // Removemos pontos de milhar apenas para checar se é numero válido no JS
-                const checkClean = (inpValor.value || '').replace(/\./g, '').replace(',', '.');
+                // Checa se é um número válido (ignorando formatação PT-BR para teste lógico)
+                const checkClean = parsePtBr(inpValor.value);
                 
-                // Valida apenas se é numérico
-                if (!checkClean || isNaN(checkClean) || Number(checkClean) <= 0) {
+                if (checkClean <= 0) {
                     e.preventDefault();
                     return Swal.fire({ icon:'warning', title:'Informe um valor numérico maior que zero.' });
                 }
-
-                // REMOVIDA A LINHA: inpValor.value = clean;
-                // Agora o valor é enviado ORIGINALMENTE (ex: 5.000,00) para o servidor
-                // O seu ViewModel em C# (NovoValorDecimal) lidará com isso usando a cultura pt-BR.
+                
+                // [IMPORTANTE] NÃO alteramos o valor do input aqui. 
+                // Deixamos como string formatada (ex: 1.000,00) para o ModelBinder do C# tratar.
             }
 
             e.preventDefault();
@@ -330,7 +330,7 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'Atenção',
-                    html: errorMsg // Permite quebras de linha do validation summary
+                    html: errorMsg // Permite HTML para quebras de linha se houver
                 });
             }
         }

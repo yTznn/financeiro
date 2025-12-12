@@ -4,116 +4,109 @@
 
 @{
     var br = new CultureInfo("pt-BR");
-    // Recebe paginação do Controller
+    // Recebe paginação do Controller (ViewBag)
     int totalPaginas = ViewBag.TotalPaginas ?? 0;
     int paginaAtual  = ViewBag.PaginaAtual ?? 1;
     int contratoId   = ViewBag.ContratoId ?? 0;
 
+    // Helper local para Badges
     string BadgeTipo(ContratoVersao v)
     {
-        if (v?.TipoAditivo == null) return "<span class=\"badge bg-secondary-subtle text-secondary\">Original</span>";
-        return v.TipoAditivo switch
+        if (v.TipoAditivo == null) return "<span class='badge bg-secondary'>Original</span>";
+        
+        // Conversão segura caso o Enum seja Nullable ou Int
+        var tipo = v.TipoAditivo.ToString(); 
+
+        return tipo switch
         {
-            TipoAditivo.Prazo            => "<span class=\"badge bg-info-subtle text-info\">Prazo</span>",
-            TipoAditivo.Acrescimo        => "<span class=\"badge bg-success-subtle text-success\">Acréscimo</span>",
-            TipoAditivo.Supressao        => "<span class=\"badge bg-danger-subtle text-danger\">Supressão</span>",
-            TipoAditivo.PrazoAcrescimo   => "<span class=\"badge bg-success-subtle text-success\">Prazo + Acréscimo</span>",
-            TipoAditivo.PrazoSupressao   => "<span class=\"badge bg-danger-subtle text-danger\">Prazo + Supressão</span>",
-            _                            => $"<span class=\"badge bg-secondary-subtle text-secondary\">{v.TipoAditivo}</span>"
+            "Prazo"          => "<span class='badge bg-info text-dark'>Prazo</span>",
+            "Acrescimo"      => "<span class='badge bg-success'>Acréscimo</span>",
+            "Supressao"      => "<span class='badge bg-danger'>Supressão</span>",
+            "PrazoAcrescimo" => "<span class='badge bg-success'>Prazo + Valor</span>",
+            "PrazoSupressao" => "<span class='badge bg-warning text-dark'>Prazo + Supressão</span>",
+            _                => $"<span class='badge bg-light text-dark border'>{tipo}</span>"
         };
     }
 }
 
 <style>
-  #hist-contrato .table { font-size: .92rem; }
-  #hist-contrato th, #hist-contrato td { vertical-align: middle; white-space: normal; }
-  #hist-contrato .nowrap { white-space: nowrap; }
-  #hist-contrato .money { font-variant-numeric: tabular-nums; }
-  #hist-contrato thead th { background-color:#0d6efd14; }
+  .hist-table th { font-size: 0.85rem; text-transform: uppercase; background-color: #f8f9fa; }
+  .hist-table td { vertical-align: middle; font-size: 0.9rem; }
+  .hist-money { font-family: monospace; font-weight: 600; }
 </style>
 
-<div id="hist-contrato">
-  <table class="table table-sm table-hover table-bordered align-middle d-none d-md-table mb-2">
-    <thead class="table-light text-center">
+<div class="table-responsive">
+  <table class="table table-hover hist-table mb-0">
+    <thead>
       <tr>
-        <th class="nowrap">Versão</th>
-        <th>Tipo de Aditivo</th>
-        <th>Início do Aditivo</th>
-        <th class="nowrap">Valor Global</th>
-        <th>Vigência</th>
-        <th>Data Registro</th>
+        <th class="text-center">Versão</th>
+        <th>Tipo</th>
+        <th class="text-center">Data Registro</th>
+        <th class="text-center">Vigência</th>
+        <th class="text-end">Valor Global</th>
+        <th>Observação</th>
       </tr>
     </thead>
     <tbody>
-    @if(Model != null)
+    @if(Model != null && Model.Any())
     {
         foreach (var v in Model)
         {
             <tr>
-              <td class="text-center fw-semibold nowrap">@v.Versao</td>
+              <td class="text-center fw-bold text-primary">v.@v.Versao</td>
               <td>@Html.Raw(BadgeTipo(v))</td>
-              <td class="text-center">@((v.DataInicioAditivo?.ToString("dd/MM/yyyy")) ?? "-")</td>
-              <td class="text-end nowrap money">@v.ValorContrato.ToString("C", br)</td>
-              <td class="text-center">@v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</td>
-              <td class="text-center">@v.DataRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+              <td class="text-center">@v.DataRegistro.ToString("dd/MM/yy HH:mm")</td>
+              <td class="text-center small">
+                  @v.DataInicio.ToString("dd/MM/yy") <br> 
+                  <span class="text-muted">até</span> @v.DataFim.ToString("dd/MM/yy")
+              </td>
+              <td class="text-end hist-money">
+                  @v.ValorContrato.ToString("C", br)
+              </td>
+              <td class="small text-muted text-truncate" style="max-width: 150px;" title="@v.Observacao">
+                  @v.Observacao
+              </td>
             </tr>
         }
     }
     else 
     {
-        <tr><td colspan="6" class="text-center text-muted">Nenhum histórico encontrado.</td></tr>
+        <tr>
+            <td colspan="6" class="text-center py-4 text-muted">
+                <i class="bi bi-info-circle me-2"></i> Nenhum histórico encontrado.
+            </td>
+        </tr>
     }
     </tbody>
   </table>
-
-  <div class="accordion d-md-none" id="historicoAccordion">
-    @if(Model != null)
-    {
-        foreach (var v in Model)
-        {
-            var collapseId = $"collapse-{v.Versao}";
-            <div class="accordion-item mb-2">
-              <h2 class="accordion-header" id="h@collapseId">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
-                  Versão @v.Versao
-                </button>
-              </h2>
-              <div id="@collapseId" class="accordion-collapse collapse" data-bs-parent="#historicoAccordion">
-                <div class="accordion-body small">
-                  <p class="mb-1"><strong>Tipo:</strong> @Html.Raw(BadgeTipo(v))</p>
-                  <p class="mb-1"><strong>Valor:</strong> @v.ValorContrato.ToString("C", br)</p>
-                  <p class="mb-1"><strong>Vigência:</strong> @v.DataInicio.ToString("dd/MM/yyyy") a @v.DataFim.ToString("dd/MM/yyyy")</p>
-                </div>
-              </div>
-            </div>
-        }
-    }
-  </div>
-
-  @if (totalPaginas > 1)
-  {
-    <nav class="mt-2">
-      <ul class="pagination pagination-sm justify-content-center">
-        @for (var i = 1; i <= totalPaginas; i++)
-        {
-          <li class="page-item @(i == paginaAtual ? "active" : "")">
-            <a class="page-link historico-page-link" href="#" data-page="@i" data-contrato-id="@contratoId">@i</a>
-          </li>
-        }
-      </ul>
-    </nav>
-  }
 </div>
 
-<script>
-    // Apenas lógica de paginação, sem cancelamento aqui dentro
-    $(document).off('click', '.historico-page-link').on('click', '.historico-page-link', function (e) {
-        e.preventDefault();
-        const page = $(this).data('page');
-        const cId = $(this).data('contrato-id');
-        const container = $('#historico-container'); // Certifique-se que o ID na View principal é este
-        if(container.length) {
-            container.load('@Url.Action("Historico","Contratos")' + '?id=' + cId + '&pag=' + page);
-        }
-    });
-</script>
+@* Paginação do Modal *@
+@if (totalPaginas > 1)
+{
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination pagination-sm mb-0">
+            @for (var i = 1; i <= totalPaginas; i++)
+            {
+                <li class="page-item @(i == paginaAtual ? "active" : "")">
+                    <a class="page-link historico-page-link" href="#" data-page="@i" data-contrato-id="@contratoId">@i</a>
+                </li>
+            }
+        </ul>
+    </nav>
+    
+    <script>
+        // Script específico para paginar dentro do SweetAlert/Modal sem recarregar a página toda
+        // Nota: O evento 'click' é delegado no body ou container pai para funcionar em elementos dinâmicos
+        $('.historico-page-link').on('click', function (e) {
+            e.preventDefault();
+            const page = $(this).data('page');
+            const cId = $(this).data('contrato-id');
+            const url = '@Url.Action("Historico", "Contratos")' + '?id=' + cId + '&pag=' + page;
+            
+            // Recarrega o conteúdo dentro do container do SweetAlert
+            // (Assumindo que o container tem a classe swal-aditivos que definimos no Index)
+            $('.swal-aditivos').load(url);
+        });
+    </script>
+}

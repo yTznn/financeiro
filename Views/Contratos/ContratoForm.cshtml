@@ -1,484 +1,625 @@
 @model Financeiro.Models.ViewModels.ContratoViewModel
-@using Financeiro.Models
-@using System.Linq
 @using System.Globalization
+@using Financeiro.Extensions 
 
 @{
-    ViewData["Title"] = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
-    var naturezas = ViewBag.Naturezas as IEnumerable<Natureza> ?? Enumerable.Empty<Natureza>();
-    var fornecedorAtual = ViewBag.FornecedorAtual as VwFornecedor;
+    ViewBag.Title = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
+    Layout = "_Layout";
     
-    // Serializa as naturezas já salvas para recriar a tabela no JS
-    var naturezasJson = Json.Serialize(Model.Naturezas);
-
-    // Recupera a versão atual para verificar se pode cancelar
     var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.ContratoVersao;
+    var controllerAction = Model.Id == 0 ? "Salvar" : "Atualizar"; 
+    bool isEdicao = Model.Id > 0;
+    var br = new CultureInfo("pt-BR");
+
+    // Lógica para saber se tem aditivo (Versão > 1)
+    bool temAditivo = versaoAtual != null && versaoAtual.Versao > 1;
+
+    // Valor original (fallback para o valor do model se não vier na viewbag)
+    decimal valorOriginal = ViewBag.ValorOriginal != null ? (decimal)ViewBag.ValorOriginal : Model.ValorContrato;
+    
+    // Permissões
+    bool podeAditivar = isEdicao && User.TemPermissao("ADITIVO_ADD");
+    bool podeEditar   = isEdicao ? User.TemPermissao("CONTRATO_EDIT") : User.TemPermissao("CONTRATO_ADD");
+    bool podeCancelar = isEdicao && temAditivo && User.TemPermissao("ADITIVO_DEL");
 }
 
+@* --- FLAG PARA O SWEETALERT --- *@
 <div id="pageFlags"
-     data-success="@(TempData["Sucesso"] ?? TempData["MensagemSucesso"])"
-     data-error="@(TempData["Erro"] ?? TempData["MensagemErro"])"></div>
+     data-success="@(TempData["MensagemSucesso"] ?? TempData["Sucesso"])"
+     data-error="@(TempData["MensagemErro"] ?? TempData["Erro"])"></div>
 
-<h3 class="fw-bold mb-4"><i class="bi bi-file-earmark-text-fill me-2"></i>@ViewData["Title"]</h3>
-<hr />
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>@ViewBag.Title</h2>
+</div>
 
-@if (Model.Id != 0)
+@if (isEdicao)
 {
-    <div class="card bg-light border-0 mb-4 shadow-sm">
-        <div class="card-body d-flex flex-wrap gap-2 align-items-center">
-            <h6 class="mb-0 me-auto text-primary fw-bold">
-                <i class="bi bi-file-earmark-medical me-2"></i>Gestão de Aditivos
-            </h6>
-            
-            <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-sm btn-primary">
-                <i class="bi bi-plus-lg"></i> Novo Aditivo
-            </a>
-
-            <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalHistorico">
-                <i class="bi bi-clock-history"></i> Histórico
-            </button>
-
-            @if (versaoAtual != null && versaoAtual.Versao > 1)
-            {
-                <button type="button" class="btn btn-sm btn-outline-danger" id="btnCancelarAditivo"
-                        data-contrato-id="@Model.Id" 
-                        data-versao="@versaoAtual.Versao">
-                    <i class="bi bi-x-circle"></i> Cancelar último aditivo (v.@versaoAtual.Versao)
-                </button>
-            }
-        </div>
-    </div>
+  <div class="mb-3 d-flex flex-wrap gap-2">
+    @if (podeAditivar) {
+        <a asp-controller="AditivosContrato" asp-action="Novo" asp-route-contratoId="@Model.Id" class="btn btn-outline-primary">
+          <i class="bi bi-file-earmark-plus"></i> Registrar Aditivo
+        </a>
+    }
+    <button type="button" class="btn btn-outline-secondary" onclick="carregarHistorico(@Model.Id)">
+      <i class="bi bi-clock-history"></i> Histórico
+    </button>
+    @if (podeCancelar) {
+      <button type="button" class="btn btn-outline-danger" id="btnCancelarAditivo"
+              data-contrato="@Model.Id" data-versao="@versaoAtual.Versao">
+        <i class="bi bi-x-circle"></i> Cancelar último aditivo
+      </button>
+    }
+  </div>
 }
-<form id="form-contrato" novalidate
-      asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")"
-      method="post"
-      class="row g-3">
 
+<div asp-validation-summary="All" class="alert alert-danger d-none" id="validationSummary"></div>
+
+<form id="formContrato" asp-controller="Contratos" asp-action="@controllerAction" method="post" class="row g-3 needs-validation" novalidate>
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
-    <input type="hidden" name="justificativa" id="justificativa-hidden" />
-
+    
+    @* --- BLOCO 1: DADOS GERAIS --- *@
     <div class="col-12">
-        <label asp-for="FornecedorIdCompleto" class="form-label fw-semibold"></label>
-        <select asp-for="FornecedorIdCompleto" id="fornecedor-select" class="form-select w-100">
-            @if (fornecedorAtual != null)
-            {
-                <option value="@Model.FornecedorIdCompleto" selected>
-                    @fornecedorAtual.Nome (@fornecedorAtual.Documento)
-                </option>
-            }
-        </select>
-        <span asp-validation-for="FornecedorIdCompleto" class="text-danger"></span>
-    </div>
-
-    <div class="col-12 col-md-6">
-        <label asp-for="AnoContrato" class="form-label fw-semibold"></label>
-        <input asp-for="AnoContrato" type="number" class="form-control" />
-        <span asp-validation-for="AnoContrato" class="text-danger"></span>
-    </div>
-    <div class="col-12 col-md-6">
-        <label asp-for="NumeroContrato" class="form-label fw-semibold"></label>
-        <input asp-for="NumeroContrato" type="number" class="form-control" />
-        <span asp-validation-for="NumeroContrato" class="text-danger"></span>
-    </div>
-
-    <div class="col-12">
-        <label asp-for="ObjetoContrato" class="form-label fw-semibold"></label>
-        <textarea asp-for="ObjetoContrato" class="form-control" rows="3"></textarea>
-        <span asp-validation-for="ObjetoContrato" class="text-danger"></span>
-    </div>
-
-    <div class="col-12 mb-3">
-        <label asp-for="OrcamentoId" class="form-label fw-bold text-primary"></label>
-        <select asp-for="OrcamentoId" 
-                class="form-select" 
-                id="OrcamentoId"
-                asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
-            <option value="">-- Selecione o Orçamento --</option>
-        </select>
-        <div class="form-text">O contrato será abatido do saldo deste orçamento.</div>
-        <span asp-validation-for="OrcamentoId" class="text-danger"></span>
-    </div>
-
-    <div class="col-12 col-md-4">
-        <label asp-for="DataInicio" class="form-label fw-semibold"></label>
-        <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio" />
-        <span asp-validation-for="DataInicio" class="text-danger"></span>
-    </div>
-    <div class="col-12 col-md-4">
-        <label asp-for="DataFim" class="form-label fw-semibold"></label>
-        <input asp-for="DataFim" type="date" class="form-control" id="DataFim" />
-        <span asp-validation-for="DataFim" class="text-danger"></span>
-    </div>
-    <div class="col-12 col-md-4">
-        <label asp-for="DataAssinatura" class="form-label fw-semibold"></label>
-        <input asp-for="DataAssinatura" type="date" class="form-control" />
-    </div>
-
-    <div class="col-12 col-md-4">
-        <label asp-for="ValorMensal" class="form-label fw-semibold"></label>
-        <div class="input-group">
-            <span class="input-group-text">R$</span>
-            <input asp-for="ValorMensal" type="text" class="form-control money" id="ValorMensal" />
-        </div>
-        <span asp-validation-for="ValorMensal" class="text-danger"></span>
-    </div>
-
-    <div class="col-12 col-md-4">
-        <label asp-for="ValorContrato" class="form-label fw-semibold">Valor Total (Calculado)</label>
-        <div class="input-group">
-            <span class="input-group-text">R$</span>
-            <input asp-for="ValorContrato" type="text" class="form-control money" id="ValorContrato" readonly style="background-color: #e9ecef;" />
-        </div>
-        <span asp-validation-for="ValorContrato" class="text-danger"></span>
-    </div>
-
-    <div class="col-12 mt-4">
-        <div class="card border-secondary mb-3">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-secondary"><i class="bi bi-pie-chart-fill me-2"></i>Rateio por Natureza</h5>
-                <button type="button" class="btn btn-sm btn-outline-success" id="btn-add-natureza">
-                    <i class="bi bi-plus-lg"></i> Adicionar Natureza
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0 align-middle" id="tb-naturezas">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 60%;">Natureza / Especialidade</th>
-                                <th style="width: 30%;">Valor Mensal (R$)</th>
-                                <th style="width: 10%;" class="text-center">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody id="lista-naturezas">
-                            </tbody>
-                        <tfoot class="table-light fw-bold">
-                            <tr>
-                                <td class="text-end">Total Rateado (Mensal):</td>
-                                <td id="total-rateado-display">R$ 0,00</td>
-                                <td></td>
-                            </tr>
-                            <tr>
-                                <td class="text-end">Meta Mensal do Contrato:</td>
-                                <td id="meta-mensal-display" class="text-primary">R$ 0,00</td>
-                                <td></td>
-                            </tr>
-                            <tr id="linha-diferenca" class="d-none table-warning">
-                                <td class="text-end text-danger">Diferença Mensal:</td>
-                                <td id="diferenca-display" class="text-danger">R$ 0,00</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light fw-bold">Dados do Contrato</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="FornecedorIdCompleto" class="form-label">Fornecedor</label>
+                        <select asp-for="FornecedorIdCompleto" class="form-select" id="FornecedorSelect" style="width: 100%;">
+                            @if (ViewBag.FornecedorAtual != null) {
+                                var f = (Financeiro.Models.VwFornecedor)ViewBag.FornecedorAtual;
+                                <option value="@Model.FornecedorIdCompleto" selected>@f.Nome (@f.Documento)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="OrcamentoId" class="form-label">Orçamento Vinculado</label>
+                        <select asp-for="OrcamentoId" class="form-select" asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
+                            <option value="">-- Selecione --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="NumeroContrato" class="form-label">Número</label>
+                        <div class="input-group">
+                            <input asp-for="NumeroContrato" type="number" class="form-control" id="NumeroContrato" />
+                            <button class="btn btn-outline-secondary" type="button" id="btnSugerirNumero"><i class="bi bi-magic"></i></button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="AnoContrato" class="form-label">Ano</label>
+                        <input asp-for="AnoContrato" type="number" class="form-control" id="AnoContrato" value="@(Model.AnoContrato == 0 ? DateTime.Now.Year : Model.AnoContrato)" />
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ObjetoContrato" class="form-label">Objeto</label>
+                        <textarea asp-for="ObjetoContrato" class="form-control" rows="1"></textarea>
+                    </div>
                 </div>
             </div>
-            <div class="card-footer text-muted small">
-                A soma dos valores mensais das naturezas deve ser igual ao <strong>Valor Mensal</strong> do contrato.
+        </div>
+    </div>
+
+    @* --- BLOCO 2: DADOS ORIGINAIS (SÓ APARECE SE TIVER ADITIVO) --- *@
+    @if (temAditivo)
+    {
+        <div class="col-12">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between">
+                    <span><i class="bi bi-clock-history me-2"></i> Dados Originais (Versão 1)</span>
+                    <span class="badge bg-light text-dark">Apenas Consulta</span>
+                </div>
+                <div class="card-body opacity-75">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Data Assinatura</label>
+                            @* CORREÇÃO AQUI: Proteção contra nulos no ToString *@
+                            <input type="text" class="form-control" 
+                                   value="@(Model.DataAssinatura.HasValue ? Model.DataAssinatura.Value.ToString("dd/MM/yyyy") : "")" 
+                                   disabled />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Valor Original (R$)</label>
+                            <input type="text" class="form-control fw-bold" value="@valorOriginal.ToString("N2", br)" disabled />
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center">
+                            <small class="text-muted">Estes eram os valores antes dos aditivos.</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <span asp-validation-for="Naturezas" class="text-danger d-block mt-1"></span>
-    </div>
+    }
 
+    @* --- BLOCO 3: VIGÊNCIA E VALORES (VIGENTES / ADITIVADOS) --- *@
     <div class="col-12">
-        <label asp-for="Observacao" class="form-label fw-semibold"></label>
-        <textarea asp-for="Observacao" class="form-control" rows="3"></textarea>
-    </div>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white fw-bold">
+                @(temAditivo ? "Dados Vigentes (Atualizados via Aditivo)" : "Vigência e Valores")
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label asp-for="DataAssinatura" class="form-label">Data Assinatura</label>
+                        <input asp-for="DataAssinatura" type="date" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="DataInicio" class="form-label">Data Início (Vigente)</label>
+                        <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="DataFim" class="form-label">Data Fim (Vigente)</label>
+                        <input asp-for="DataFim" type="date" class="form-control" id="DataFim" />
+                    </div>
+                    
+                    <div class="col-md-3 d-flex align-items-center">
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" asp-for="Ativo" id="AtivoSwitch">
+                            <label class="form-check-label fw-bold" for="AtivoSwitch">Contrato Ativo</label>
+                        </div>
+                    </div>
 
-    <div class="col-12">
-        <div class="form-check">
-            <input asp-for="Ativo" class="form-check-input" type="checkbox" />
-            <label asp-for="Ativo" class="form-check-label fw-semibold"></label>
+                    <div class="col-md-4">
+                        <label asp-for="ValorMensal" class="form-label">Valor Mensal Vigente (R$)</label>
+                        <input asp-for="ValorMensal" class="form-control money" id="ValorMensal" />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Valor Total Vigente (R$)</label>
+                        @* O valor aqui vem do Banco (Contrato.ValorContrato) que foi atualizado pelo Aditivo *@
+                        <input type="text" 
+                               name="ValorContrato" 
+                               id="ValorTotal"
+                               class="form-control bg-light fw-bold text-primary" 
+                               readonly 
+                               tabindex="-1"
+                               value="@Model.ValorContrato.ToString("N2", br)"
+                               data-val="false" />
+                        
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted" id="infoCalculo"></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="col-12 mt-4 d-flex gap-2">
-        <button type="submit" class="btn btn-primary" id="btn-salvar">
-            <i class="bi bi-check-circle me-1"></i> Salvar Alterações
-        </button>
+    @* --- BLOCO 4: RATEIO (VALIDAÇÃO) --- *@
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                <span>Distribuição por Natureza (Rateio)</span>
+                <span id="badgeRateio" class="badge bg-secondary">Total: R$ 0,00</span>
+            </div>
+            <div class="card-body">
+                
+                <div id="avisoRateio" class="alert alert-warning py-2 mb-3" style="display:none;">
+                    <i class="bi bi-exclamation-circle-fill me-1"></i>
+                    <strong>Atenção:</strong> Os valores vigentes mudaram. <br>
+                    Você deve redistribuir o saldo nas naturezas abaixo para igualar o novo Valor Mensal.
+                    <div id="msgDiferenca" class="small mt-1 fw-bold"></div>
+                </div>
 
-        <a asp-action="Index" class="btn btn-secondary">
-            <i class="bi bi-x-circle me-1"></i> Voltar
-        </a>
+                <div class="row g-2 align-items-end mb-3 border-bottom pb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">Selecionar Natureza</label>
+                        <select id="selectNatureza" class="form-select">
+                            <option value="">-- Selecione uma Natureza --</option>
+                            @if (ViewBag.Naturezas != null) {
+                                foreach (var nat in (IEnumerable<Financeiro.Models.Natureza>)ViewBag.Naturezas) {
+                                    <option value="@nat.Id">@nat.Nome</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Valor Mensal (R$)</label>
+                        <input type="text" id="inputValorNatureza" class="form-control money" placeholder="0,00" />
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-outline-primary w-100" id="btnAddNatureza">
+                            <i class="bi bi-plus-circle"></i> Adicionar
+                        </button>
+                    </div>
+                </div>
+
+                <table class="table table-hover mb-0" id="tabelaNaturezas">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60%">Natureza de Despesa</th>
+                            <th style="width: 30%">Valor Mensal (R$)</th>
+                            <th style="width: 10%" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyNaturezas">
+                        @if (Model.Naturezas != null) {
+                            int i = 0;
+                            foreach (var item in Model.Naturezas) {
+                                string nomeNat = "Natureza ID " + item.NaturezaId; 
+                                if (ViewBag.Naturezas != null) {
+                                    var lista = (IEnumerable<Financeiro.Models.Natureza>)ViewBag.Naturezas;
+                                    var obj = lista.FirstOrDefault(x => x.Id == item.NaturezaId);
+                                    if(obj != null) nomeNat = obj.Nome;
+                                }
+                                <tr class="linha-natureza">
+                                    <td>
+                                        <input type="hidden" name="Naturezas[@i].NaturezaId" value="@item.NaturezaId" class="nat-id" />
+                                        <input type="hidden" name="Naturezas[@i].NomeNatureza" value="@nomeNat" class="nat-nome-input" />
+                                        <span class="nat-nome">@nomeNat</span>
+                                    </td>
+                                    <td>
+                                        <input type="hidden" name="Naturezas[@i].Valor" value="@item.Valor.ToString("N2", br)" class="nat-valor-raw" />
+                                        <span class="nat-valor-display">@item.Valor.ToString("N2", br)</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-nat"><i class="bi bi-trash"></i></button>
+                                    </td>
+                                </tr>
+                                i++;
+                            }
+                        }
+                    </tbody>
+                </table>
+                <div class="text-center p-3 text-muted" id="msgSemNaturezas" style="@(Model.Naturezas != null && Model.Naturezas.Any() ? "display:none" : "")">
+                    Nenhuma natureza adicionada.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <label asp-for="Observacao" class="form-label">Observações</label>
+        <textarea asp-for="Observacao" class="form-control" rows="2"></textarea>
+    </div>
+
+    <div class="col-12 d-flex gap-2 mt-4 pt-3 border-top">
+        @if (podeEditar) {
+            <button type="submit" class="btn btn-success px-4" id="btnSalvar">
+                <i class="bi bi-check-lg me-1"></i> @(Model.Id == 0 ? "Salvar Contrato" : "Salvar Alterações Cadastrais")
+            </button>
+        }
+        else {
+            <div class="alert alert-warning mb-0"><i class="bi bi-lock-fill"></i> Sem permissão de edição.</div>
+        }
+        <a asp-action="Index" class="btn btn-light border px-4">Cancelar / Voltar</a>
     </div>
 </form>
 
-@if (Model.Id != 0)
-{
-  <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
+@* --- MODAL DE HISTÓRICO --- *@
+<div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
-        <div class="modal-header bg-secondary text-white">
-          <h5 class="modal-title">Histórico do Contrato</h5>
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">Histórico de Aditivos</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" id="historico-container">
-            <div class="text-center my-3"><div class="spinner-border text-secondary"></div></div>
+        <div class="modal-body" id="histBody">
+          <div class="text-center my-3"><div class="spinner-border"></div></div>
         </div>
       </div>
     </div>
-  </div>
-}
+</div>
+
 @section Scripts {
-    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    <partial name="_ValidationScriptsPartial" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+    
     <script>
-        // --- CONFIGURAÇÃO GLOBAL DO VALIDATOR ---
-        $.validator.methods.number = function (value, element) {
-            return this.optional(element) || 
-                   /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value) || 
-                   /^-?\d+(?:[\.,]\d+)?$/.test(value);
-        }
-        $.validator.setDefaults({ onkeyup: false, onclick: false });
+        // Variável global de controle
+        var formChanged = false;
+        var rateioValido = false; 
 
-        // --- FUNÇÕES AUXILIARES ---
-        function parseCurrency(value) {
-            if (!value) return 0;
-            let s = String(value).trim();
-            if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
-            const normalized = s.replace(/\./g, '').replace(',', '.');
-            const n = parseFloat(normalized);
-            return isNaN(n) ? 0 : n;
-        }
-        function formatCurrency(value) {
-            return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-        function formatCurrencyBRL(value) {
-            return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        function carregarHistorico(id) {
+            var modal = new bootstrap.Modal(document.getElementById('modalHistorico'));
+            modal.show();
+            $('#histBody').load('@Url.Action("Historico", "Contratos")?id=' + id);
         }
 
-        // Dados Backend
-        const naturezasDisponiveis = @Html.Raw(Json.Serialize(naturezas.Select(n => new { id = n.Id, text = n.Nome })));
-        let naturezasAtuais = @Html.Raw(Json.Serialize(Model.Naturezas));
+        $(document).ready(function() {
+            // Máscaras
+            $('.money').mask('#.##0,00', {reverse: true});
 
-        $(document).ready(function () {
-            const isEdit = @((Model.Id > 0).ToString().ToLower());
-            const form = $('#form-contrato');
-            const listaNaturezas = $('#lista-naturezas');
-            const valorTotalInput = $('#ValorContrato');
-            const valorMensalInput = $('#ValorMensal'); 
+            // Detecta alterações para a justificativa
+            $('form input, form select, form textarea').on('change input', function() {
+                if (!$(this).prop('readonly')) {
+                    formChanged = true;
+                }
+            });
 
-            // --- TABELA DE NATUREZAS ---
-            function adicionarLinhaNatureza(id = "", valor = 0) {
-                const index = listaNaturezas.children('tr').length;
-                const tr = $(`
-                    <tr class="linha-natureza">
-                        <td>
-                            <select name="Naturezas[${index}].NaturezaId" class="form-select select2-natureza" required>
-                                <option value="">Selecione...</option>
-                            </select>
-                            <input type="hidden" name="Naturezas[${index}].NomeNatureza" class="nome-hidden" />
-                        </td>
-                        <td>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text">R$</span>
-                                <input type="text" name="Naturezas[${index}].Valor" 
-                                       class="form-control money valor-natureza" 
-                                       value="${formatCurrency(valor)}" required />
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-row" title="Remover">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `);
-
-                listaNaturezas.append(tr);
-
-                const select = tr.find('.select2-natureza');
-                naturezasDisponiveis.forEach(n => {
-                    const option = new Option(n.text, n.id, false, n.id == id);
-                    select.append(option);
-                });
-
-                select.select2({ theme: 'bootstrap-5', width: '100%', dropdownParent: tr });
-                select.on('change', function() { tr.find('.nome-hidden').val($(this).find("option:selected").text()); });
-                if(id) select.trigger('change');
-
-                tr.find('.money').on('blur', function() {
-                    const v = parseCurrency($(this).val());
-                    $(this).val(formatCurrency(v));
-                    recalcularTotais();
-                });
-
-                recalcularTotais();
+            // Funções de Conversão
+            function brlToFloat(str) {
+                if (!str) return 0;
+                return parseFloat(str.replace(/\./g, '').replace(',', '.'));
             }
 
-            listaNaturezas.on('click', '.btn-remove-row', function() {
+            function floatToBrl(val) {
+                if (isNaN(val)) return '0,00';
+                return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            // Select2
+            $('#FornecedorSelect').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Busque por nome ou documento...',
+                allowClear: true,
+                width: '100%', 
+                minimumInputLength: 2,
+                ajax: {
+                    url: '@Url.Action("BuscarFornecedores", "Contratos")',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) { return { term: params.term, page: params.page || 1 }; },
+                    processResults: function (data, params) { return { results: data.results, pagination: { more: data.pagination.more } }; },
+                    cache: true
+                }
+            });
+
+            $('#btnSugerirNumero').click(function() {
+                var ano = $('#AnoContrato').val();
+                if(!ano) { Swal.fire('Atenção', 'Informe o ano primeiro.', 'warning'); return; }
+                $.get('@Url.Action("SugerirNumero", "Contratos")?ano=' + ano, function(data) {
+                    $('#NumeroContrato').val(data.proximoNumero);
+                });
+            });
+
+            // --- LÓGICA DE DATAS E TOTAIS ---
+            function getMesesEntre(d1Str, d2Str) {
+                if (!d1Str || !d2Str) return 1;
+                var inicio = new Date(d1Str + "T12:00:00");
+                var fim = new Date(d2Str + "T12:00:00");
+                var meses = (fim.getFullYear() - inicio.getFullYear()) * 12;
+                meses -= inicio.getMonth();
+                meses += fim.getMonth();
+                meses += 1; // inclusivo
+                if (meses <= 0) meses = 1;
+                return meses;
+            }
+
+            // [IMPORTANTE] Recalcula o Mensal com base no Total (que veio do Aditivo)
+            function recalcularMensalPeloTotal() {
+                var totalVigente = brlToFloat($('#ValorTotal').val());
+                var dIni = $('#DataInicio').val();
+                var dFim = $('#DataFim').val();
+                
+                if (totalVigente > 0 && dIni && dFim) {
+                    var meses = getMesesEntre(dIni, dFim);
+                    var mensal = totalVigente / meses;
+                    // Atualiza o visual
+                    $('#ValorMensal').val(floatToBrl(mensal));
+                    $('#infoCalculo').text(`Recalculado: Total ${floatToBrl(totalVigente)} ÷ ${meses} meses = ${floatToBrl(mensal)}`);
+                }
+            }
+
+            function calcularTotalPeloMensal() {
+                // Só roda se o usuário estiver digitando no mensal
+                var dIni = $('#DataInicio').val();
+                var dFim = $('#DataFim').val();
+                var valMensal = brlToFloat($('#ValorMensal').val());
+
+                if (dIni && dFim && valMensal >= 0) {
+                    var meses = getMesesEntre(dIni, dFim);
+                    var total = valMensal * meses;
+                    $('#ValorTotal').val(floatToBrl(total));
+                    $('#infoCalculo').text(`Cálculo: ${meses} meses x R$ ${floatToBrl(valMensal)}`);
+                }
+            }
+
+            // --- VALIDAÇÃO DE RATEIO (O Bloqueio) ---
+            function atualizarRateio() {
+                var totalNaturezas = 0;
+                var count = 0;
+                
+                // Soma a tabela
+                $('#tbodyNaturezas .nat-valor-raw').each(function() {
+                    totalNaturezas += brlToFloat($(this).val());
+                    count++;
+                });
+
+                if(count === 0) $('#msgSemNaturezas').show(); else $('#msgSemNaturezas').hide();
+
+                // Compara com o Valor Mensal (que já foi ajustado pelo recalcularMensalPeloTotal)
+                var valMensalEsperado = brlToFloat($('#ValorMensal').val());
+                
+                var diff = totalNaturezas - valMensalEsperado;
+                var diffAbs = Math.abs(diff);
+                
+                var badge = $('#badgeRateio');
+                var aviso = $('#avisoRateio');
+                var msgDiff = $('#msgDiferenca');
+                var btnSalvar = $('#btnSalvar');
+
+                // Margem de 5 centavos para arredondamento
+                if (diffAbs < 0.05) { 
+                    // OK
+                    rateioValido = true;
+                    badge.text("Total Rateio: " + floatToBrl(totalNaturezas)).attr('class', 'badge bg-success');
+                    aviso.hide();
+
+                    // Restaura botão
+                    if(btnSalvar.hasClass('btn-danger')) {
+                        btnSalvar.html('<i class="bi bi-check-lg me-1"></i> Salvar Alterações Cadastrais');
+                        btnSalvar.removeClass('btn-danger').addClass('btn-success');
+                    }
+                }
+                else {
+                    // ERRO - Bloqueia e Avisa
+                    rateioValido = false;
+                    aviso.show();
+                    
+                    // Transforma botão em alerta
+                    btnSalvar.html('<i class="bi bi-exclamation-octagon-fill me-1"></i> Refaça o Rateio para Salvar');
+                    btnSalvar.removeClass('btn-success btn-warning').addClass('btn-danger');
+
+                    if (diff > 0) { 
+                        badge.attr('class', 'badge bg-danger');
+                        msgDiff.html(`O total distribuído excede o valor mensal em <strong>R$ ${floatToBrl(diffAbs)}</strong>.`);
+                    }
+                    else { 
+                        badge.attr('class', 'badge bg-warning text-dark');
+                        msgDiff.html(`Valor mensal aumentou (Aditivo).<br>Falta distribuir <strong>R$ ${floatToBrl(diffAbs)}</strong>.`);
+                    }
+                    $('#badgeRateio').text("Total Rateio: " + floatToBrl(totalNaturezas));
+                }
+            }
+
+            // Ações Tabela Natureza
+            $('#btnAddNatureza').click(function() {
+                var id = $('#selectNatureza').val();
+                var texto = $('#selectNatureza option:selected').text();
+                var valorStr = $('#inputValorNatureza').val(); 
+
+                if (!id || !valorStr) { Swal.fire('Atenção', 'Preencha natureza e valor.', 'warning'); return; }
+
+                var existe = false;
+                $('.nat-id').each(function() { if ($(this).val() == id) existe = true; });
+                if (existe) { Swal.fire('Atenção', 'Esta natureza já foi adicionada.', 'warning'); return; }
+
+                var tr = `<tr class="linha-natureza">
+                        <td><input type="hidden" name="Naturezas[0].NaturezaId" value="${id}" class="nat-id" />
+                            <input type="hidden" name="Naturezas[0].NomeNatureza" value="${texto}" class="nat-nome-input" />
+                            <span class="nat-nome">${texto}</span></td>
+                        <td><input type="hidden" name="Naturezas[0].Valor" value="${valorStr}" class="nat-valor-raw" />
+                            <span class="nat-valor-display">${valorStr}</span></td>
+                        <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-nat"><i class="bi bi-trash"></i></button></td>
+                    </tr>`;
+                
+                $('#tbodyNaturezas').append(tr);
+                $('#selectNatureza').val('');
+                $('#inputValorNatureza').val('');
+                reindexarNaturezas();
+                formChanged = true;
+                atualizarRateio();
+            });
+
+            $(document).on('click', '.btn-remove-nat', function() {
                 $(this).closest('tr').remove();
                 reindexarNaturezas();
-                recalcularTotais();
+                formChanged = true;
+                atualizarRateio();
             });
-
-            $('#btn-add-natureza').click(function() { adicionarLinhaNatureza(); });
-
-            listaNaturezas.on('input', '.valor-natureza', function() { recalcularTotais(); });
 
             function reindexarNaturezas() {
-                listaNaturezas.children('tr').each(function(i) {
-                    $(this).find('select').attr('name', `Naturezas[${i}].NaturezaId`);
-                    $(this).find('.nome-hidden').attr('name', `Naturezas[${i}].NomeNatureza`);
-                    $(this).find('input.valor-natureza').attr('name', `Naturezas[${i}].Valor`);
+                $('#tbodyNaturezas tr').each(function(index) {
+                    $(this).find('input.nat-id').attr('name', `Naturezas[${index}].NaturezaId`);
+                    $(this).find('input.nat-nome-input').attr('name', `Naturezas[${index}].NomeNatureza`);
+                    $(this).find('input.nat-valor-raw').attr('name', `Naturezas[${index}].Valor`);
                 });
             }
 
-            function recalcularTotais() {
-                let somaRateio = 0;
-                $('.valor-natureza').each(function() { somaRateio += parseCurrency($(this).val()); });
-
-                const valorMensalMeta = parseCurrency(valorMensalInput.val());
-                const diferenca = valorMensalMeta - somaRateio;
-
-                $('#total-rateado-display').text(formatCurrencyBRL(somaRateio));
-                $('#meta-mensal-display').text(formatCurrencyBRL(valorMensalMeta));
-                
-                const linhaDif = $('#linha-diferenca');
-                const displayDif = $('#diferenca-display');
-
-                if (Math.abs(diferenca) > 0.05) {
-                    linhaDif.removeClass('d-none');
-                    displayDif.text(formatCurrencyBRL(diferenca));
-                    $('#btn-salvar').addClass('btn-danger').removeClass('btn-primary').html('<i class="bi bi-exclamation-octagon me-1"></i> Corrija o Rateio');
-                } else {
-                    linhaDif.addClass('d-none');
-                    $('#btn-salvar').addClass('btn-primary').removeClass('btn-danger').html('<i class="bi bi-check-circle me-1"></i> Salvar Alterações');
-                }
-            }
-
-            if (naturezasAtuais && naturezasAtuais.length > 0) {
-                naturezasAtuais.forEach(n => adicionarLinhaNatureza(n.naturezaId, n.valor));
-            } else {
-                adicionarLinhaNatureza();
-            }
-
-            // --- CÁLCULO TOTAL ---
-            const dataInicioInput = $('#DataInicio');
-            const dataFimInput    = $('#DataFim');
-
-            function calcularValorContrato() {
-                const d1 = dataInicioInput.val();
-                const d2 = dataFimInput.val();
-                const vMensal = parseCurrency(valorMensalInput.val());
-
-                if (d1 && d2 && vMensal > 0) {
-                    const inicio = new Date(d1 + 'T00:00:00');
-                    const fim    = new Date(d2 + 'T00:00:00');
-                    if (fim >= inicio) {
-                        const meses = (fim.getFullYear() - inicio.getFullYear()) * 12 + (fim.getMonth() - inicio.getMonth()) + 1;
-                        valorTotalInput.val(formatCurrency(vMensal * meses));
-                    }
-                }
-                recalcularTotais();
-            }
-
-            $('#DataInicio, #DataFim').on('change', calcularValorContrato);
-            valorMensalInput.on('input', function() { calcularValorContrato(); });
-            valorMensalInput.on('blur', function() { 
-                $(this).val(formatCurrency(parseCurrency($(this).val()))); 
-                calcularValorContrato(); 
+            // LISTENERS
+            // Se mudar data, recalcula mensal com base no total (prioridade ao total vigente)
+            $('#DataInicio, #DataFim').on('change', function() {
+                recalcularMensalPeloTotal();
+                atualizarRateio();
+                formChanged = true;
             });
 
-            // Selects
-            $('#fornecedor-select').select2({ theme: 'bootstrap-5', width: '100%', ajax: { url: '@Url.Action("BuscarFornecedores","Contratos")', dataType: 'json', delay: 250, data: p => ({ term: p.term, page: p.page || 1 }), processResults: (d, p) => ({ results: d.results, pagination: { more: d.pagination.more } }) } });
-            $('#OrcamentoId').select2({ theme: 'bootstrap-5', width: '100%' });
+            // Se mudar o mensal manualmente, recalcula o total (comportamento padrão de edição)
+            $('#ValorMensal').on('keyup', function() {
+                calcularTotalPeloMensal();
+                atualizarRateio();
+                formChanged = true;
+            });
 
-            // --- SUBMIT (LIMPO) ---
-            form.on('submit', function(e) {
-                const vMensal = parseCurrency(valorMensalInput.val());
-                let somaRateio = 0;
-                $('.valor-natureza').each(function() { somaRateio += parseCurrency($(this).val()); });
-                
-                if (Math.abs(vMensal - somaRateio) > 0.05) {
-                    e.preventDefault();
-                    Swal.fire({ icon: 'error', title: 'Atenção!', text: `A soma do rateio não bate com o Valor Mensal.` });
-                    return false;
+            // Detecta alterações gerais para justificativa
+            $('form input, form select, form textarea').on('change input', function() {
+                if (!$(this).prop('readonly') && $(this).attr('id') !== 'ValorMensal') {
+                    formChanged = true;
                 }
             });
+
+            // === INICIALIZAÇÃO ===
+            // Força o Valor Mensal a se ajustar ao Valor Total (que veio do Aditivo)
+            recalcularMensalPeloTotal();
             
-            $('#AnoContrato').on('change', function () {
-                var ano = $(this).val();
-                if (ano && !isEdit) $.get('@Url.Action("SugerirNumero","Contratos")', { ano: ano }, function (d) { if(d && d.proximoNumero) $('#NumeroContrato').val(d.proximoNumero); });
-            });
-            if (!isEdit) $('#AnoContrato').trigger('change');
+            // Verifica o rateio imediatamente
+            setTimeout(atualizarRateio, 200);
 
-            // =========================================================================
-            // GESTÃO DE ADITIVOS E HISTÓRICO (CÓDIGO INSERIDO)
-            // =========================================================================
-            
-            // 1. CARREGAR HISTÓRICO NO MODAL
-            const modalHist = document.getElementById('modalHistorico');
-            const containerHist = $('#historico-container');
-            if (modalHist && containerHist.length) {
-                modalHist.addEventListener('shown.bs.modal', function () {
-                    const url = '@Url.Action("Historico", "Contratos")' + '?id=@Model.Id&pag=1';
-                    containerHist.html('<div class="text-center my-3"><div class="spinner-border text-primary"></div></div>');
-                    containerHist.load(url);
-                });
-            }
+            // SUBMIT
+            $('#formContrato').on('submit', async function(e) {
+                var isEdicao = '@isEdicao';
+                
+                if (!$('#FornecedorSelect').val()) {
+                    Swal.fire('Atenção', 'Selecione um fornecedor.', 'warning');
+                    e.preventDefault(); return;
+                }
 
-            // 2. LÓGICA DE CANCELAR ADITIVO
-            const btnCancelar = document.getElementById('btnCancelarAditivo');
-            if (btnCancelar) {
-                btnCancelar.addEventListener('click', async function () {
-                    const contratoId = parseInt(this.getAttribute('data-contrato-id'));
-                    const versao     = parseInt(this.getAttribute('data-versao'));
-
-                    if (!contratoId || !versao) return;
-
-                    const result = await Swal.fire({
-                        title: `Cancelar aditivo v${versao}?`,
-                        text: "Isso reverterá o contrato para os valores da versão anterior. A justificativa é obrigatória.",
-                        input: "textarea",
-                        inputPlaceholder: "Informe o motivo do cancelamento...",
-                        inputAttributes: { maxlength: 1000 },
-                        inputValidator: (v) => !v?.trim() ? "A justificativa é obrigatória." : undefined,
-                        showCancelButton: true,
-                        confirmButtonText: "Sim, cancelar",
-                        confirmButtonColor: "#dc3545",
-                        cancelButtonText: "Voltar",
-                        focusConfirm: false
+                // TRAVA VISUAL
+                if (rateioValido === false) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Pendência Financeira',
+                        html: 'O valor do contrato mudou (Aditivo) e a distribuição das naturezas está desatualizada.<br><br><b>Ajuste a tabela de rateio para igualar o novo valor mensal.</b>'
                     });
+                    e.preventDefault();
+                    return;
+                }
 
-                    if (!result.isConfirmed || !result.value) return;
+                if (isEdicao === 'False') {
+                    if (!this.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
+                    this.classList.add('was-validated');
+                    return; 
+                }
 
-                    try {
-                        const response = await fetch('@Url.Action("CancelarAditivo", "AditivosContrato")', {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ 
-                                ContratoId: contratoId, 
-                                Versao: versao, 
-                                Justificativa: result.value 
-                            })
-                        });
+                e.preventDefault();
+                if (!this.checkValidity()) { this.classList.add('was-validated'); return; }
 
-                        if (response.ok) {
-                            await Swal.fire({ 
-                                icon: "success", 
-                                title: "Sucesso", 
-                                text: "Aditivo cancelado com sucesso. A página será recarregada." 
-                            });
-                            window.location.reload(); 
-                        } else {
-                            const msg = await response.text();
-                            Swal.fire({ icon: "error", title: "Erro", text: msg || "Não foi possível cancelar." });
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        Swal.fire({ icon: "error", text: "Erro de comunicação com o servidor." });
-                    }
+                // Se não mudou nada e o rateio está certo, salva direto
+                if (formChanged === false) {
+                    this.submit();
+                    return;
+                }
+
+                const { value: justif } = await Swal.fire({
+                    title: 'Salvar Alterações',
+                    input: 'textarea',
+                    inputLabel: 'Justificativa da alteração',
+                    inputValidator: (value) => { if (!value) return 'Obrigatório!' },
+                    showCancelButton: true,
+                    confirmButtonText: 'Salvar'
                 });
+
+                if (justif) {
+                    $('<input>').attr({type: 'hidden', name: 'justificativa', value: justif}).appendTo('#formContrato');
+                    this.submit();
+                }
+            });
+
+            // Botão Cancelar Aditivo
+            $('#btnCancelarAditivo').click(async function() {
+                const contratoId = $(this).data('contrato');
+                const versao = $(this).data('versao');
+                const { value: justif } = await Swal.fire({
+                    title: 'Cancelar Aditivo?',
+                    html: `Reverter para versão anterior? (V.${versao} será excluída)`,
+                    icon: 'warning',
+                    input: 'textarea',
+                    inputLabel: 'Justificativa',
+                    inputValidator: (value) => { if (!value) return 'Obrigatório.' },
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Sim, cancelar'
+                });
+
+                if (justif) {
+                    $.post('@Url.Action("CancelarUltimoAditivo", "Contratos")', { 
+                        contratoId: contratoId, versao: versao, justificativa: justif 
+                    }).done(function(res) {
+                        if (res.sucesso) Swal.fire('Sucesso', res.mensagem, 'success').then(() => location.reload());
+                        else Swal.fire('Erro', res.mensagem, 'error');
+                    });
+                }
+            });
+
+            // Alertas
+            const pageFlags = document.getElementById('pageFlags');
+            if (pageFlags) {
+                const successMsg = pageFlags.getAttribute('data-success');
+                const errorMsg   = pageFlags.getAttribute('data-error');
+                if (successMsg) Swal.fire({ icon: 'success', title: 'Sucesso!', text: successMsg, timer: 3000, showConfirmButton: false });
+                if (errorMsg) Swal.fire({ icon: 'error', title: 'Atenção', html: errorMsg });
             }
         });
     </script>
 }
-
-<style>
-    .table tfoot td { font-weight: bold; }
-    .select2-container .select2-selection--single { height: 38px; line-height: 38px; }
-    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { line-height: 36px; }
-    .btn-danger { transition: all 0.3s; }
-</style>

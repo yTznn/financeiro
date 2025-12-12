@@ -6,8 +6,8 @@ using System.Linq;
 using Financeiro.Servicos;
 using System;
 using Microsoft.AspNetCore.Authorization;
-using Financeiro.Extensions; // Importante
-using Financeiro.Atributos;  // Importante
+using Financeiro.Extensions; 
+using Financeiro.Atributos;
 
 namespace Financeiro.Controllers
 {
@@ -21,8 +21,7 @@ namespace Financeiro.Controllers
         private readonly IOrcamentoRepositorio _orcamentoRepo;
         private readonly IContratoVersaoService _versaoService;
 
-        // Constante de paginação
-        private const int TAMANHO_PAGINA = 3; 
+        private const int TAMANHO_PAGINA = 10; 
 
         public ContratosController(
             IContratoRepositorio contratoRepo,
@@ -40,31 +39,26 @@ namespace Financeiro.Controllers
             _versaoService = versaoService;
         }
 
-        /* -------------------- LISTAR -------------------- */
         [HttpGet]
         [AutorizarPermissao("CONTRATO_VIEW")]
         public async Task<IActionResult> Index(int p = 1)
         {
             int entidadeId = User.ObterEntidadeId();
             if (entidadeId == 0) return RedirectToAction("Login", "Conta");
-
             if (p < 1) p = 1;
 
-            // Busca paginada e filtrada por Entidade
             var (itens, totalPaginas) = await _contratoRepo.ListarPaginadoAsync(entidadeId, p, TAMANHO_PAGINA);
-
-            foreach (var item in itens)
+            
+            foreach (var item in itens) 
             {
                 item.QuantidadeAditivos = await _versaoRepo.ContarPorContratoAsync(item.Contrato.Id);
             }
-
+            
             ViewBag.TotalPaginas = totalPaginas;
             ViewBag.PaginaAtual = p;
-
             return View(itens);
         }
 
-        /* -------------------- NOVO -------------------- */
         [HttpGet]
         [AutorizarPermissao("CONTRATO_ADD")]
         public async Task<IActionResult> Novo()
@@ -80,247 +74,250 @@ namespace Financeiro.Controllers
             return View("ContratoForm", vm);
         }
 
-        /* -------------------- SALVAR -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
         [AutorizarPermissao("CONTRATO_ADD")]
         public async Task<IActionResult> Salvar(ContratoViewModel vm, string justificativa = null)
         {
-            // Validações de Negócio
+            // Lógica de cálculo
             int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
             if (meses < 1) meses = 1;
 
             if (vm.ValorMensalDecimal > 0)
             {
                 vm.ValorContrato = vm.ValorMensalDecimal * meses;
-                ModelState.Remove(nameof(vm.ValorContrato));
                 
-                if (vm.Naturezas != null)
-                {
-                    foreach (var natureza in vm.Naturezas)
-                        natureza.Valor = natureza.Valor * meses;
-                }
-            }
-
-            if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato))
-            {
-                ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número para o ano selecionado.");
-            }
-
-            // Trava de Orçamento (Segurança e Saldo)
-            if (vm.OrcamentoId.HasValue)
-            {
-                var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
-                if (orcamentoHeader == null)
-                {
-                     ModelState.AddModelError("OrcamentoId", "Orçamento inválido.");
-                }
-                else 
-                {
-                    // Verifica se o Orçamento pertence à entidade do usuário (via Instrumento)
-                    // (Aqui assumimos que o ListarAtivosPorEntidadeAsync no ViewBag já filtrou, mas é bom garantir no Post)
-                    // ... (Pode ser adicionada verificação extra aqui se necessário)
-
-                    var jaGasto = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value);
-                    var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGasto;
-
-                    if (vm.ValorContrato > (saldoOrcamento + 0.01m))
-                    {
-                        ModelState.AddModelError(nameof(vm.ValorContrato), 
-                            $"Saldo insuficiente no Orçamento. Disponível: {saldoOrcamento:C2}. Necessário: {vm.ValorContrato:C2}.");
-                    }
-                }
-            }
-
-            if (!ModelState.IsValid)
-            {
-                if (meses > 0 && vm.Naturezas != null)
-                {
-                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor / meses;
-                }
-                var todosErros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
-                TempData["Erro"] = string.Join("<br>", todosErros);
-
-                await PrepararViewBagParaFormulario(vm);
-                return View("ContratoForm", vm);
-            }
-            
-            await _contratoRepo.InserirAsync(vm);
-            await _versaoService.CriarVersaoInicialAsync(vm);
-            await _logService.RegistrarCriacaoAsync("Contrato", vm, vm.Id);
-
-            if (!string.IsNullOrWhiteSpace(justificativa))
-            {
-                await _justificativaService.RegistrarAsync("Contrato", "Inserção com naturezas", vm.Id, justificativa);
-            }
-
-            TempData["Sucesso"] = "Contrato salvo com sucesso!";
-            return RedirectToAction(nameof(Index));
-        }
-
-        /* -------------------- EDITAR -------------------- */
-        [HttpGet]
-        [AutorizarPermissao("CONTRATO_EDIT")]
-        public async Task<IActionResult> Editar(int id)
-        {
-            var vm = await _contratoRepo.ObterParaEdicaoAsync(id);
-            if (vm == null) return NotFound();
-
-            // [SEGURANÇA] Verifica se o contrato pertence a um orçamento da minha unidade
-            // (Lógica: Contrato -> Orçamento -> Instrumento -> Entidade)
-            var orcamento = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId ?? 0);
-            if (orcamento != null)
-            {
-                 // Precisaríamos ir até o Instrumento para checar a Entidade.
-                 // Como o repositório 'ObterParaEdicaoAsync' não traz essa info direta,
-                 // confiamos que o usuário só chegou aqui via Index (que é filtrada).
-                 // Para blindagem total, seria ideal fazer essa check.
-            }
-
-            await PrepararViewBagParaFormulario(vm);
-
-            var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(id);
-            ViewBag.VersaoAtual = versaoAtual; 
-
-            return View("ContratoForm", vm);
-        }
-
-        /* -------------------- ATUALIZAR -------------------- */
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [AutorizarPermissao("CONTRATO_EDIT")]
-        public async Task<IActionResult> Atualizar(ContratoViewModel vm, string justificativa = null)
-        {
-            // Lógica de cálculo (igual ao Salvar)
-            int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
-            if (meses < 1) meses = 1;
-
-            if (vm.ValorMensalDecimal > 0)
-            {
-                vm.ValorContrato = vm.ValorMensalDecimal * meses;
-                ModelState.Remove(nameof(vm.ValorContrato));
-
                 if (vm.Naturezas != null)
                 {
                     foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor * meses;
                 }
             }
 
-            if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato, vm.Id))
+            int entidadeId = User.ObterEntidadeId();
+            if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato, entidadeId))
             {
-                ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número.");
+                ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número/ano nesta unidade.");
             }
 
             if (vm.OrcamentoId.HasValue)
             {
                 var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
-                // Ignora o valor antigo deste contrato
-                var jaGastoOutros = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value, ignorarContratoId: vm.Id);
-                var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGastoOutros;
-
-                if (vm.ValorContrato > (saldoOrcamento + 0.01m))
+                if (orcamentoHeader != null)
                 {
-                    ModelState.AddModelError(nameof(vm.ValorContrato), 
-                        $"Saldo insuficiente. Disponível: {saldoOrcamento:C2}. Tentativa: {vm.ValorContrato:C2}.");
+                    var jaGasto = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value);
+                    var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGasto;
+
+                    if (vm.ValorContrato > (saldoOrcamento + 0.01m))
+                    {
+                        ModelState.AddModelError("ValorMensal", 
+                            $"Saldo insuficiente no Orçamento. Disponível: {saldoOrcamento:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                    }
                 }
             }
 
             if (!ModelState.IsValid)
             {
-                if (meses > 0 && vm.Naturezas != null)
-                {
-                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor / meses;
-                }
-                var todosErros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
-                TempData["Erro"] = string.Join("<br>", todosErros);
-
+                ReverterCalculoParaView(vm, meses);
+                var erros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                TempData["Erro"] = "Erros de validação:<br>" + string.Join("<br>", erros);
                 await PrepararViewBagParaFormulario(vm);
                 return View("ContratoForm", vm);
             }
             
-            await _contratoRepo.AtualizarAsync(vm);
-            await _logService.RegistrarEdicaoAsync("Contrato", null, vm, vm.Id);
-
-            if (!string.IsNullOrWhiteSpace(justificativa))
+            try 
             {
-                await _justificativaService.RegistrarAsync("Contrato", "Atualização", vm.Id, justificativa);
-            }
+                await _contratoRepo.InserirAsync(vm);
+                await _versaoService.CriarVersaoInicialAsync(vm); // Cria V1
+                await _logService.RegistrarCriacaoAsync("Contrato", vm, vm.Id);
 
-            TempData["Sucesso"] = "Contrato atualizado com sucesso!";
-            return RedirectToAction(nameof(Index));
+                if (!string.IsNullOrWhiteSpace(justificativa))
+                {
+                    await _justificativaService.RegistrarAsync("Contrato", "Inserção com naturezas", vm.Id, justificativa);
+                }
+
+                TempData["Sucesso"] = "Contrato salvo com sucesso!";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                ReverterCalculoParaView(vm, meses);
+                TempData["Erro"] = $"Erro ao salvar: {ex.Message}";
+                await PrepararViewBagParaFormulario(vm);
+                return View("ContratoForm", vm);
+            }
         }
 
-        /* -------------------- EXCLUIR -------------------- */
+        [HttpGet]
+        [AutorizarPermissao("CONTRATO_EDIT")]
+        public async Task<IActionResult> Editar(int id)
+        {
+            var vm = await _contratoRepo.ObterParaEdicaoAsync(id);
+            if (vm == null) return NotFound();
+            
+            await PrepararViewBagParaFormulario(vm);
+            
+            var historico = await _versaoRepo.ListarPorContratoAsync(id);
+            var versaoAtual = historico.FirstOrDefault();
+            var versaoOriginal = historico.LastOrDefault() ?? versaoAtual; 
+
+            ViewBag.VersaoAtual = versaoAtual;
+            ViewBag.ValorOriginal = versaoOriginal?.ValorContrato ?? vm.ValorContrato;
+            
+            return View("ContratoForm", vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AutorizarPermissao("CONTRATO_EDIT")]
+        public async Task<IActionResult> Atualizar(ContratoViewModel vm, string justificativa = null)
+        {
+            int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
+            if (meses < 1) meses = 1;
+
+            if (vm.ValorMensalDecimal > 0)
+            {
+                vm.ValorContrato = vm.ValorMensalDecimal * meses;
+                
+                if (vm.Naturezas != null)
+                {
+                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor * meses;
+                }
+            }
+
+            int entidadeId = User.ObterEntidadeId();
+            if (await _contratoRepo.VerificarUnicidadeAsync(vm.NumeroContrato, vm.AnoContrato, entidadeId, vm.Id))
+            {
+                ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número/ano nesta unidade.");
+            }
+
+            if (vm.OrcamentoId.HasValue)
+            {
+                var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
+                var jaGastoOutros = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value, ignorarContratoId: vm.Id);
+                var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGastoOutros;
+
+                if (vm.ValorContrato > (saldoOrcamento + 0.01m))
+                {
+                    ModelState.AddModelError("ValorMensal", 
+                        $"Saldo insuficiente. Disponível: {saldoOrcamento:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                }
+            }
+
+            if (!ModelState.IsValid)
+            {
+                ReverterCalculoParaView(vm, meses);
+                var erros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                TempData["Erro"] = "Erros de validação:<br>" + string.Join("<br>", erros);
+                await PrepararViewBagParaFormulario(vm);
+                return View("ContratoForm", vm);
+            }
+            
+            try
+            {
+                // 1. Atualiza o registro oficial (Vigente)
+                await _contratoRepo.AtualizarAsync(vm);
+                
+                // 2. Sincroniza o histórico da versão atual para refletir esse novo rateio
+                await _versaoService.AtualizarSnapshotUltimaVersaoAsync(vm.Id);
+                
+                await _logService.RegistrarEdicaoAsync("Contrato", null, vm, vm.Id);
+
+                if (!string.IsNullOrWhiteSpace(justificativa))
+                {
+                    await _justificativaService.RegistrarAsync("Contrato", "Atualização Cadastral/Rateio", vm.Id, justificativa);
+                }
+
+                TempData["Sucesso"] = "Dados do contrato atualizados com sucesso!";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                ReverterCalculoParaView(vm, meses);
+                TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
+                await PrepararViewBagParaFormulario(vm);
+                return View("ContratoForm", vm);
+            }
+        }
+
+        // Cancelar Aditivo
+        [HttpPost]
+        [AutorizarPermissao("ADITIVO_DEL")]
+        public async Task<IActionResult> CancelarUltimoAditivo(int contratoId, int versao, string justificativa)
+        {
+            try
+            {
+                var (removida, vigente) = await _versaoService.CancelarUltimoAditivoAsync(contratoId, versao, justificativa);
+                
+                if (!string.IsNullOrWhiteSpace(justificativa))
+                    await _justificativaService.RegistrarAsync("Contrato", $"Cancelamento de Aditivo V.{removida.Versao}", contratoId, justificativa);
+
+                return Json(new { sucesso = true, mensagem = "Último aditivo cancelado com sucesso. O contrato voltou à versão anterior." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { sucesso = false, mensagem = "Erro ao cancelar aditivo: " + ex.Message });
+            }
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         [AutorizarPermissao("CONTRATO_DEL")]
         public async Task<IActionResult> Excluir(int id, string justificativa)
         {
-            if (string.IsNullOrWhiteSpace(justificativa))
-            {
-                TempData["Erro"] = "A justificativa é obrigatória.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            var contratoParaExcluir = await _contratoRepo.ObterParaEdicaoAsync(id);
-            if(contratoParaExcluir == null) return NotFound();
-
-            // [SEGURANÇA] Idealmente verificar se pertence à unidade aqui também
-
-            await _justificativaService.RegistrarAsync("Contrato", "Exclusão de Contrato", id, justificativa);
+            if (string.IsNullOrWhiteSpace(justificativa)) { TempData["Erro"] = "Justificativa obrigatória."; return RedirectToAction(nameof(Index)); }
+            var c = await _contratoRepo.ObterParaEdicaoAsync(id);
+            if(c == null) return NotFound();
             
+            await _justificativaService.RegistrarAsync("Contrato", "Exclusão", id, justificativa);
             await _contratoRepo.ExcluirAsync(id);
-            await _logService.RegistrarExclusaoAsync("Contrato", contratoParaExcluir, id);
-
-            TempData["Sucesso"] = "Contrato excluído com sucesso!";
+            await _logService.RegistrarExclusaoAsync("Contrato", c, id);
+            
+            TempData["Sucesso"] = "Excluído com sucesso!";
             return RedirectToAction(nameof(Index));
         }
 
-        // --- AJAX ---
-
+        // AJAX e Helpers
         [HttpGet]
         public async Task<IActionResult> SugerirNumero(int ano)
         {
-            var numero = await _contratoRepo.SugerirProximoNumeroAsync(ano);
-            return Json(new { proximoNumero = numero });
+            int entidadeId = User.ObterEntidadeId();
+            var n = await _contratoRepo.SugerirProximoNumeroAsync(ano, entidadeId);
+            return Json(new { proximoNumero = n });
         }
         
         [HttpGet]
         public async Task<IActionResult> BuscarFornecedores(string term = "", int page = 1)
         {
-            const int tamanhoPagina = 10;
-            var (itens, totalItens) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(term, page, tamanhoPagina);
-            bool temMaisPaginas = (page * tamanhoPagina) < totalItens;
-
-            var resultado = new
-            {
-                results = itens.Select(f => new { id = $"{f.Tipo}-{f.FornecedorId}", text = $"{f.Nome} ({f.Documento})" }),
-                pagination = new { more = temMaisPaginas }
-            };
-            return Json(resultado);
+            var (itens, total) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(term, page, 10);
+            return Json(new { results = itens.Select(f => new { id = $"{f.Tipo}-{f.FornecedorId}", text = $"{f.Nome} ({f.Documento})" }), pagination = new { more = (page * 10) < total } });
         }
         
         [HttpGet]
         public async Task<IActionResult> Historico(int id, int pag = 1)
         {
-            var (itens, totalPaginas) = await _versaoRepo.ListarPaginadoAsync(id, pag);
-            ViewBag.TotalPaginas = totalPaginas;
+            var (itens, total) = await _versaoRepo.ListarPaginadoAsync(id, pag);
+            ViewBag.TotalPaginas = total;
             ViewBag.PaginaAtual = pag;
             ViewBag.ContratoId = id;
             return PartialView("_HistoricoContrato", itens);
         }
-        
+
         private async Task PrepararViewBagParaFormulario(ContratoViewModel vm)
         {
             ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
-            
-            // CORREÇÃO FINAL: Usa o método que criamos para filtrar orçamentos
             int entidadeId = User.ObterEntidadeId();
             ViewBag.Orcamentos = await _orcamentoRepo.ListarAtivosPorEntidadeAsync(entidadeId); 
+            if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto)) ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
+        }
 
-            if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto))
+        private void ReverterCalculoParaView(ContratoViewModel vm, int meses)
+        {
+            if (meses > 0 && vm.Naturezas != null && vm.Naturezas.Any())
             {
-                ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
+                foreach (var natureza in vm.Naturezas)
+                {
+                    if(natureza.Valor != 0) natureza.Valor = natureza.Valor / meses;
+                }
             }
         }
     }

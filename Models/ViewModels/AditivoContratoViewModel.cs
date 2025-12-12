@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Globalization; // Necessário para a conversão de moeda
+using System.Globalization; 
 using Financeiro.Models;
 
 namespace Financeiro.Models.ViewModels
@@ -23,15 +23,13 @@ namespace Financeiro.Models.ViewModels
         [DataType(DataType.Date)]
         public DateTime? DataInicioAditivo { get; set; }
 
-        // [NOVO] Checkbox para definir a lógica de cálculo
         [Display(Name = "O valor informado é mensal?")]
         public bool EhValorMensal { get; set; }
 
-        // [ALTERADO] Mudamos para string para aceitar formatação PT-BR (vírgula) sem erro de validação imediato
         [Display(Name = "Valor do Aditivo")]
         public string? NovoValor { get; set; }
 
-        // [NOVO] Propriedade auxiliar que converte o texto para Decimal (uso interno no Service)
+        // Propriedade auxiliar que converte o texto para Decimal
         public decimal NovoValorDecimal
         {
             get
@@ -42,7 +40,7 @@ namespace Financeiro.Models.ViewModels
                 if (decimal.TryParse(NovoValor, NumberStyles.Currency, new CultureInfo("pt-BR"), out decimal valBr))
                     return valBr;
                 
-                // Fallback: Tenta converter formato internacional (ponto) caso venha limpo do JS
+                // Fallback: Tenta converter formato internacional (ponto)
                 if (decimal.TryParse(NovoValor, NumberStyles.Currency, CultureInfo.InvariantCulture, out decimal valInv))
                     return valInv;
 
@@ -57,18 +55,34 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Novo Objeto do Contrato")]
         public string? NovoObjeto { get; set; }
 
-        [Display(Name = "Observação")]
-        public string? Observacao { get; set; }
+        // [CORREÇÃO] Adicionada a propriedade Justificativa explicitamente
+        // A Observacao abaixo pode ser usada como complemento ou podemos usar apenas Justificativa
+        [Required(ErrorMessage = "A justificativa do aditivo é obrigatória.")]
+        [Display(Name = "Justificativa / Observação")]
+        public string Justificativa { get; set; }
 
-        // Validação condicional
+        // Mantemos Observacao apontando para Justificativa ou separada, 
+        // mas para evitar quebra de código antigo que usa 'Observacao', deixamos ela aqui.
+        // No service, mapeamos vm.Justificativa para o campo Observacao do banco.
+        public string? Observacao 
+        { 
+            get => Justificativa; 
+            set => Justificativa = value; 
+        }
+
         public IEnumerable<ValidationResult> Validate(ValidationContext context)
         {
-            bool alteraValor = TipoAditivo is TipoAditivo.Acrescimo or TipoAditivo.Supressao or TipoAditivo.PrazoAcrescimo or TipoAditivo.PrazoSupressao;
-            bool alteraPrazo = TipoAditivo is TipoAditivo.Prazo or TipoAditivo.PrazoAcrescimo or TipoAditivo.PrazoSupressao;
+            bool alteraValor = TipoAditivo == TipoAditivo.Acrescimo || 
+                               TipoAditivo == TipoAditivo.Supressao || 
+                               TipoAditivo == TipoAditivo.PrazoAcrescimo || 
+                               TipoAditivo == TipoAditivo.PrazoSupressao;
+            
+            bool alteraPrazo = TipoAditivo == TipoAditivo.Prazo || 
+                               TipoAditivo == TipoAditivo.PrazoAcrescimo || 
+                               TipoAditivo == TipoAditivo.PrazoSupressao;
 
             if (alteraValor)
             {
-                // Validamos o decimal convertido
                 if (NovoValorDecimal <= 0)
                 {
                     yield return new ValidationResult(
