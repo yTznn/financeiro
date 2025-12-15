@@ -1,44 +1,190 @@
+@using Financeiro.Extensions
 @model IEnumerable<Financeiro.Models.Natureza>
+
 @{
     ViewBag.Title = "Naturezas";
     Layout = "_Layout";
+    
+    // Permissões
+    bool podeCriar = User.TemPermissao("NATUREZA_ADD");
+    bool podeEditar = User.TemPermissao("NATUREZA_EDIT");
+    bool podeExcluir = User.TemPermissao("NATUREZA_DEL");
+
+    // Paginação
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
+
+@* Flags para alertas do Controller *@
+<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
 
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="text-primary fw-bold">@ViewBag.Title</h2>
-        <a asp-action="Novo" class="btn btn-success">
-            <i class="bi bi-plus-circle me-1"></i> Nova Natureza
-        </a>
+        <div>
+            <h2 class="text-primary fw-bold mb-0">@ViewBag.Title</h2>
+            <small class="text-muted">Gerenciamento de tipos de despesa</small>
+        </div>
+        
+        @if (podeCriar)
+        {
+            <a asp-action="Novo" class="btn btn-success rounded-pill px-4 shadow-sm">
+                <i class="bi bi-plus-circle me-1"></i> Nova Natureza
+            </a>
+        }
     </div>
 
-    <div class="table-responsive shadow-sm rounded">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>Nome</th>
-                    <th style="width:160px">Natureza Médica</th>
-                    <th style="width:100px">Ativo</th>
-                    <th style="width:120px" class="text-center">Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var n in Model)
-                {
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
                     <tr>
-                        <td>@n.Nome</td>
-                        <td>@(n.NaturezaMedica ? "Sim" : "Não")</td>
-                        <td>@(n.Ativo ? "Sim" : "Não")</td>
-                        <td class="text-center">
-                            <a class="btn btn-sm btn-outline-primary"
-                               asp-action="Editar"
-                               asp-route-id="@n.Id">
-                                <i class="bi bi-pencil"></i> Editar
-                            </a>
-                        </td>
+                        <th class="ps-4">Nome</th>
+                        <th style="width:160px" class="text-center">Natureza Médica</th>
+                        <th style="width:100px" class="text-center">Status</th>
+                        <th style="width:140px" class="text-end pe-4">Ações</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                Nenhuma natureza encontrada.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var n in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-medium text-dark">@n.Nome</td>
+                                
+                                <td class="text-center">
+                                    @if (n.NaturezaMedica)
+                                    {
+                                        <span class="badge bg-info bg-opacity-10 text-info">SIM</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted opacity-25">-</span>
+                                    }
+                                </td>
+                                
+                                <td class="text-center">
+                                    <span class="badge rounded-pill bg-success"><i class='bi bi-check'></i> Ativo</span>
+                                </td>
+                                
+                                <td class="text-end pe-4">
+                                    <div class="btn-group">
+                                        @if (podeEditar)
+                                        {
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               asp-action="Editar"
+                                               asp-route-id="@n.Id"
+                                               title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        }
+                                        
+                                        @if (podeExcluir)
+                                        {
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-danger js-delete"
+                                                    data-id="@n.Id"
+                                                    data-nome="@n.Nome"
+                                                    title="Inativar">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        @if (totalPaginas > 1)
+        {
+            <div class="card-footer bg-white border-0 py-3">
+                <nav aria-label="Navegação de página">
+                    <ul class="pagination justify-content-center mb-0">
+                        
+                        <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-p="@(paginaAtual - 1)">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+
+                        @for (int i = 1; i <= totalPaginas; i++)
+                        {
+                            @if (i == 1 || i == totalPaginas || (i >= paginaAtual - 2 && i <= paginaAtual + 2))
+                            {
+                                <li class="page-item @(i == paginaAtual ? "active" : "")">
+                                    <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-p="@i">@i</a>
+                                </li>
+                            }
+                            else if (i == paginaAtual - 3 || i == paginaAtual + 3)
+                            {
+                                <li class="page-item disabled"><span class="page-link border-0">...</span></li>
+                            }
+                        }
+
+                        <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-p="@(paginaAtual + 1)">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="text-center mt-2 text-muted small">
+                    Página @paginaAtual de @totalPaginas
+                </div>
+            </div>
+        }
     </div>
 </div>
+
+@* Formulário oculto para envio do POST de exclusão *@
+<form id="form-excluir" method="post" style="display:none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // 1. Alertas de Sucesso/Erro vindos do Controller
+        const flags = document.getElementById('pageFlags');
+        if (flags) {
+            const s = flags.dataset.success;
+            const e = flags.dataset.error;
+            if (s) Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: s, showConfirmButton: false, timer: 3000 });
+            if (e) Swal.fire({ icon: 'error', title: 'Erro', text: e });
+        }
+
+        // 2. Lógica do Botão de Excluir (Inativar)
+        $('.js-delete').click(function() {
+            const id = $(this).data('id');
+            const nome = $(this).data('nome');
+            
+            Swal.fire({
+                title: 'Inativar Natureza?',
+                html: `Deseja realmente inativar <b>${nome}</b>?<br><small class="text-muted">O registro não aparecerá mais nesta lista.</small>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sim, inativar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const form = $('#form-excluir');
+                    form.attr('action', '/Naturezas/Excluir/' + id);
+                    form.submit();
+                }
+            });
+        });
+    </script>
+}

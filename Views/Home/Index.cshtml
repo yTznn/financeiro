@@ -1,6 +1,15 @@
 ﻿@{
     ViewData["Title"] = "Início";
+    
+    // Verificações de permissão
+    bool podeCadastrarFornecedor = User.TemPermissao("FORNECEDOR_ADD"); 
+    bool podeGerenciarContratos = User.TemPermissao("CONTRATO_VIEW");
+    
+    // Verifica se tem ALGUMA permissão
+    bool temAlgumaPermissao = podeCadastrarFornecedor || podeGerenciarContratos;
 }
+
+@using Financeiro.Extensions
 
 <style>
     .card-link {
@@ -10,66 +19,127 @@
         transform: translateY(-5px);
         box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15) !important;
     }
+    
+    /* Estilo para o Estado Vazio (Sem Permissão) */
+    .empty-state-icon {
+        width: 120px;
+        height: 120px;
+        background-color: #f8f9fa;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem auto;
+    }
 </style>
 
 <div class="container py-5">
-    <div class="text-center mb-5 p-4 bg-white rounded-3 shadow-sm animate__animated animate__fadeInDown">
-        <h1 class="display-4 fw-bold">
-            <i class="bi bi-bank2 me-2 text-primary"></i> Sistema Financeiro
-        </h1>
-        <p class="lead text-muted">Bem-vindo! Gerencie contratos, fornecedores e recursos com praticidade e organização.</p>
-    </div>
+    
+    @if (temAlgumaPermissao)
+    {
+        <div class="text-center mb-5 p-4 bg-white rounded-3 shadow-sm animate__animated animate__fadeInDown">
+            <h1 class="display-4 fw-bold">
+                <i class="bi bi-bank2 me-2 text-primary"></i> Sistema Financeiro
+            </h1>
+            <p class="lead text-muted">Bem-vindo! Gerencie contratos, fornecedores e recursos com praticidade.</p>
+        </div>
 
-    <div class="row">
-        <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp">
-            <div class="card h-100 shadow-sm card-link">
-                <div class="card-body d-flex flex-column text-center p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-person-plus-fill fs-1 text-primary"></i>
+        <div class="row">
+            @* --- CARTÃO DE FORNECEDOR --- *@
+            @if (podeCadastrarFornecedor)
+            {
+                <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp">
+                    <div class="card h-100 shadow-sm card-link border-0">
+                        <div class="card-body d-flex flex-column text-center p-4">
+                            <div class="mb-3">
+                                <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 64px; height: 64px;">
+                                    <i class="bi bi-person-plus-fill fs-2"></i>
+                                </div>
+                            </div>
+                            <h5 class="card-title fw-bold">Cadastrar Fornecedor</h5>
+                            <p class="card-text text-muted small">Registre novas pessoas jurídicas ou físicas.</p>
+                            <div class="mt-auto pt-3">
+                                <a href="/Escolhas/Index" class="btn btn-outline-primary rounded-pill px-4">Acessar</a>
+                            </div>
+                        </div>
                     </div>
-                    <h5 class="card-title fw-bold">Cadastrar Fornecedor</h5>
-                    <p class="card-text text-muted small">Registre novas pessoas jurídicas ou físicas para iniciar contratos.</p>
-                    <div class="mt-auto pt-3">
-                        <a href="/Escolhas/Index" class="btn btn-primary">
-                            <i class="bi bi-arrow-right-circle-fill me-2"></i> Iniciar Cadastro
-                        </a>
+                </div>
+            }
+
+            @* --- CARTÃO DE CONTRATOS --- *@
+            @if (podeGerenciarContratos)
+            {
+                <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp" style="animation-delay: 0.1s;">
+                    <div class="card h-100 shadow-sm card-link border-0">
+                        <div class="card-body d-flex flex-column text-center p-4">
+                             <div class="mb-3">
+                                <div class="bg-success bg-opacity-10 text-success rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 64px; height: 64px;">
+                                    <i class="bi bi-file-earmark-text-fill fs-2"></i>
+                                </div>
+                            </div>
+                            <h5 class="card-title fw-bold">Gerenciar Contratos</h5>
+                            <p class="card-text text-muted small">Lance contratos e aditivos vinculados.</p>
+                            <div class="mt-auto pt-3">
+                                 <a href="/Contratos/Index" class="btn btn-outline-success rounded-pill px-4">Acessar</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* --- CARTÃO DE RELATÓRIOS (EM BREVE) --- *@
+            <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp" style="animation-delay: 0.2s;">
+                <div class="card h-100 shadow-sm card-link border-0">
+                    <div class="card-body d-flex flex-column text-center p-4">
+                        <div class="mb-3">
+                            <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 64px; height: 64px;">
+                                <i class="bi bi-bar-chart-line-fill fs-2"></i>
+                            </div>
+                        </div>
+                        <h5 class="card-title fw-bold">Relatórios</h5>
+                        <p class="card-text text-muted small">Acompanhe orçamentos e previsões.</p>
+                        <div class="mt-auto pt-3">
+                            <button class="btn btn-light rounded-pill px-4 text-muted" disabled>Em Breve</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+    }
+    else
+    {
+        @* --- TELA DE "SOLICITE SEU CHAMADO" --- *@
+        <div class="row justify-content-center min-vh-50 align-items-center mt-5">
+            <div class="col-md-8 col-lg-6">
+                <div class="card border-0 shadow-lg rounded-4 text-center animate__animated animate__fadeInUp">
+                    <div class="card-body p-5">
+                        
+                        <div class="empty-state-icon mb-4">
+                            <i class="bi bi-shield-lock text-secondary opacity-50" style="font-size: 3.5rem;"></i>
+                        </div>
 
-        <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp" style="animation-delay: 0.2s;">
-            <div class="card h-100 shadow-sm card-link">
-                <div class="card-body d-flex flex-column text-center p-4">
-                     <div class="mb-3">
-                        <i class="bi bi-file-earmark-text-fill fs-1 text-success"></i>
-                    </div>
-                    <h5 class="card-title fw-bold">Gerenciar Contratos</h5>
-                    <p class="card-text text-muted small">Lance contratos e aditivos com vínculo completo aos fornecedores.</p>
-                    <div class="mt-auto pt-3">
-                         <a href="/Contratos/Index" class="btn btn-success">
-                            <i class="bi bi-folder-check me-2"></i> Ver Contratos
-                        </a>
+                        <h3 class="fw-bold text-dark mb-2">Olá, @User.Identity?.Name!</h3>
+                        <h5 class="text-secondary fw-normal mb-4">Seu perfil está em configuração.</h5>
+
+                        <p class="text-muted mb-4 px-md-4">
+                            No momento, seu usuário não possui módulos ativos na base de gerenciamento. 
+                            Para liberar seu acesso, é necessário abrir um chamado.
+                        </p>
+
+                        <div class="d-grid gap-2 d-sm-flex justify-content-center">
+                            @* LINK DIRETO PARA O GLPI *@
+                            <a href="http://glpi.ipgse.org.br:1000" target="_blank" class="btn btn-primary btn-lg rounded-pill px-5 shadow-sm">
+                                <i class="bi bi-ticket-detailed-fill me-2"></i> Abrir Chamado no GLPI
+                            </a>
+                        </div>
+                        
+                        <div class="mt-4 text-muted small">
+                            <i class="bi bi-info-circle me-1"></i> O SLA de liberação depende da aprovação do gestor.
+                        </div>
+
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-4 col-md-6 mb-4 animate__animated animate__fadeInUp" style="animation-delay: 0.4s;">
-            <div class="card h-100 shadow-sm card-link">
-                <div class="card-body d-flex flex-column text-center p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-bar-chart-line-fill fs-1 text-warning"></i>
-                    </div>
-                    <h5 class="card-title fw-bold">Visualizar Relatórios</h5>
-                    <p class="card-text text-muted small">Acompanhe orçamentos, despesas e previsões financeiras.</p>
-                    <div class="mt-auto pt-3">
-                        <a href="#" class="btn btn-warning disabled text-dark">
-                           <i class="bi bi-hourglass-split me-2"></i> Em Breve
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    }
 </div>

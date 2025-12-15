@@ -27,11 +27,18 @@ namespace Financeiro.Controllers
         // MÉTODOS DE PÁGINA (CRUD PADRÃO COM REDIRECT)
         // =========================================================================
 
+/* ---------- LISTAR (PAGINADO) ---------- */
         [HttpGet("")]
         [AutorizarPermissao("NIVEL_VIEW")]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(int p = 1)
         {
-            var lista = await _repo.BuscarAsync(string.Empty, null);
+            const int TAMANHO_PAGINA = 8;
+
+            var (lista, total) = await _repo.ListarPaginadoAsync(p, TAMANHO_PAGINA);
+
+            ViewBag.PaginaAtual = p;
+            ViewBag.TotalPaginas = (int)System.Math.Ceiling((double)total / TAMANHO_PAGINA);
+
             return View(lista);
         }
 

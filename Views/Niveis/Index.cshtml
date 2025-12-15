@@ -3,9 +3,18 @@
 
 @{
     ViewData["Title"] = "Gestão de Níveis";
+    
+    // Permissões Individuais
     bool podeEditar = User.TemPermissao("NIVEL_EDIT");
     bool podeExcluir = User.TemPermissao("NIVEL_DEL");
     bool podeCriar = User.TemPermissao("NIVEL_ADD");
+
+    // Verifica se o usuário tem ALGUMA permissão de ação
+    bool podeAcoes = podeEditar || podeExcluir;
+
+    // Paginação
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
 <div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
@@ -42,66 +51,119 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in Model)
+                    @if (!Model.Any())
                     {
                         <tr>
-                            <td class="ps-4 fw-medium text-dark">@item.Nome</td>
-                            
-                            <td class="text-center">
-                                @if(item.IsNivel1) { <span class="badge bg-primary bg-opacity-10 text-primary">SIM</span> } 
-                                else { <span class="text-muted opacity-25">-</span> }
-                            </td>
-                            <td class="text-center">
-                                @if(item.IsNivel2) { <span class="badge bg-info bg-opacity-10 text-info">SIM</span> } 
-                                else { <span class="text-muted opacity-25">-</span> }
-                            </td>
-                            <td class="text-center">
-                                @if(item.IsNivel3) { <span class="badge bg-warning bg-opacity-10 text-warning">SIM</span> } 
-                                else { <span class="text-muted opacity-25">-</span> }
-                            </td>
-
-                            <td class="text-center">
-                                @if(item.Ativo)
-                                {
-                                    <span class="badge rounded-pill bg-success"><i class='bx bx-check'></i> Ativo</span>
-                                }
-                                else
-                                {
-                                    <span class="badge rounded-pill bg-secondary">Inativo</span>
-                                }
-                            </td>
-
-                            <td class="text-end pe-4">
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
-                                        <i class='bx bx-dots-vertical-rounded fs-5'></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                                        @if(podeEditar)
-                                        {
-                                            <li>
-                                                <a class="dropdown-item py-2" asp-action="Editar" asp-route-id="@item.Id">
-                                                    <i class='bx bx-pencil me-2 text-primary'></i> Editar
-                                                </a>
-                                            </li>
-                                        }
-                                        @if(podeExcluir && item.Ativo)
-                                        {
-                                            <li>
-                                                <button class="dropdown-item py-2 text-danger js-delete" 
-                                                        data-id="@item.Id" data-nome="@item.Nome">
-                                                    <i class='bx bx-trash me-2'></i> Inativar
-                                                </button>
-                                            </li>
-                                        }
-                                    </ul>
-                                </div>
+                            <td colspan="6" class="text-center py-4 text-muted">
+                                Nenhum nível ativo encontrado.
                             </td>
                         </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-medium text-dark">@item.Nome</td>
+                                
+                                <td class="text-center">
+                                    @if(item.IsNivel1) { <span class="badge bg-primary bg-opacity-10 text-primary">SIM</span> } 
+                                    else { <span class="text-muted opacity-25">-</span> }
+                                </td>
+                                <td class="text-center">
+                                    @if(item.IsNivel2) { <span class="badge bg-info bg-opacity-10 text-info">SIM</span> } 
+                                    else { <span class="text-muted opacity-25">-</span> }
+                                </td>
+                                <td class="text-center">
+                                    @if(item.IsNivel3) { <span class="badge bg-warning bg-opacity-10 text-warning">SIM</span> } 
+                                    else { <span class="text-muted opacity-25">-</span> }
+                                </td>
+
+                                <td class="text-center">
+                                    <span class="badge rounded-pill bg-success"><i class='bx bx-check'></i> Ativo</span>
+                                </td>
+
+                                <td class="text-end pe-4">
+                                    @if (podeAcoes)
+                                    {
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                                                <i class='bx bx-dots-vertical-rounded fs-5'></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                                @if(podeEditar)
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item py-2" asp-action="Editar" asp-route-id="@item.Id">
+                                                            <i class='bx bx-pencil me-2 text-primary'></i> Editar
+                                                        </a>
+                                                    </li>
+                                                }
+                                                @if(podeExcluir)
+                                                {
+                                                    <li>
+                                                        <button class="dropdown-item py-2 text-danger js-delete" 
+                                                                data-id="@item.Id" data-nome="@item.Nome">
+                                                            <i class='bx bx-trash me-2'></i> Inativar
+                                                        </button>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        @* Exibe um ícone de cadeado discreto indicando somente leitura *@
+                                        <span class="text-muted opacity-50" title="Somente Leitura">
+                                            <i class='bx bx-lock-alt fs-5'></i>
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
         </div>
+
+        @if (totalPaginas > 1)
+        {
+            <div class="card-footer bg-white border-0 py-3">
+                <nav aria-label="Navegação de página">
+                    <ul class="pagination justify-content-center mb-0">
+                        
+                        <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-p="@(paginaAtual - 1)">
+                                <i class='bx bx-chevron-left'></i>
+                            </a>
+                        </li>
+
+                        @for (int i = 1; i <= totalPaginas; i++)
+                        {
+                            @if (i == 1 || i == totalPaginas || (i >= paginaAtual - 2 && i <= paginaAtual + 2))
+                            {
+                                <li class="page-item @(i == paginaAtual ? "active" : "")">
+                                    <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-p="@i">@i</a>
+                                </li>
+                            }
+                            else if (i == paginaAtual - 3 || i == paginaAtual + 3)
+                            {
+                                <li class="page-item disabled"><span class="page-link border-0">...</span></li>
+                            }
+                        }
+
+                        <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-p="@(paginaAtual + 1)">
+                                <i class='bx bx-chevron-right'></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="text-center mt-2 text-muted small">
+                    Página @paginaAtual de @totalPaginas
+                </div>
+            </div>
+        }
     </div>
 </div>
 
@@ -126,12 +188,13 @@
             
             Swal.fire({
                 title: 'Inativar Nível?',
-                html: `Deseja realmente inativar o nível <b>${nome}</b>?`,
+                html: `Deseja realmente inativar o nível <b>${nome}</b>?<br><small class='text-muted'>O registro não aparecerá mais nesta lista.</small>`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#dc3545',
                 cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sim, inativar'
+                confirmButtonText: 'Sim, inativar',
+                cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
                     const form = $('#form-excluir');

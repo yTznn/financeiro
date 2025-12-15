@@ -10,7 +10,11 @@ namespace Financeiro.Repositorios
         Task InserirAsync(NaturezaViewModel vm);
         Task AtualizarAsync(int id, NaturezaViewModel vm);
         Task<Natureza?> ObterPorIdAsync(int id);
-        Task<IEnumerable<Natureza>> ListarAsync();
+        
+        // Alterado para aceitar um limite opcional
+        Task<IEnumerable<Natureza>> ListarAsync(int? limite = null);
+        
         Task<IEnumerable<Natureza>> ListarTodasAsync();
+        Task<(IEnumerable<Natureza> Itens, int Total)> ListarPaginadoAsync(int pagina, int tamanho);
     }
 }

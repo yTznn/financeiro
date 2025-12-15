@@ -128,7 +128,7 @@
         var gerenciamentoControllers = new[] {
             "Contratos", "Entidades", "Fornecedores", "Instrumentos",
             "LancamentosInstrumento", "Movimentacoes", "Naturezas", "Niveis", "Orcamentos",
-            "Perfis", "Usuarios"
+            "Perfis", "Usuarios", "RecebimentosInstrumento"
         };
 
         // Verifica se o controller atual está na lista acima
@@ -157,7 +157,16 @@
                     <li class="menu-window p-0" id="window-gerenciamento">
                         <ul id="gerenciamento-list" class="list-unstyled m-0">
                             
-                            <li class="menu-item"><a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")"><i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span></a></li>
+                            @* --- ITEM PROTEGIDO: CONTRATOS --- *@
+                            @if (User.TemPermissao("CONTRATO_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")">
+                                        <i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span>
+                                    </a>
+                                </li>
+                            }
+                            @* -------------------------------- *@
                             
                             @* --- ITEM PROTEGIDO: ENTIDADES --- *@
                             @if (User.TemPermissao("ENTIDADE_VIEW"))
@@ -203,9 +212,18 @@
                             }
                             @* -------------------------------------------------------- *@
 
-                            <li class="menu-item"><a asp-controller="Naturezas" asp-action="Index" class="@(currentController == "Naturezas" ? "active" : "")"><i class='bx bx-purchase-tag-alt'></i><span class="links_name">Naturezas</span></a></li>
+                            @* --- ITEM PROTEGIDO: NATUREZAS --- *@
+                            @if (User.TemPermissao("NATUREZA_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Naturezas" asp-action="Index" class="@(currentController == "Naturezas" ? "active" : "")">
+                                        <i class='bx bx-purchase-tag-alt'></i><span class="links_name">Naturezas</span>
+                                    </a>
+                                </li>
+                            }
+                            @* --------------------------------- *@
                             
-                            @* --- ITEM PROTEGIDO: NÍVEIS (BLOQUEIO ADICIONADO) --- *@
+                            @* --- ITEM PROTEGIDO: NÍVEIS --- *@
                             @if (User.TemPermissao("NIVEL_VIEW"))
                             {
                                 <li class="menu-item">
@@ -214,7 +232,7 @@
                                     </a>
                                 </li>
                             }
-                            @* ---------------------------------------------------- *@
+                            @* ------------------------------ *@
                             
                             @* --- ITEM PROTEGIDO: ORÇAMENTOS --- *@
                             @if (User.TemPermissao("ORCAMENTO_VIEW"))
@@ -227,9 +245,39 @@
                             }
                             @* ---------------------------------- *@
 
-                            <li class="menu-item"><a asp-controller="Perfis" asp-action="Index" class="@(currentController == "Perfis" ? "active" : "")"><i class='bx bx-id-card'></i><span class="links_name">Perfis de Acesso</span></a></li>
-                            <li class="menu-item"><a asp-controller="RecebimentosInstrumento" asp-action="RelatorioGeral" class="@(currentController == "RecebimentosInstrumento" ? "active" : "")"><i class='bx bxs-dollar-circle'></i><span class="links_name">Recebimentos</span></a></li>
-                            <li class="menu-item"><a asp-controller="Usuarios" asp-action="Index" class="@(currentController == "Usuarios" ? "active" : "")"><i class='bx bx-group'></i><span class="links_name">Usuários</span></a></li>
+                            @* --- ITEM PROTEGIDO: PERFIS DE ACESSO --- *@
+                            @if (User.TemPermissao("PERFIL_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Perfis" asp-action="Index" class="@(currentController == "Perfis" ? "active" : "")">
+                                        <i class='bx bx-id-card'></i><span class="links_name">Perfis de Acesso</span>
+                                    </a>
+                                </li>
+                            }
+                            @* ---------------------------------------- *@
+
+                            @* --- ITEM PROTEGIDO: RECEBIMENTOS --- *@
+                            @if (User.TemPermissao("RECEBIMENTO_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="RecebimentosInstrumento" asp-action="RelatorioGeral" class="@(currentController == "RecebimentosInstrumento" ? "active" : "")">
+                                        <i class='bx bxs-dollar-circle'></i><span class="links_name">Recebimentos</span>
+                                    </a>
+                                </li>
+                            }
+                            @* ------------------------------------ *@
+
+                            @* --- ITEM PROTEGIDO: USUÁRIOS --- *@
+                            @if (User.TemPermissao("USUARIO_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Usuarios" asp-action="Index" class="@(currentController == "Usuarios" ? "active" : "")">
+                                        <i class='bx bx-group'></i><span class="links_name">Usuários</span>
+                                    </a>
+                                </li>
+                            }
+                            @* -------------------------------- *@
+
                         </ul>
                     </li>
 

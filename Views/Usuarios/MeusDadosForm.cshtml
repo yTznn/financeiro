@@ -1,65 +1,163 @@
 @model Financeiro.Models.ViewModels.UsuarioViewModel
 @{
-    ViewBag.Title = "Meus Dados";
-    Layout = "_Layout";
+    ViewData["Title"] = "Meus Dados";
+    // Verifica se é Admin para liberar edição de e-mail (regra original mantida)
     var isAdmin = User.IsInRole("Administrador");
 }
 
-<h2 class="mb-4">@ViewBag.Title</h2>
-
-<div asp-validation-summary="All" class="alert alert-danger"></div>
-
-<form asp-action="AtualizarMeusDados" method="post" enctype="multipart/form-data" class="row g-3">
-    @Html.AntiForgeryToken()
-    <input asp-for="Id" type="hidden" />
-
-    <div class="col-md-6">
-        <label asp-for="Email" class="form-label">E-mail</label>
-
-        @if (isAdmin)
-        {
-            <input asp-for="Email" class="form-control" />
-        }
-        else
-        {
-            <input asp-for="Email" class="form-control" readonly />
-        }
-
-        <span asp-validation-for="Email" class="text-danger small"></span>
+<div class="container py-4" style="max-width: 800px;">
+    
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h3 class="fw-bold text-secondary mb-0">
+            <i class="bi bi-person-circle me-2"></i>@ViewData["Title"]
+        </h3>
+        <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class='bi bi-arrow-left'></i> Voltar ao Início
+        </a>
     </div>
 
-    <div class="col-md-6">
-        <label asp-for="Senha" class="form-label">Nova Senha (opcional)</label>
-        <input asp-for="Senha" type="password" class="form-control" />
-        <span asp-validation-for="Senha" class="text-danger small"></span>
-    </div>
+    <div class="card shadow-sm border-0 rounded-3 animate__animated animate__fadeIn">
+        <div class="card-body p-4">
+            
+            <form asp-action="AtualizarMeusDados" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+                @Html.AntiForgeryToken()
+                <input asp-for="Id" type="hidden" />
 
-    <div class="col-md-6">
-        <label asp-for="ConfirmarSenha" class="form-label">Confirmar Senha</label>
-        <input asp-for="ConfirmarSenha" type="password" class="form-control" />
-        <span asp-validation-for="ConfirmarSenha" class="text-danger small"></span>
-    </div>
+                <div class="text-center mb-4">
+                    <div class="position-relative d-inline-block">
+                        @if (!string.IsNullOrEmpty(Model.HashImagem))
+                        {
+                            <img src="/Usuarios/ImagemPerfil?hash=@Model.HashImagem" 
+                                 class="rounded-circle border border-3 border-light shadow-sm" 
+                                 style="width: 120px; height: 120px; object-fit: cover;" 
+                                 alt="Foto de Perfil" />
+                        }
+                        else
+                        {
+                            <div class="rounded-circle bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center mx-auto border border-3 border-light shadow-sm" 
+                                 style="width: 120px; height: 120px;">
+                                <i class="bi bi-person-fill text-secondary" style="font-size: 3.5rem;"></i>
+                            </div>
+                        }
+                        
+                        <div class="position-absolute bottom-0 end-0 bg-primary text-white rounded-circle p-1 border border-2 border-white" 
+                             style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-camera-fill" style="font-size: 0.9rem;"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 w-50 mx-auto">
+                        <label asp-for="ImagemPerfil" class="form-label small text-muted">Alterar Imagem</label>
+                        <input asp-for="ImagemPerfil" type="file" class="form-control form-control-sm" accept="image/*" />
+                        <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
+                    </div>
+                </div>
 
-    <div class="col-md-6">
-        <label asp-for="ImagemPerfil" class="form-label">Nova Imagem de Perfil</label>
-        <input asp-for="ImagemPerfil" type="file" class="form-control" />
-        <span asp-validation-for="ImagemPerfil" class="text-danger small"></span>
-    </div>
+                <hr class="my-4 text-muted opacity-25">
 
-    @if (!string.IsNullOrEmpty(Model.HashImagem))
-    {
-        <div class="col-md-6">
-            <label class="form-label">Imagem Atual</label><br />
-            <img src="/Usuarios/ImagemPerfil?hash=@Model.HashImagem" class="rounded border" width="80" height="80" />
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+
+                <div class="row g-3">
+                    
+                    <div class="col-md-12">
+                        <label asp-for="Email" class="form-label fw-bold text-secondary small text-uppercase">E-mail de Acesso</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-envelope-fill"></i></span>
+                            @if (isAdmin)
+                            {
+                                <input asp-for="Email" class="form-control form-control-lg border-start-0 ps-0" />
+                            }
+                            else
+                            {
+                                <input asp-for="Email" class="form-control form-control-lg border-start-0 ps-0 bg-light" readonly 
+                                       title="Apenas administradores podem alterar o e-mail." data-bs-toggle="tooltip"/>
+                            }
+                        </div>
+                        <span asp-validation-for="Email" class="text-danger small mt-1 d-block"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Senha" class="form-label fw-bold text-secondary small text-uppercase">Nova Senha</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock-fill"></i></span>
+                            <input asp-for="Senha" type="password" class="form-control form-control-lg border-start-0 ps-0" placeholder="Deixe em branco para manter" />
+                        </div>
+                        <span asp-validation-for="Senha" class="text-danger small mt-1 d-block"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="ConfirmarSenha" class="form-label fw-bold text-secondary small text-uppercase">Confirmar Nova Senha</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-check-square-fill"></i></span>
+                            <input asp-for="ConfirmarSenha" type="password" class="form-control form-control-lg border-start-0 ps-0" placeholder="Repita a senha" />
+                        </div>
+                        <span asp-validation-for="ConfirmarSenha" class="text-danger small mt-1 d-block"></span>
+                    </div>
+
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end pt-4 mt-2 border-top">
+                    <button type="submit" class="btn btn-primary btn-lg px-5 shadow-sm">
+                        <i class="bi bi-save me-2"></i> Salvar Alterações
+                    </button>
+                </div>
+
+            </form>
         </div>
-    }
-
-    <div class="col-12">
-        <button type="submit" class="btn btn-primary">Salvar</button>
-        <a asp-action="Index" class="btn btn-secondary">Voltar</a>
     </div>
-</form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    @* Integração com SweetAlert para mensagens do Controller *@
+    @if (TempData["Sucesso"] != null)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: '@TempData["Sucesso"]',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        </script>
+    }
+    
+    @if (TempData["Erro"] != null)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Atenção',
+                text: '@TempData["Erro"]'
+            });
+        </script>
+    }
+
+    <script>
+        // Inicializa Tooltips do Bootstrap (para o campo de email readonly)
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Validação Visual
+        (function () {
+            'use strict'
+            var forms = document.querySelectorAll('.needs-validation')
+            Array.prototype.slice.call(forms)
+                .forEach(function (form) {
+                    form.addEventListener('submit', function (event) {
+                        if (!form.checkValidity()) {
+                            event.preventDefault()
+                            event.stopPropagation()
+                        }
+                        form.classList.add('was-validated')
+                    }, false)
+                })
+        })()
+    </script>
 }

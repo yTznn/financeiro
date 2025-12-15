@@ -12,5 +12,6 @@ namespace Financeiro.Repositorios
         Task AtualizarAsync(NivelDto dto);
         Task InativarAsync(int id);
         Task<NivelDto> ObterPorIdAsync(int id);
+        Task<(IEnumerable<NivelDto> Itens, int Total)> ListarPaginadoAsync(int pagina, int tamanho);
     }
 }
