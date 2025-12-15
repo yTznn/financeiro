@@ -18,5 +18,6 @@ namespace Financeiro.Repositorios
         /// Busca a movimentação completa (com rateios) para realizar estorno.
         /// </summary>
         Task<MovimentacaoViewModel?> ObterCompletoPorIdAsync(int id);
+        Task ExcluirAsync(int id);
     }
 }

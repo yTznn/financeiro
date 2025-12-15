@@ -442,5 +442,49 @@ namespace Financeiro.Repositorios
             using var conn = _factory.CreateConnection();
             await conn.ExecuteAsync(sql, new { contratoId, inicio, fim, valorTotal });
         }
+        public async Task<IEnumerable<dynamic>> ListarAtivosPorFornecedorAsync(int entidadeId, int fornecedorId, string tipoPessoa)
+        {
+            using var conn = _factory.CreateConnection();
+            
+            // CORREÇÃO: O Join agora segue o caminho: Contrato -> Orçamento -> Instrumento -> Entidade
+            const string sql = @"
+                SELECT 
+                    c.Id, 
+                    c.NumeroContrato, 
+                    c.ObjetoContrato 
+                FROM Contrato c
+                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id        -- Liga Contrato ao Orçamento
+                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id    -- Liga Orçamento ao Instrumento
+                WHERE c.Ativo = 1 
+                AND i.EntidadeId = @entidadeId -- Filtra pela entidade do Instrumento (pai do orçamento)
+                AND (
+                    (@tipoPessoa = 'PJ' AND c.PessoaJuridicaId = @fornecedorId)
+                    OR
+                    (@tipoPessoa = 'PF' AND c.PessoaFisicaId = @fornecedorId)
+                )
+                ORDER BY c.DataInicio DESC";
+
+            return await conn.QueryAsync(sql, new { 
+                entidadeId, 
+                fornecedorId, 
+                tipoPessoa 
+            });
+        }
+        public async Task<IEnumerable<dynamic>> ListarNaturezasDetalhadasPorContratoAsync(int contratoId)
+        {
+            using var conn = _factory.CreateConnection();
+            // Fazemos o JOIN para pegar o Nome da Natureza
+            const string sql = @"
+                SELECT 
+                    n.Id, 
+                    n.Nome 
+                FROM ContratoNatureza cn
+                INNER JOIN Natureza n ON cn.NaturezaId = n.Id
+                WHERE cn.ContratoId = @contratoId 
+                AND n.Ativo = 1
+                ORDER BY n.Nome";
+
+            return await conn.QueryAsync(sql, new { contratoId });
+        }
     }
 }

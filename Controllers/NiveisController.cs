@@ -5,18 +5,30 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Financeiro.Servicos;  // Importante para Logs
+using Financeiro.Atributos; // Importante para Permissões
 
 namespace Financeiro.Controllers
 {
-    [Route("Niveis")]
     [Authorize]
+    [Route("Niveis")]
     public class NiveisController : Controller
     {
         private readonly INivelRepositorio _repo;
-        public NiveisController(INivelRepositorio repo) => _repo = repo;
+        private readonly ILogService _logService; // Serviço de Log
 
-        // --- MÉTODOS CRUD PARA PÁGINAS (sem alterações) ---
+        public NiveisController(INivelRepositorio repo, ILogService logService)
+        {
+            _repo = repo;
+            _logService = logService;
+        }
+
+        // =========================================================================
+        // MÉTODOS DE PÁGINA (CRUD PADRÃO COM REDIRECT)
+        // =========================================================================
+
         [HttpGet("")]
+        [AutorizarPermissao("NIVEL_VIEW")]
         public async Task<IActionResult> Index()
         {
             var lista = await _repo.BuscarAsync(string.Empty, null);
@@ -24,68 +36,115 @@ namespace Financeiro.Controllers
         }
 
         [HttpGet("Novo")]
-        public IActionResult Novo() => View("NivelForm", new NivelDto { Ativo = true });
+        [AutorizarPermissao("NIVEL_ADD")]
+        public IActionResult Novo()
+        {
+            return View("NivelForm", new NivelDto { Ativo = true });
+        }
 
         [HttpPost("Salvar")]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("NIVEL_ADD")]
         public async Task<IActionResult> Salvar(NivelDto dto)
         {
             if (!ModelState.IsValid) return View("NivelForm", dto);
+
             if (await _repo.ExisteNomeAsync(dto.Nome))
             {
                 ModelState.AddModelError("Nome", "Já existe um nível com esse nome.");
                 return View("NivelForm", dto);
             }
-            await _repo.InserirAsync(dto);
-            TempData["MensagemSucesso"] = "Nível cadastrado!";
-            return RedirectToAction(nameof(Index));
+
+            try
+            {
+                int novoId = await _repo.InserirAsync(dto);
+                await _logService.RegistrarCriacaoAsync("Nivel", dto, novoId); // LOG
+
+                TempData["Sucesso"] = "Nível cadastrado com sucesso!";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Erro ao salvar: {ex.Message}";
+                return View("NivelForm", dto);
+            }
         }
 
         [HttpGet("Editar/{id:int}")]
+        [AutorizarPermissao("NIVEL_EDIT")]
         public async Task<IActionResult> Editar(int id)
         {
             var nivel = await _repo.ObterPorIdAsync(id);
-            return nivel == null ? NotFound() : View("NivelForm", nivel);
+            if (nivel == null) return NotFound();
+            return View("NivelForm", nivel);
         }
 
         [HttpPost("Atualizar")]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("NIVEL_EDIT")]
         public async Task<IActionResult> Atualizar(NivelDto dto)
         {
             if (!ModelState.IsValid) return View("NivelForm", dto);
+
             if (await _repo.ExisteNomeAsync(dto.Nome, dto.Id))
             {
-                ModelState.AddModelError("Nome", "Já existe um nível com esse nome.");
+                ModelState.AddModelError("Nome", "Já existe outro nível com esse nome.");
                 return View("NivelForm", dto);
             }
-            await _repo.AtualizarAsync(dto);
-            TempData["MensagemSucesso"] = "Nível atualizado!";
-            return RedirectToAction(nameof(Index));
+
+            try 
+            {
+                var antigo = await _repo.ObterPorIdAsync(dto.Id);
+                await _repo.AtualizarAsync(dto);
+                await _logService.RegistrarEdicaoAsync("Nivel", antigo, dto, dto.Id); // LOG
+
+                TempData["Sucesso"] = "Nível atualizado com sucesso!";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
+                return View("NivelForm", dto);
+            }
         }
 
         [HttpPost("Excluir/{id:int}")]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("NIVEL_DEL")]
         public async Task<IActionResult> Excluir(int id)
         {
-            await _repo.InativarAsync(id);
-            TempData["MensagemSucesso"] = "Nível inativado!";
-            return RedirectToAction(nameof(Index));
+            try
+            {
+                var item = await _repo.ObterPorIdAsync(id);
+                if (item == null) return NotFound();
+
+                await _repo.InativarAsync(id);
+                await _logService.RegistrarExclusaoAsync("Nivel", item, id); // LOG
+
+                TempData["Sucesso"] = "Nível inativado com sucesso!";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Erro ao inativar: {ex.Message}";
+                return RedirectToAction(nameof(Index));
+            }
         }
-        
+
         [HttpGet("Search")]
         public async Task<IActionResult> Search(string term, int? nivel)
         {
             var niveis = await _repo.BuscarAsync(term ?? string.Empty, nivel);
-            var resultadoParaSelect2 = niveis.Select(n => new
-            {
-                id = n.Nome,
-                text = n.Nome
-            });
-            return Ok(new { results = resultadoParaSelect2 });
+            var resultado = niveis.Select(n => new { id = n.Id, text = n.Nome }); 
+            return Ok(new { results = resultado });
         }
 
-        // --- MÉTODO PARA CARREGAR O MODAL (sem alterações) ---
+        // =========================================================================
+        // MÉTODOS ESPECÍFICOS PARA O MODAL (QUE ESTAVAM FALTANDO)
+        // =========================================================================
+
         [HttpGet("NovoNivelPartial")]
+        [AutorizarPermissao("NIVEL_ADD")] // Mantivemos a segurança
         public IActionResult NovoNivelPartial(int nivel)
         {
             var dto = new NivelDto { Ativo = true };
@@ -93,36 +152,35 @@ namespace Financeiro.Controllers
             if (nivel == 2) dto.IsNivel2 = true;
             if (nivel == 3) dto.IsNivel3 = true;
 
-            // Retorna a PartialView que contém o modal e o formulário
+            // IMPORTANTE: Certifique-se que o arquivo View se chama "_NivelFormModal.cshtml"
+            // Se o arquivo que você criou se chama apenas "_NivelModal.cshtml", altere o nome aqui abaixo.
             return PartialView("_NivelFormModal", dto);
         }
-        
-        // --- NOVA ACTION [HttpPost] EXCLUSIVA PARA O MODAL ---
+
         [HttpPost("SalvarNivelAjax")]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("NIVEL_ADD")] // Mantivemos a segurança
         public async Task<IActionResult> SalvarNivelAjax(NivelDto dto)
         {
-            // Validação 1: O modelo de dados é válido?
             if (!ModelState.IsValid)
             {
-                // Retorna 400 Bad Request com os detalhes do erro para o JavaScript tratar
                 return BadRequest(ModelState);
             }
 
-            // Validação 2: Já existe um nível com este nome?
             if (await _repo.ExisteNomeAsync(dto.Nome))
             {
-                // Retorna 409 Conflict, que é o código HTTP ideal para "recurso já existe"
                 return Conflict($"Já existe um nível com o nome '{dto.Nome}'.");
             }
 
             try
             {
-                // Se tudo estiver OK, salva no banco
-                var novoId = await _repo.InserirAsync(dto);
+                int novoId = await _repo.InserirAsync(dto);
+                
+                // ADICIONAMOS O LOG AQUI TAMBÉM (Melhoria em relação ao antigo)
+                await _logService.RegistrarCriacaoAsync("Nivel", dto, novoId);
+
                 var nivelCriado = await _repo.ObterPorIdAsync(novoId);
 
-                // Retorna 200 OK com uma mensagem e os dados do objeto criado, para o JavaScript usar
                 return Ok(new
                 {
                     message = "Nível salvo com sucesso!",
@@ -131,7 +189,6 @@ namespace Financeiro.Controllers
             }
             catch (Exception)
             {
-                // Em caso de erro inesperado no banco, retorna um erro 500
                 return StatusCode(500, "Ocorreu um erro inesperado ao salvar o nível.");
             }
         }

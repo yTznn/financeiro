@@ -46,5 +46,16 @@ namespace Financeiro.Repositorios
             using var conn = _connectionFactory.CreateConnection();
             return await conn.QueryFirstOrDefaultAsync<Arquivo>(sql, new { Hash = hash });
         }
+        public async Task<Arquivo?> ObterPorReferenciaAsync(string origem, int chaveReferencia)
+        {
+            using var conn = _connectionFactory.CreateConnection();
+            // Pega o arquivo mais recente vinculado àquela origem/ID
+            const string sql = @"
+                SELECT TOP 1 * FROM Arquivos 
+                WHERE Origem = @origem AND ChaveReferencia = @chaveReferencia 
+                ORDER BY DataEnvio DESC";
+                
+            return await conn.QueryFirstOrDefaultAsync<Arquivo>(sql, new { origem, chaveReferencia });
+        }
     }
 }

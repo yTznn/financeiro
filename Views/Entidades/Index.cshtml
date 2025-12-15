@@ -134,6 +134,20 @@ else
                         <span class="cnpj">@FormatCnpj(e.Cnpj)</span>
                     </div>
 
+                    <div class="mb-3">
+                        @if (e.ContaBancariaId.HasValue)
+                        {
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill">
+                                <i class='bx bxs-bank me-1'></i> Conta Configurada
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill">
+                                <i class='bx bx-error me-1'></i> Sem Conta Bancária
+                            </span>
+                        }
+                    </div>
                     <div class="mt-auto">
                         <div class="small text-muted mb-1">
                             <i class="bx bx-map me-1"></i> Endereço principal

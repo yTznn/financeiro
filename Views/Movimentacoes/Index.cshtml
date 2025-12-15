@@ -1,99 +1,187 @@
-@model IEnumerable<Financeiro.Models.MovimentacaoFinanceira>
 @using System.Globalization
+@using Financeiro.Extensions
+@model IEnumerable<Financeiro.Models.MovimentacaoFinanceira>
 
 @{
     ViewData["Title"] = "Movimentações Financeiras";
     var ptBR = new CultureInfo("pt-BR");
+
+    // Permissões
+    bool podeAdicionar = User.TemPermissao("MOVIMENTACAO_ADD");
+    bool podeEstornar = User.TemPermissao("MOVIMENTACAO_ESTORNAR");
+    bool podeExcluir = User.TemPermissao("MOVIMENTACAO_DEL");
+
+    // Totais
+    var totalPago = Model.Where(m => m.ValorTotal > 0).Sum(m => m.ValorTotal);
+    var totalEstorno = Model.Where(m => m.ValorTotal < 0).Sum(m => m.ValorTotal);
+    var liquido = totalPago + totalEstorno;
 }
 
-<!-- Alertas SweetAlert -->
-<div id="pageFlags"
-     data-success="@TempData["Sucesso"]"
-     data-error="@TempData["Erro"]"></div>
+<style>
+    /* Estilos para o Menu Modal */
+    .swal-menu-container {
+        text-align: left;
+        font-family: var(--bs-body-font-family);
+    }
+    .swal-menu-header {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #0d6efd;
+    }
+    .swal-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 12px 20px;
+        border: 1px solid #e9ecef;
+        background: white;
+        border-radius: 8px;
+        color: #495057;
+        font-weight: 500;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+    .swal-action-btn:hover {
+        background-color: #f1f3f5;
+        transform: translateX(5px);
+        border-color: #dee2e6;
+        color: #0d6efd;
+    }
+    .swal-action-btn i { font-size: 1.2rem; margin-right: 12px; }
+    
+    /* Cores específicas para ações */
+    .btn-action-delete:hover { color: #dc3545; background-color: #fff5f5; border-color: #ffc9c9; }
+    .btn-action-estorno:hover { color: #ffc107; background-color: #fff9db; border-color: #ffe066; }
 
-<div class="container-fluid px-0">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    /* Ajuste fino na tabela */
+    .avatar-fornecedor {
+        width: 35px; height: 35px; background-color: #e9ecef; color: #495057;
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        font-weight: bold; font-size: 0.8rem;
+    }
+    .row-estorno { background-color: #fff5f5; }
+    .badge-estorno { background-color: #ffebe9; color: #cf222e; border: 1px solid #ffc1bc; }
+</style>
+
+<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
+
+<div class="container-fluid px-0 py-3">
+    
+    <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
-            <h3 class="fw-bold mb-1"><i class="bx bx-money-withdraw me-2"></i>@ViewData["Title"]</h3>
-            <p class="text-muted mb-0">Histórico de pagamentos e lançamentos</p>
+            <h2 class="fw-bold text-dark mb-0">Gestão Financeira</h2>
+            <small class="text-muted">Controle de lançamentos e fluxo de caixa.</small>
         </div>
-        <a asp-action="Novo" class="btn btn-primary">
-            <i class="bx bx-plus me-1"></i> Novo Pagamento
-        </a>
+        @if (podeAdicionar) {
+            <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                <i class="bx bx-plus-circle me-2"></i>Novo Lançamento
+            </a>
+        }
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
-                        <tr>
-                            <th class="ps-4">Data</th>
-                            <th>Fornecedor / Beneficiário</th>
-                            <th>Histórico</th>
-                            <th class="text-end">Valor</th>
-                            <th class="text-center pe-4">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (Model == null || !Model.Any())
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold">Total Saídas</h6>
+                    <h3 class="fw-bold text-danger mb-0">@totalPago.ToString("C", ptBR)</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold">Estornos / Entradas</h6>
+                    <h3 class="fw-bold text-success mb-0">@totalEstorno.ToString("C", ptBR)</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="text-muted text-uppercase small fw-bold">Balanço Líquido</h6>
+                    <h3 class="fw-bold text-primary mb-0">@liquido.ToString("C", ptBR)</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold text-secondary"><i class='bx bx-list-ul me-2'></i>Lançamentos</h5>
+            <input type="text" class="form-control form-control-sm bg-light" style="max-width: 250px;" placeholder="Filtrar...">
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">Data / ID</th>
+                        <th>Beneficiário</th>
+                        <th>Histórico</th>
+                        <th class="text-end">Valor</th>
+                        <th class="text-center pe-4" style="width: 80px;">Opções</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr><td colspan="5" class="text-center py-5 text-muted">Nenhum registro encontrado.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model)
                         {
-                            <tr>
-                                <td colspan="5" class="text-center py-5 text-muted">
-                                    <i class="bx bx-ghost fs-1 mb-2 d-block"></i>
-                                    Nenhum lançamento encontrado.
+                            bool ehEstorno = item.ValorTotal < 0 || (item.Historico?.Contains("[ESTORNO]") ?? false);
+                            string rowClass = ehEstorno ? "row-estorno" : "";
+                            string corValor = item.ValorTotal < 0 ? "text-success" : "text-danger";
+
+                            <tr class="@rowClass">
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark">@item.DataMovimentacao.ToString("dd/MM/yyyy")</div>
+                                    <small class="text-muted font-monospace">#@item.Id.ToString("D6")</small>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-fornecedor me-2">
+                                            @(!string.IsNullOrEmpty(item.FornecedorIdCompleto) ? item.FornecedorIdCompleto.Substring(0, 2).ToUpper() : "?")
+                                        </div>
+                                        <div>
+                                            <div class="fw-medium text-dark" style="font-size: 0.85rem;">
+                                                @(string.IsNullOrEmpty(item.FornecedorIdCompleto) ? "Não Informado" : item.FornecedorIdCompleto)
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if(ehEstorno) { <span class="badge badge-estorno me-1">ESTORNO</span> }
+                                    <span class="text-secondary small">@item.Historico</span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="fw-bold @corValor font-monospace">@item.ValorTotal.ToString("C", ptBR)</span>
+                                </td>
+                                <td class="text-center pe-4">
+                                    <button class="btn btn-light btn-sm text-secondary js-open-menu"
+                                            data-id="@item.Id"
+                                            data-fornecedor="@(item.FornecedorIdCompleto ?? "Não Informado")"
+                                            data-valor="@item.ValorTotal.ToString("C", ptBR)"
+                                            data-data="@item.DataMovimentacao.ToString("dd/MM/yyyy")"
+                                            data-estorno="@ehEstorno.ToString().ToLower()"
+                                            data-url-anexo="@Url.Action("BaixarAnexo", new { id = item.Id })"
+                                            data-pode-estornar="@podeEstornar.ToString().ToLower()"
+                                            data-pode-excluir="@podeExcluir.ToString().ToLower()">
+                                        <i class='bx bx-dots-vertical-rounded fs-5'></i>
+                                    </button>
                                 </td>
                             </tr>
                         }
-                        else
-                        {
-                            @foreach (var item in Model)
-                            {
-                                // Verifica se é um estorno (valor negativo ou texto no histórico)
-                                bool ehEstorno = item.ValorTotal < 0 || (item.Historico?.Contains("[ESTORNO]") ?? false);
-                                string classeValor = item.ValorTotal < 0 ? "text-success" : "text-danger"; // Saída vermelho, Entrada/Estorno verde
-
-                                <tr class="@(ehEstorno ? "bg-light text-muted" : "")">
-                                    <td class="ps-4 text-nowrap">
-                                        <div class="fw-semibold">@item.DataMovimentacao.ToString("dd/MM/yyyy")</div>
-                                    </td>
-                                    <td>
-                                        @if (!string.IsNullOrEmpty(item.FornecedorIdCompleto))
-                                        {
-                                            <span class="badge bg-info-subtle text-info border border-info-subtle">
-                                                <i class="bx bx-user me-1"></i> @item.FornecedorIdCompleto
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted fst-italic">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if(ehEstorno) { <span class="badge bg-warning text-dark me-1">ESTORNO</span> }
-                                        @item.Historico
-                                    </td>
-                                    <td class="text-end">
-                                        <span class="fw-bold @classeValor fs-6">
-                                            @item.ValorTotal.ToString("C", ptBR)
-                                        </span>
-                                    </td>
-                                    <td class="text-center pe-4">
-                                        @if(!ehEstorno) // Só permite estornar o que não é estorno
-                                        {
-                                            <button class="btn btn-sm btn-outline-danger js-estornar" 
-                                                    data-id="@item.Id" 
-                                                    title="Estornar Lançamento">
-                                                <i class="bx bx-undo"></i> Estornar
-                                            </button>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
+                    }
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -102,57 +190,134 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(document).ready(function() {
-            // Alertas de Carga de Página
+            // 1. Processar Alertas do Backend
             const pageFlags = document.getElementById('pageFlags');
             if (pageFlags) {
-                const success = pageFlags.dataset.success;
-                const error = pageFlags.dataset.error;
-                if (success) Swal.fire({ icon: 'success', title: 'Sucesso', text: success });
-                if (error) Swal.fire({ icon: 'error', title: 'Erro', html: error });
+                if (pageFlags.dataset.success) Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: pageFlags.dataset.success, showConfirmButton: false, timer: 3000 });
+                if (pageFlags.dataset.error) Swal.fire({ icon: 'error', title: 'Atenção', html: pageFlags.dataset.error });
             }
 
-            // Botão de Estornar
-            $('.js-estornar').click(async function() {
-                const id = $(this).data('id');
-                
-                const { value: justificativa } = await Swal.fire({
-                    title: 'Confirmar Estorno?',
-                    text: "Isso criará um lançamento reverso. O valor voltará ao saldo.",
+            // 2. ABRIR MENU "MODAL" (Simula a Partial View)
+            $('.js-open-menu').click(function() {
+                const btn = $(this);
+                const d = btn.data(); // Pega todos os dados do botão
+
+                // Monta o HTML do menu dinamicamente
+                let htmlContent = `
+                    <div class="swal-menu-container">
+                        <div class="swal-menu-header">
+                            <div class="small text-muted text-uppercase fw-bold">Lançamento #${d.id}</div>
+                            <div class="fs-5 fw-bold text-dark mb-1">${d.fornecedor}</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-light text-dark border">${d.data}</span>
+                                <span class="fw-bold text-primary">${d.valor}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <a href="${d.urlAnexo}" target="_blank" class="swal-action-btn">
+                                <i class='bx bx-file text-primary'></i> Ver Comprovante
+                            </a>`;
+
+                // Só mostra estornar se não for estorno e tiver permissão
+                if (d.estorno === false && d.podeEstornar === true) {
+                    htmlContent += `
+                        <button onclick="swalEstornar(${d.id})" class="swal-action-btn btn-action-estorno">
+                            <i class='bx bx-undo text-warning'></i> Estornar Valor
+                        </button>`;
+                }
+
+                // Só mostra excluir se não for estorno e tiver permissão (Regra do Superintendente)
+                if (d.estorno === false && d.podeExcluir === true) {
+                    htmlContent += `
+                        <button onclick="swalExcluir(${d.id})" class="swal-action-btn btn-action-delete">
+                            <i class='bx bx-trash text-danger'></i> Excluir Registro
+                        </button>`;
+                }
+
+                htmlContent += `</div></div>`;
+
+                Swal.fire({
+                    html: htmlContent,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    width: 400,
+                    padding: '1.5em',
+                    customClass: { popup: 'rounded-4' }
+                });
+            });
+
+            // 3. FUNÇÕES GLOBAIS PARA OS BOTÕES DENTRO DO SWAL
+            window.swalEstornar = function(id) {
+                Swal.fire({
+                    title: 'Estornar Lançamento?',
+                    text: "Isso criará um lançamento reverso. O histórico será preservado.",
                     icon: 'warning',
                     input: 'textarea',
-                    inputLabel: 'Motivo do Estorno',
-                    inputPlaceholder: 'Ex: Lançamento duplicado...',
-                    inputValidator: (value) => {
-                        if (!value) return 'Você precisa escrever uma justificativa!'
-                    },
+                    inputLabel: 'Justificativa Obrigatória',
+                    inputPlaceholder: 'Ex: Valor lançado duplicado...',
                     showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'Sim, estornar!'
-                });
-
-                if (justificativa) {
-                    try {
-                        const formData = new FormData();
-                        formData.append('id', id);
-                        formData.append('justificativa', justificativa);
-
-                        const response = await fetch('@Url.Action("Estornar", "Movimentacoes")', {
-                            method: 'POST',
-                            body: formData // Envia como Form Data simples
-                        });
-
-                        if (response.ok) {
-                            await Swal.fire('Estornado!', 'O lançamento foi compensado.', 'success');
-                            window.location.reload();
-                        } else {
-                            Swal.fire('Erro', 'Não foi possível realizar o estorno.', 'error');
-                        }
-                    } catch (e) {
-                        Swal.fire('Erro', 'Falha na comunicação.', 'error');
+                    confirmButtonColor: '#ffc107',
+                    confirmButtonText: 'Confirmar Estorno',
+                    cancelButtonText: 'Voltar',
+                    preConfirm: (just) => {
+                        if (!just) Swal.showValidationMessage('A justificativa é obrigatória');
+                        return just;
                     }
-                }
-            });
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        executarAcao('Estornar', id, res.value);
+                    }
+                });
+            };
+
+            window.swalExcluir = function(id) {
+                Swal.fire({
+                    title: 'Excluir Definitivamente?',
+                    html: "Essa ação <b>APAGARÁ</b> o registro do banco de dados.<br>Não pode ser desfeita.",
+                    icon: 'error',
+                    input: 'textarea',
+                    inputLabel: 'Justificativa de Auditoria',
+                    inputPlaceholder: 'Ex: Lançamento teste ou erro operacional grave...',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    confirmButtonText: 'Sim, Excluir',
+                    cancelButtonText: 'Voltar',
+                    preConfirm: (just) => {
+                        if (!just) Swal.showValidationMessage('A justificativa é obrigatória');
+                        return just;
+                    }
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        executarAcao('Excluir', id, res.value);
+                    }
+                });
+            };
+
+            function executarAcao(actionName, id, justificativa) {
+                Swal.showLoading();
+                const fd = new FormData();
+                fd.append('id', id);
+                fd.append('justificativa', justificativa);
+
+                // Define a URL baseada na ação
+                const url = '@Url.Action("ACTION", "Movimentacoes")'.replace("ACTION", actionName);
+
+                fetch(url, { method: 'POST', body: fd })
+                    .then(r => {
+                        if (r.ok) {
+                            return r.json().then(d => {
+                                Swal.fire('Pronto!', d.message || 'Operação realizada.', 'success')
+                                    .then(() => location.reload());
+                            });
+                        } else {
+                            return r.text().then(err => {
+                                Swal.fire('Erro', err, 'error');
+                            });
+                        }
+                    })
+                    .catch(() => Swal.fire('Erro', 'Falha na conexão.', 'error'));
+            }
         });
     </script>
 }

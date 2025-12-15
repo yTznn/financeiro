@@ -34,9 +34,12 @@ namespace Financeiro.Repositorios
 
             try
             {
+                // [ALTERADO] Adicionadas as colunas de DataReferenciaInicio e Fim
                 const string sqlHeader = @"
-                    INSERT INTO MovimentacaoFinanceira (DataMovimentacao, FornecedorIdCompleto, ValorTotal, Historico, Ativo)
-                    VALUES (@DataMovimentacao, @FornecedorIdCompleto, @ValorTotal, @Historico, 1);
+                    INSERT INTO MovimentacaoFinanceira 
+                        (DataMovimentacao, FornecedorIdCompleto, ValorTotal, Historico, Ativo, DataReferenciaInicio, DataReferenciaFim)
+                    VALUES 
+                        (@DataMovimentacao, @FornecedorIdCompleto, @ValorTotal, @Historico, 1, @DataReferenciaInicio, @DataReferenciaFim);
                     SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
                 int movId = await conn.QuerySingleAsync<int>(sqlHeader, new
@@ -44,7 +47,10 @@ namespace Financeiro.Repositorios
                     vm.DataMovimentacao,
                     vm.FornecedorIdCompleto,
                     ValorTotal = vm.ValorTotalDecimal, 
-                    vm.Historico
+                    vm.Historico,
+                    // [NOVO] Passando as datas calculadas no Controller (ou null)
+                    vm.DataReferenciaInicio,
+                    vm.DataReferenciaFim
                 }, tx);
 
                 const string sqlItem = @"
@@ -96,10 +102,11 @@ namespace Financeiro.Repositorios
             var ptBR = new CultureInfo("pt-BR");
 
             // 3. Monta o ViewModel
-            // AQUI O PULO DO GATO: Se mov.ValorTotal for decimal, converte.
-            // Se o erro persiste, pode ser que mov.ValorTotal seja string na classe MovimentacaoFinanceira?
-            // Vou forçar um cast para decimal para garantir.
             decimal vTotal = Convert.ToDecimal(mov.ValorTotal);
+
+            // [NOTA] Se quiser exibir a referência na edição/visualização futura,
+            // precisará mapear mov.DataReferenciaInicio e Fim aqui também.
+            // Por enquanto, mantive o foco no Insert e Listagem básica.
 
             return new MovimentacaoViewModel
             {
@@ -108,19 +115,48 @@ namespace Financeiro.Repositorios
                 FornecedorIdCompleto = mov.FornecedorIdCompleto,
                 ValorTotal = vTotal.ToString("N2", ptBR), 
                 Historico = mov.Historico,
+                
+                // Mapeia datas de volta para a ViewModel (opcional, mas bom ter)
+                DataReferenciaInicio = mov.DataReferenciaInicio,
+                DataReferenciaFim = mov.DataReferenciaFim,
+
                 Rateios = rateios.Select(r => 
                 {
-                     // Mesma coisa aqui: garante que é decimal antes de formatar
-                     decimal vRateio = Convert.ToDecimal(r.Valor);
-                     return new MovimentacaoRateioViewModel
-                     {
+                      decimal vRateio = Convert.ToDecimal(r.Valor);
+                      return new MovimentacaoRateioViewModel
+                      {
                         InstrumentoId = r.InstrumentoId,
                         ContratoId = r.ContratoId,
                         NaturezaId = r.NaturezaId,
                         Valor = vRateio.ToString("N2", ptBR)
-                     };
+                      };
                 }).ToList()
             };
+        }
+
+        public async Task ExcluirAsync(int id)
+        {
+            using var conn = _factory.CreateConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            try
+            {
+                // 1. Apaga os Rateios (Filhos)
+                const string sqlRateio = "DELETE FROM MovimentacaoRateio WHERE MovimentacaoId = @id";
+                await conn.ExecuteAsync(sqlRateio, new { id }, tx);
+
+                // 2. Apaga a Movimentação (Pai)
+                const string sqlMov = "DELETE FROM MovimentacaoFinanceira WHERE Id = @id";
+                await conn.ExecuteAsync(sqlMov, new { id }, tx);
+
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
         }
     }
 }

@@ -15,5 +15,7 @@ namespace Financeiro.Models
 
         // Para exibição na lista
         public string NomeFornecedor { get; set; } 
+        public DateTime? DataReferenciaInicio { get; set; }
+        public DateTime? DataReferenciaFim { get; set; }
     }
 }

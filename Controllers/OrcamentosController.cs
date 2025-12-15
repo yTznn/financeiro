@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.Data.SqlClient; // Adicionado para garantir compatibilidade
+using Microsoft.Data.SqlClient;
 using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-
+using Financeiro.Models.Dto;
 using Financeiro.Models;
 using Financeiro.Models.ViewModels;
 using Financeiro.Repositorios;

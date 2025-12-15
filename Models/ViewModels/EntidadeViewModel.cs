@@ -4,19 +4,16 @@ namespace Financeiro.Models.ViewModels
 {
     public class EntidadeViewModel
     {
-        public int? Id { get; set; }  // null para Create
+        public int? Id { get; set; }
 
-        [Display(Name = "Nome da Entidade"), Required, StringLength(200)]
+        [Display(Name = "Nome da Entidade"), Required(ErrorMessage = "O nome é obrigatório"), StringLength(200)]
         public string Nome { get; set; } = null!;
 
-        [Display(Name = "Sigla"), Required, StringLength(20)]
+        [Display(Name = "Sigla"), Required(ErrorMessage = "A sigla é obrigatória"), StringLength(20)]
         public string Sigla { get; set; } = null!;
 
-        [Display(Name = "CNPJ"), Required, StringLength(18)]
-        public string Cnpj { get; set; } = null!;   // máscara 00.000.000/0000-00 no front
-
-        [Display(Name = "Conta Bancária")]
-        public int? ContaBancariaId { get; set; }
+        [Display(Name = "CNPJ"), Required(ErrorMessage = "O CNPJ é obrigatório"), StringLength(18)]
+        public string Cnpj { get; set; } = null!;
 
         [Display(Name = "Endereço")]
         public int? EnderecoId { get; set; }
@@ -29,5 +26,27 @@ namespace Financeiro.Models.ViewModels
 
         [Display(Name = "Observações")]
         public string? Observacao { get; set; }
+
+        // =================================================================
+        // DADOS BANCÁRIOS (Gerenciados via permissão ENTIDADE_CONTA_EDIT)
+        // =================================================================
+        
+        public int? ContaBancariaId { get; set; } // Mantemos para referência oculta
+
+        [Display(Name = "Banco")]
+        [StringLength(100)]
+        public string? Banco { get; set; }
+
+        [Display(Name = "Agência")]
+        [StringLength(20)]
+        public string? Agencia { get; set; }
+
+        [Display(Name = "Conta")]
+        [StringLength(30)]
+        public string? Conta { get; set; }
+
+        [Display(Name = "Chave PIX")]
+        [StringLength(120)]
+        public string? ChavePix { get; set; }
     }
 }

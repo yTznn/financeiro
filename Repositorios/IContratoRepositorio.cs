@@ -28,5 +28,7 @@ namespace Financeiro.Repositorios
         // [NOVO] Adicione esta linha aqui:
         Task<IEnumerable<ContratoNatureza>> ListarNaturezasPorContratoAsync(int contratoId);
         Task<decimal> ObterTotalComprometidoPorDetalheAsync(int orcamentoDetalheId, int? ignorarContratoId = null);
+        Task<IEnumerable<dynamic>> ListarAtivosPorFornecedorAsync(int entidadeId, int fornecedorId, string tipoPessoa);
+        Task<IEnumerable<dynamic>> ListarNaturezasDetalhadasPorContratoAsync(int contratoId);
     }
 }

@@ -1,50 +1,73 @@
 @model Financeiro.Models.Dto.NivelDto
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo Nível" : "Editar Nível";
-    var formId = $"nivel-form-{Model.GetHashCode()}";
+    bool isNovo = Model.Id == 0;
 }
 
-@if (!Context.Request.Headers["X-Requested-With"].Equals("XMLHttpRequest"))
-{
-    <h3>@ViewData["Title"]</h3>
-    <hr />
-}
-
-<form id="@formId" asp-action="@(Model.Id == 0 ? "Salvar" : "Atualizar")" method="post">
-    @Html.AntiForgeryToken()
-    <input type="hidden" asp-for="Id" />
-
-    <div class="mb-3">
-        <label asp-for="Nome" class="form-label"></label>
-        <input asp-for="Nome" class="form-control" />
-        <span asp-validation-for="Nome" class="text-danger"></span>
+<div class="container py-4" style="max-width: 700px;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h3 class="fw-bold text-secondary mb-0">
+            <i class='bx @(isNovo ? "bx-plus-circle" : "bx-edit") me-2'></i>@ViewData["Title"]
+        </h3>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class='bx bx-arrow-back'></i> Voltar
+        </a>
     </div>
 
-    @* CORREÇÃO: As checkboxes para selecionar o "nível do nível" estão visíveis novamente! *@
-    <div class="mb-3">
-        <label class="form-label d-block">Aplicável aos seguintes níveis:</label>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" asp-for="IsNivel1" />
-            <label class="form-check-label" asp-for="IsNivel1">Nível 1</label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" asp-for="IsNivel2" />
-            <label class="form-check-label" asp-for="IsNivel2">Nível 2</label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" asp-for="IsNivel3" />
-            <label class="form-check-label" asp-for="IsNivel3">Nível 3</label>
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+            <form asp-action="@(isNovo ? "Salvar" : "Atualizar")" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id" />
+
+                <div class="mb-4">
+                    <label asp-for="Nome" class="form-label fw-bold small text-uppercase text-muted">Nome do Nível</label>
+                    <input asp-for="Nome" class="form-control form-control-lg" placeholder="Ex: Despesas Operacionais" autofocus />
+                    <span asp-validation-for="Nome" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-uppercase text-muted mb-2">Hierarquia Aplicável</label>
+                    <div class="d-flex gap-3 p-3 bg-light rounded border">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" asp-for="IsNivel1">
+                            <label class="form-check-label" asp-for="IsNivel1">Nível 1 (Sintético)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" asp-for="IsNivel2">
+                            <label class="form-check-label" asp-for="IsNivel2">Nível 2 (Grupo)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" asp-for="IsNivel3">
+                            <label class="form-check-label" asp-for="IsNivel3">Nível 3 (Analítico)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                    <input class="form-check-input" type="checkbox" asp-for="Ativo">
+                    <label class="form-check-label fw-bold" asp-for="Ativo">Registro Ativo</label>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-3">
+                    <a asp-action="Index" class="btn btn-light border px-4">Cancelar</a>
+                    <button type="submit" class="btn btn-primary px-5 shadow-sm">
+                        <i class='bx bx-save me-2'></i> Salvar Dados
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <div class="form-check mb-3">
-        <input class="form-check-input" asp-for="Ativo" />
-        <label class="form-check-label" asp-for="Ativo">Ativo</label>
-    </div>
-
-    @if (!Context.Request.Headers["X-Requested-With"].Equals("XMLHttpRequest"))
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    @if(TempData["Erro"] != null)
     {
-        <button type="submit" class="btn btn-primary">Salvar</button>
-        <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            Swal.fire({ icon: 'error', title: 'Atenção', text: '@TempData["Erro"]' });
+        </script>
     }
-</form>
+}

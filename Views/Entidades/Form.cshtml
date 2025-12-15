@@ -1,99 +1,183 @@
+@using Financeiro.Extensions
 @model Financeiro.Models.ViewModels.EntidadeViewModel
+
 @{
     bool isEdit = Model.Id.HasValue;
     ViewData["Title"] = isEdit ? "Editar Entidade" : "Nova Entidade";
+    
+    // Verifica permissão para MOSTRAR o bloco
+    bool temPermissaoBanco = User.TemPermissao("ENTIDADE_CONTA_EDIT");
 }
 
-<h2>@ViewData["Title"]</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0 fw-bold text-dark">@ViewData["Title"]</h2>
+</div>
 
 @if (isEdit)
 {
-    <!-- Card: Endereço Principal (preenchido via AJAX) -->
-    <div id="cardEnderecoPrincipal" class="card border-0 shadow-sm mb-3 d-none">
-        <div class="card-body d-flex align-items-start justify-content-between">
+    <div id="cardEnderecoPrincipal" class="card border-0 shadow-sm mb-4 d-none border-start border-4 border-primary">
+        <div class="card-body d-flex align-items-center justify-content-between py-3">
             <div>
-                <div class="small text-muted mb-1">
-                    <i class="bx bx-star me-1"></i> Endereço principal
+                <div class="small text-uppercase text-muted fw-bold mb-1" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                    <i class="bx bx-star me-1 text-warning"></i> Endereço Principal
                 </div>
-                <div id="epLinha1" class="fw-semibold"></div>
-                <div id="epLinha2" class="text-muted"></div>
+                <div id="epLinha1" class="fw-bold text-dark fs-5"></div>
+                <div id="epLinha2" class="text-secondary small mt-1"></div>
             </div>
             <div class="ms-3">
-                <a class="btn btn-sm btn-outline-secondary"
+                <a class="btn btn-sm btn-outline-primary"
                    asp-controller="Entidades"
                    asp-action="GerenciarEnderecos"
                    asp-route-id="@(Model.Id ?? 0)">
-                    <i class="bx bx-map"></i> Gerenciar
+                    <i class="bx bx-map me-1"></i> Gerenciar Endereços
                 </a>
             </div>
         </div>
     </div>
 
-    <!-- Alerta quando não há principal -->
-    <div id="alertSemPrincipal" class="alert alert-warning d-none mb-3">
-        Nenhum endereço principal definido para esta entidade.
-        <a class="alert-link"
-           asp-controller="Entidades"
-           asp-action="GerenciarEnderecos"
-           asp-route-id="@(Model.Id ?? 0)">Definir agora</a>.
+    <div id="alertSemPrincipal" class="alert alert-warning d-none mb-4 shadow-sm border-0 d-flex align-items-center">
+        <i class='bx bx-error-circle fs-4 me-2'></i>
+        <div>
+            Nenhum endereço principal definido para esta entidade.
+            <a class="alert-link fw-bold"
+               asp-controller="Entidades"
+               asp-action="GerenciarEnderecos"
+               asp-route-id="@(Model.Id ?? 0)">Definir agora</a>.
+        </div>
     </div>
 }
 
-<form id="frmEntidade" autocomplete="off">
+<form id="frmEntidade" autocomplete="off" class="needs-validation" novalidate>
     @if (isEdit) { <input type="hidden" asp-for="Id" /> }
+    
+    <input type="hidden" asp-for="ContaBancariaId" />
 
-    <!-- campos -->
-    <div class="mb-2">
-        <label asp-for="Nome" class="form-label"></label>
-        <input asp-for="Nome" class="form-control" id="Nome" />
-        <span asp-validation-for="Nome" class="text-danger"></span>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-transparent border-0 pt-3 pb-0">
+            <h5 class="text-primary mb-0"><i class='bx bx-id-card me-1'></i> Dados Cadastrais</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Nome" class="form-label fw-bold small text-uppercase text-muted"></label>
+                    <input asp-for="Nome" class="form-control" id="Nome" placeholder="Razão Social ou Nome da Unidade" />
+                    <span asp-validation-for="Nome" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-2">
+                    <label asp-for="Sigla" class="form-label fw-bold small text-uppercase text-muted"></label>
+                    <input asp-for="Sigla" class="form-control text-uppercase" id="Sigla" maxlength="20" placeholder="Ex: IPGSE" />
+                    <span asp-validation-for="Sigla" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="Cnpj" class="form-label fw-bold small text-uppercase text-muted"></label>
+                    <input asp-for="Cnpj" class="form-control font-monospace" id="txtCnpj" placeholder="00.000.000/0000-00" />
+                    <span asp-validation-for="Cnpj" class="text-danger small"></span>
+                </div>
+                
+                <div class="col-12">
+                     <label asp-for="Observacao" class="form-label fw-bold small text-uppercase text-muted"></label>
+                     <textarea asp-for="Observacao" class="form-control" rows="2" placeholder="Informações adicionais..."></textarea>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="form-check form-switch p-3 bg-light rounded border">
+                        <input asp-for="Ativo" class="form-check-input" type="checkbox" role="switch" id="switchAtivo" />
+                        <label class="form-check-label ms-2" for="switchAtivo">
+                            <strong>Entidade Ativa</strong>
+                            <div class="small text-muted">Define se a unidade aparece nos cadastros gerais.</div>
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check form-switch p-3 bg-light rounded border">
+                        <input asp-for="VinculaUsuario" class="form-check-input" type="checkbox" role="switch" id="switchVinculo" />
+                        <label class="form-check-label ms-2" for="switchVinculo">
+                            <strong>Permite Vínculo de Usuário</strong>
+                            <div class="small text-muted">Habilita usuários a logarem nesta unidade.</div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="mb-2">
-        <label asp-for="Sigla" class="form-label"></label>
-        <input asp-for="Sigla" class="form-control" id="Sigla" />
-        <span asp-validation-for="Sigla" class="text-danger"></span>
-    </div>
+    @if (temPermissaoBanco)
+    {
+        <div class="card border-0 shadow-sm mb-4 border-start border-4 border-success">
+            <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                <h5 class="text-success mb-0"><i class='bx bxs-bank me-1'></i> Dados Bancários (Financeiro)</h5>
+            </div>
+            <div class="card-body">
+                @if (isEdit)
+                {
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label asp-for="Banco" class="form-label fw-bold small text-uppercase text-muted"></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted"><i class='bx bxs-building'></i></span>
+                                <input asp-for="Banco" class="form-control" placeholder="Ex: Banco do Brasil" />
+                            </div>
+                            <span asp-validation-for="Banco" class="text-danger small"></span>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label asp-for="Agencia" class="form-label fw-bold small text-uppercase text-muted"></label>
+                            <input asp-for="Agencia" class="form-control" placeholder="0000-X" />
+                            <span asp-validation-for="Agencia" class="text-danger small"></span>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label asp-for="Conta" class="form-label fw-bold small text-uppercase text-muted"></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted"><i class='bx bx-wallet'></i></span>
+                                <input asp-for="Conta" class="form-control" placeholder="00000-0" />
+                            </div>
+                            <span asp-validation-for="Conta" class="text-danger small"></span>
+                        </div>
 
-    <div class="mb-2">
-        <label asp-for="Cnpj" class="form-label"></label>
-        <input asp-for="Cnpj" class="form-control" id="txtCnpj" />
-        <span asp-validation-for="Cnpj" class="text-danger"></span>
-    </div>
+                        <div class="col-md-3">
+                            <label asp-for="ChavePix" class="form-label fw-bold small text-uppercase text-muted"></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted"><i class='bx bx-qr'></i></span>
+                                <input asp-for="ChavePix" class="form-control" placeholder="CPF/CNPJ/Email..." />
+                            </div>
+                            <span asp-validation-for="ChavePix" class="text-danger small"></span>
+                        </div>
+                        
+                        <div class="col-12">
+                            <div class="form-text text-muted">
+                                <i class='bx bx-info-circle'></i> Estes dados serão utilizados automaticamente como <strong>Conta de Origem</strong> nos lançamentos financeiros desta unidade.
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-light border border-dashed text-center py-4 mb-0">
+                        <i class='bx bx-lock-alt fs-1 text-muted mb-2'></i>
+                        <h6 class="text-muted fw-bold">Cadastro Bloqueado Temporariamente</h6>
+                        <p class="text-muted small mb-0">
+                            Para configurar a Conta Bancária, primeiro <strong>salve</strong> os dados cadastrais acima.<br>
+                            Após salvar, você será redirecionado para a edição onde os campos estarão liberados.
+                        </p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 
-    <div class="form-check form-switch mb-2">
-        <input asp-for="Ativo" class="form-check-input" />
-        <label asp-for="Ativo" class="form-check-label"></label>
-    </div>
-
-    <div class="form-check form-switch mb-3">
-        <input asp-for="VinculaUsuario" class="form-check-input" />
-        <label asp-for="VinculaUsuario" class="form-check-label"></label>
-    </div>
-
-    <div class="mb-3">
-        <label asp-for="Observacao" class="form-label"></label>
-        <textarea asp-for="Observacao" class="form-control"></textarea>
-    </div>
-
-    <div class="d-flex align-items-center gap-2">
-        <button type="submit" class="btn btn-primary">
-            @(isEdit ? "Salvar alterações" : "Criar")
+    <div class="d-flex align-items-center gap-2 py-3 border-top mt-4">
+        <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm">
+            <i class='bx bx-save me-1'></i> @(isEdit ? "Salvar Alterações" : "Criar Entidade")
         </button>
 
-        <a asp-action="Index" class="btn btn-secondary">Voltar</a>
-
-        @* Botão Endereços: aparece só em edição *@
-        @if (isEdit)
-        {
-            <a class="btn btn-outline-secondary"
-               asp-controller="Entidades"
-               asp-action="GerenciarEnderecos"
-               asp-route-id="@(Model.Id ?? 0)"
-               title="Gerenciar Endereços da Entidade">
-                <i class="bx bx-map"></i> Endereços
-            </a>
-        }
+        <a asp-action="Index" class="btn btn-outline-secondary btn-lg px-4">
+            Voltar
+        </a>
     </div>
 </form>
 
@@ -102,83 +186,141 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 
     <script>
-        /* máscara */
-        $('#txtCnpj').mask('00.000.000/0000-00');
+        $(document).ready(function() {
+            /* Máscara CNPJ */
+            $('#txtCnpj').mask('00.000.000/0000-00');
 
-        /* auto-fill */
-        $('#txtCnpj').on('blur', function () {
-            const cnpj = $(this).val().replace(/\D/g, '');
-            if (cnpj.length === 14) {
-                fetch(`/Entidades/AutoFill?cnpj=${cnpj}`)
-                    .then(r => r.json())
-                    .then(d => { if (d) { $('#Nome').val(d.nome); $('#Sigla').val(d.sigla); } });
+            /* Auto-fill por CNPJ */
+            $('#txtCnpj').on('blur', function () {
+                const cnpj = $(this).val().replace(/\D/g, '');
+                
+                // CORREÇÃO CRÍTICA 1: Pega APENAS o botão de submit do formulário atual
+                const btnSubmit = $('#frmEntidade').find('button[type="submit"]');
+                
+                if (cnpj.length === 14) {
+                    const originalText = btnSubmit.html();
+                    btnSubmit.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Buscando...');
+
+                    fetch(`/Entidades/AutoFill?cnpj=${cnpj}`)
+                        .then(r => r.json())
+                        .then(d => { 
+                            if (d && d.nome) { 
+                                $('#Nome').val(d.nome); 
+                                $('#Sigla').val(d.sigla); 
+                                Swal.fire({
+                                    toast: true,
+                                    position: 'top-end',
+                                    icon: 'success',
+                                    title: 'Dados encontrados!',
+                                    showConfirmButton: false,
+                                    timer: 3000
+                                });
+                            } 
+                        })
+                        .finally(() => {
+                            btnSubmit.prop('disabled', false).html(originalText);
+                        });
+                }
+            });
+
+            /* Helper: Formata CEP */
+            function formatCep(cep) {
+                if (!cep) return '';
+                const digits = ('' + cep).replace(/\D/g, '');
+                return digits.replace(/^(\d{5})(\d{3})$/, '$1-$2');
             }
-        });
 
-        /* helper: formata CEP */
-        function formatCep(cep) {
-            if (!cep) return '';
-            const digits = ('' + cep).replace(/\D/g, '');
-            return digits.replace(/^(\d{5})(\d{3})$/, '$1-$2');
-        }
+            /* Carregar endereço principal (somente em edição) */
+            (function carregarEnderecoPrincipal() {
+                const isEdit = @(isEdit.ToString().ToLower());
+                if (!isEdit) return;
 
-        /* carregar endereço principal (somente em edição) */
-        (function carregarEnderecoPrincipal() {
-            const isEdit = @(isEdit.ToString().ToLower());
-            if (!isEdit) return;
+                const id = @(Model.Id ?? 0);
+                
+                fetch(`/Entidades/EnderecoPrincipal/${id}`)
+                    .then(r => r.json())
+                    .then(j => {
+                        const card = document.getElementById('cardEnderecoPrincipal');
+                        const alertSem = document.getElementById('alertSemPrincipal');
 
-            const id = @(Model.Id ?? 0);
-            fetch(`/Entidades/EnderecoPrincipal/${id}`)
-                .then(r => r.json())
-                .then(j => {
-                    const card = document.getElementById('cardEnderecoPrincipal');
-                    const alertSem = document.getElementById('alertSemPrincipal');
+                        if (!j?.sucesso) return;
 
-                    if (!j?.sucesso) {
-                        // falha silenciosa
-                        return;
-                    }
+                        if (!j.possuiPrincipal) {
+                            alertSem?.classList.remove('d-none');
+                            return;
+                        }
 
-                    if (!j.possuiPrincipal) {
-                        alertSem?.classList.remove('d-none');
-                        return;
-                    }
+                        const e = j.endereco || {};
+                        const linha1 = `${e.Logradouro ?? ''}, ${e.Numero ?? ''} ${e.Complemento ? ' - ' + e.Complemento : ''}`.trim();
+                        const linha2 = `${e.Bairro ?? ''} — ${e.Municipio ?? ''}/${e.Uf ?? ''} ${e.Cep ? ' — CEP ' + formatCep(e.Cep) : ''}`.trim();
 
-                    const e = j.endereco || {};
-                    const linha1 = `${e.Logradouro ?? ''}, ${e.Numero ?? ''} ${e.Complemento ? ' - ' + e.Complemento : ''}`.trim();
-                    const linha2 = `${e.Bairro ?? ''} — ${e.Municipio ?? ''}/${e.Uf ?? ''} ${e.Cep ? ' — CEP ' + formatCep(e.Cep) : ''}`.trim();
+                        document.getElementById('epLinha1').textContent = linha1;
+                        document.getElementById('epLinha2').textContent = linha2;
 
-                    document.getElementById('epLinha1').textContent = linha1;
-                    document.getElementById('epLinha2').textContent = linha2;
+                        card?.classList.remove('d-none');
+                    })
+                    .catch(() => { /* ignora erro */ });
+            })();
 
-                    card?.classList.remove('d-none');
+            /* Submit do Formulário */
+            $('#frmEntidade').on('submit', function (e) {
+                e.preventDefault();
+                
+                if (!$(this).valid()) {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'warning',
+                        title: 'Preencha os campos obrigatórios.',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                    return;
+                }
+
+                const url = '@(isEdit ? Url.Action("Edit", "Entidades", new { id = Model.Id }) : Url.Action("Create", "Entidades"))';
+                const formData = $(this).serialize();
+
+                // CORREÇÃO CRÍTICA 2: Pega APENAS o botão de submit do formulário atual
+                const btn = $(this).find('button[type="submit"]');
+                
+                // Backup seguro do texto original
+                const originalContent = btn.html();
+                
+                btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Salvando...');
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
                 })
-                .catch(() => { /* ignora erro */ });
-        })();
-
-        /* submit */
-        $('#frmEntidade').on('submit', function (e) {
-            e.preventDefault();
-            if (!$(this).valid()) return;
-
-            /* URL correta para create / edit */
-            const url = '@(isEdit
-                ? Url.Action("Edit",   "Entidades", new { id = Model.Id })
-                : Url.Action("Create", "Entidades"))';
-
-            const formData = $(this).serialize();
-
-            fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
-            })
-            .then(async resp => {
-                const j = await resp.json();
-                SwalDefault.fire(j.mensagem, '', j.sucesso ? 'success' : 'error')
-                    .then(() => { if (j.sucesso) location.href = '@Url.Action("Index","Entidades")'; });
-            })
-            .catch(() => SwalDefault.fire('Erro inesperado.', '', 'error'));
+                .then(async resp => {
+                    const j = await resp.json();
+                    
+                    if (j.sucesso) {
+                        Swal.fire({
+                            title: 'Sucesso!',
+                            text: j.mensagem,
+                            icon: 'success',
+                            confirmButtonColor: '#3085d6'
+                        }).then(() => {
+                             location.href = '@Url.Action("Index", "Entidades")'; 
+                        });
+                    } else {
+                        Swal.fire('Erro!', j.mensagem, 'error');
+                        // Restaura o botão em caso de erro lógico (ex: backend recusou)
+                        btn.prop('disabled', false).html(originalContent);
+                    }
+                })
+                .catch(() => {
+                    Swal.fire('Erro!', 'Ocorreu um erro inesperado na comunicação com o servidor.', 'error');
+                    // Restaura o botão em caso de erro técnico
+                    btn.prop('disabled', false).html(originalContent);
+                })
+                // Nota: removi o .finally() que restaurava o botão incondicionalmente,
+                // pois se for sucesso e redirecionar, não queremos que o botão volte a ficar ativo.
+                // Restauramos apenas nos blocos de erro acima.
+            });
         });
     </script>
 }

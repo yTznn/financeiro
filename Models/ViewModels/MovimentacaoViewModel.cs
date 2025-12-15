@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
-using Microsoft.AspNetCore.Http; // Necessário para IFormFile
+using Microsoft.AspNetCore.Http; 
 
 namespace Financeiro.Models.ViewModels
 {
@@ -26,7 +26,19 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Valor Total Pago")]
         public string ValorTotal { get; set; }
 
-        // [NOVO] Campo para Upload de Arquivo
+        // --- [NOVOS CAMPOS DE REFERÊNCIA] ---
+        
+        // 1. Campo Visual (para o input type="month" da View)
+        // O navegador envia string no formato "yyyy-MM" (ex: "2025-02")
+        [Display(Name = "Mês de Referência")]
+        public string? ReferenciaMesAno { get; set; }
+
+        // 2. Campos de Banco (Calculados no Controller a partir do campo acima)
+        public DateTime? DataReferenciaInicio { get; set; }
+        public DateTime? DataReferenciaFim { get; set; }
+
+        // ------------------------------------
+
         [Display(Name = "Comprovante / Documento (PDF)")]
         public IFormFile? ArquivoAnexo { get; set; }
 

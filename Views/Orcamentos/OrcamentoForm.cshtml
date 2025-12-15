@@ -1,4 +1,5 @@
 @model Financeiro.Models.ViewModels.OrcamentoViewModel
+@using Financeiro.Extensions
 
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo Orçamento" : "Editar Orçamento";
@@ -111,10 +112,17 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <div class="vr mx-2"></div>
-                <button type="button" class="btn btn-warning" id="btn-abrir-modal-nivel">
-                    <i class="bi bi-asterisk"></i> Cadastrar Novo Nível (BD)
-                </button>
+                
+                @* --- INÍCIO DA PROTEÇÃO POR PERMISSÃO --- *@
+                @if (User.TemPermissao("NIVEL_ADD"))
+                {
+                    <div class="vr mx-2"></div>
+                    <button type="button" class="btn btn-warning" id="btn-abrir-modal-nivel">
+                        <i class="bi bi-asterisk"></i> Cadastrar Novo Nível (BD)
+                    </button>
+                }
+                @* --- FIM DA PROTEÇÃO --- *@
+
                 <div id="modal-nivel-placeholder"></div>
                 <button type="button" class="btn btn-success fw-bold" id="salvar-detalhamento">
                     <i class="bi bi-check-lg"></i> Confirmar Detalhes
@@ -147,7 +155,7 @@
         const arvoreContainer = document.getElementById('arvore-container');
         const btnAdicionarNivel = document.getElementById('btn-adicionar-nivel');
         const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
-        const btnAbrirNovoNivel = document.getElementById('btn-abrir-modal-nivel');
+        const btnAbrirNovoNivel = document.getElementById('btn-abrir-modal-nivel'); // Pode ser null se não tiver permissão
         
         const valorTotalInput = document.getElementById('ValorPrevistoTotal');
         const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
@@ -482,11 +490,11 @@
                 
                 // Se não achou container no DOM (porque é o primeiro filho), insere no div pai
                 if(!elem.querySelector('.orcamento-node-children')) {
-                     childrenContainer = document.createElement('div');
-                     childrenContainer.className = 'orcamento-node-children border-start border-3 border-secondary ps-3 ms-4 mt-2';
-                     elem.appendChild(childrenContainer);
+                      childrenContainer = document.createElement('div');
+                      childrenContainer.className = 'orcamento-node-children border-start border-3 border-secondary ps-3 ms-4 mt-2';
+                      elem.appendChild(childrenContainer);
                 } else {
-                     childrenContainer = elem.querySelector('.orcamento-node-children');
+                      childrenContainer = elem.querySelector('.orcamento-node-children');
                 }
                 
                 childrenContainer.appendChild(novoElemento);
@@ -547,68 +555,70 @@
         });
 
         // [RESTAURADO] Lógica do Botão "Cadastrar Novo Nível" que havia sumido
-        btnAbrirNovoNivel.addEventListener('click', () => {
-            const nivel = ultimoNivelFocado || 1;
-            const $placeholder = $('#modal-nivel-placeholder');
-            
-            // 1. Busca o HTML do modal via AJAX
-            $.get('/Niveis/NovoNivelPartial', { nivel })
-                .done(html => {
-                    $placeholder.html(html);
-                    const $modal = $placeholder.find('.modal');
-                    const $form = $placeholder.find('form');
+        if(btnAbrirNovoNivel) { // Verifica se o botão existe antes de adicionar evento
+            btnAbrirNovoNivel.addEventListener('click', () => {
+                const nivel = ultimoNivelFocado || 1;
+                const $placeholder = $('#modal-nivel-placeholder');
+                
+                // 1. Busca o HTML do modal via AJAX
+                $.get('/Niveis/NovoNivelPartial', { nivel })
+                    .done(html => {
+                        $placeholder.html(html);
+                        const $modal = $placeholder.find('.modal');
+                        const $form = $placeholder.find('form');
 
-                    // 2. Reativa validação do jQuery (Unobtrusive) no form carregado dinamicamente
-                    if ($.validator && $.validator.unobtrusive) {
-                        $.validator.unobtrusive.parse($form);
-                    }
+                        // 2. Reativa validação do jQuery (Unobtrusive) no form carregado dinamicamente
+                        if ($.validator && $.validator.unobtrusive) {
+                            $.validator.unobtrusive.parse($form);
+                        }
 
-                    // 3. Intercepta o Submit para enviar via AJAX
-                    $form.on('submit', function (e) {
-                        e.preventDefault();
-                        if (!$form.valid()) return;
+                        // 3. Intercepta o Submit para enviar via AJAX
+                        $form.on('submit', function (e) {
+                            e.preventDefault();
+                            if (!$form.valid()) return;
 
-                        $.ajax({
-                            url: $form.attr('action'),
-                            type: $form.attr('method'),
-                            data: $form.serialize(),
-                            success: function (response) {
-                                // Fecha modal e avisa sucesso
-                                const modalInstance = bootstrap.Modal.getInstance($modal[0]);
-                                modalInstance.hide();
-                                Swal.fire({ icon: 'success', title: 'Sucesso!', text: response.message, timer: 1500 });
-                                
-                                // Opcional: Se quiser recarregar os selects para mostrar o novo nível,
-                                // não precisa fazer nada pois o Select2 Ajax busca na hora.
-                            },
-                            error: function (xhr) {
-                                let mensagemErro = "Falha ao salvar.";
-                                if (xhr.status === 409) { // Conflict (Duplicado)
-                                    mensagemErro = xhr.responseText; // Texto enviado pelo controller
-                                    Swal.fire({ icon: 'warning', title: 'Atenção', text: mensagemErro });
-                                } else if (xhr.status === 400 && xhr.responseJSON) {
-                                    // Erros de validação do ModelState
-                                    const errors = xhr.responseJSON;
-                                    // ... lógica simples de mostrar erro ...
-                                    Swal.fire({ icon: 'error', title: 'Erro de Validação', text: 'Verifique os campos.' });
-                                } else {
-                                    Swal.fire({ icon: 'error', title: 'Erro', text: mensagemErro });
+                            $.ajax({
+                                url: $form.attr('action'),
+                                type: $form.attr('method'),
+                                data: $form.serialize(),
+                                success: function (response) {
+                                    // Fecha modal e avisa sucesso
+                                    const modalInstance = bootstrap.Modal.getInstance($modal[0]);
+                                    modalInstance.hide();
+                                    Swal.fire({ icon: 'success', title: 'Sucesso!', text: response.message, timer: 1500 });
+                                    
+                                    // Opcional: Se quiser recarregar os selects para mostrar o novo nível,
+                                    // não precisa fazer nada pois o Select2 Ajax busca na hora.
+                                },
+                                error: function (xhr) {
+                                    let mensagemErro = "Falha ao salvar.";
+                                    if (xhr.status === 409) { // Conflict (Duplicado)
+                                        mensagemErro = xhr.responseText; // Texto enviado pelo controller
+                                        Swal.fire({ icon: 'warning', title: 'Atenção', text: mensagemErro });
+                                    } else if (xhr.status === 400 && xhr.responseJSON) {
+                                        // Erros de validação do ModelState
+                                        const errors = xhr.responseJSON;
+                                        // ... lógica simples de mostrar erro ...
+                                        Swal.fire({ icon: 'error', title: 'Erro de Validação', text: 'Verifique os campos.' });
+                                    } else {
+                                        Swal.fire({ icon: 'error', title: 'Erro', text: mensagemErro });
+                                    }
                                 }
-                            }
+                            });
                         });
-                    });
 
-                    $modal.on('hidden.bs.modal', function () {
-                        $(this).remove(); // Limpa o DOM
-                    });
+                        $modal.on('hidden.bs.modal', function () {
+                            $(this).remove(); // Limpa o DOM
+                        });
 
-                    const modal = new bootstrap.Modal($modal[0]);
-                    modal.show();
-                })
-                .fail(() => {
-                    Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível carregar o formulário.' });
-                });
-        });
+                        const modal = new bootstrap.Modal($modal[0]);
+                        modal.show();
+                    })
+                    .fail(() => {
+                        Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível carregar o formulário.' });
+                    });
+            });
+        }
 
         btnSalvarDetalhamento.addEventListener('click', () => {
             syncSelectionsIntoData();

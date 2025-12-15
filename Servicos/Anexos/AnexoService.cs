@@ -1,8 +1,10 @@
 using Financeiro.Models;
 using Financeiro.Repositorios;
 using Microsoft.AspNetCore.Http;
+using System;
+using System.IO;
 using System.Security.Cryptography;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace Financeiro.Servicos.Anexos
 {
@@ -39,5 +41,13 @@ namespace Financeiro.Servicos.Anexos
 
             return await _arquivoRepositorio.AdicionarAsync(entidade);
         }
+
+        // --- NOVO MÉTODO IMPLEMENTADO ---
+        public async Task<Arquivo?> ObterPorReferenciaAsync(string origem, int chaveReferencia)
+        {
+            // Repassa a chamada para o repositório buscar no banco
+            return await _arquivoRepositorio.ObterPorReferenciaAsync(origem, chaveReferencia);
+        }
+        
     }
 }

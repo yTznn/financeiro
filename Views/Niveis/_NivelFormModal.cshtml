@@ -1,55 +1,76 @@
 @model Financeiro.Models.Dto.NivelDto
 
 @{
-    // Gera um ID único para o formulário para evitar conflitos
+    // Gera um ID único para garantir que o JS pegue o form correto
     var formId = $"nivel-form-{Guid.NewGuid()}";
+    bool isNovo = Model.Id == 0;
 }
 
 <div class="modal fade" id="modal-nivel-cadastro" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Cadastrar Novo Nível</h5>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-primary">
+                    <i class='bx @(isNovo ? "bx-layer-plus" : "bx-edit") me-2'></i>
+                    @(isNovo ? "Novo Nível" : "Editar Nível")
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+
+            <div class="modal-body pt-4">
                 
                 <form id="@formId" asp-controller="Niveis" asp-action="SalvarNivelAjax" method="post">
                     @Html.AntiForgeryToken()
                     <input type="hidden" asp-for="Id" />
 
-                    <div class="mb-3">
-                        <label asp-for="Nome" class="form-label"></label>
-                        <input asp-for="Nome" class="form-control" />
-                        <span asp-validation-for="Nome" class="text-danger"></span>
+                    <div class="mb-4">
+                        <label asp-for="Nome" class="form-label fw-bold small text-uppercase text-muted">Nome do Nível</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class='bx bx-purchase-tag-alt'></i></span>
+                            <input asp-for="Nome" class="form-control form-control-lg border-start-0 ps-0" placeholder="Ex: Receitas Financeiras" />
+                        </div>
+                        <span asp-validation-for="Nome" class="text-danger small mt-1 d-block"></span>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label d-block">Aplicável aos seguintes níveis:</label>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" asp-for="IsNivel1" />
-                            <label class="form-check-label" asp-for="IsNivel1">Nível 1</label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" asp-for="IsNivel2" />
-                            <label class="form-check-label" asp-for="IsNivel2">Nível 2</label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" asp-for="IsNivel3" />
-                            <label class="form-check-label" asp-for="IsNivel3">Nível 3</label>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-uppercase text-muted mb-2">Hierarquia Aplicável</label>
+                        <div class="p-3 bg-light rounded border border-dashed d-flex justify-content-between align-items-center">
+                            
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" asp-for="IsNivel1" />
+                                <label class="form-check-label fw-medium" asp-for="IsNivel1">Nível 1</label>
+                            </div>
+                            
+                            <div class="vr text-muted opacity-25"></div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" asp-for="IsNivel2" />
+                                <label class="form-check-label fw-medium" asp-for="IsNivel2">Nível 2</label>
+                            </div>
+
+                            <div class="vr text-muted opacity-25"></div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" asp-for="IsNivel3" />
+                                <label class="form-check-label fw-medium" asp-for="IsNivel3">Nível 3</label>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" asp-for="Ativo" />
-                        <label class="form-check-label" asp-for="Ativo">Ativo</label>
+                    <div class="form-check form-switch d-flex align-items-center mb-2 ps-5">
+                        <input class="form-check-input fs-4 me-2" type="checkbox" asp-for="Ativo" style="cursor: pointer; margin-left: -2.5em;">
+                        <label class="form-check-label fw-bold text-dark pt-1" asp-for="Ativo" style="cursor: pointer;">Registro Ativo</label>
                     </div>
                 </form>
 
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary" form="@formId">Salvar</button>
+
+            <div class="modal-footer border-0 pt-0 pb-4 pe-4">
+                <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary px-4 shadow-sm" form="@formId">
+                    <i class='bx bx-save me-1'></i> Salvar
+                </button>
             </div>
         </div>
     </div>

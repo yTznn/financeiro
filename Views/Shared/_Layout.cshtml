@@ -192,14 +192,29 @@
                             }
                             @* ------------------------------------ *@
                             
-                            <li class="menu-item">
-                                <a asp-controller="Movimentacoes" asp-action="Index" class="@(currentController == "Movimentacoes" ? "active" : "")">
-                                    <i class='bx bx-money-withdraw'></i><span class="links_name">Pagamentos / Lançamentos</span>
-                                </a>
-                            </li>
+                            @* --- ITEM PROTEGIDO: LANÇAMENTOS --- *@
+                            @if (User.TemPermissao("MOVIMENTACAO_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Movimentacoes" asp-action="Index" class="@(currentController == "Movimentacoes" ? "active" : "")">
+                                        <i class='bx bx-money-withdraw'></i><span class="links_name">Lançamentos Contábeis</span>
+                                    </a>
+                                </li>
+                            }
+                            @* -------------------------------------------------------- *@
 
                             <li class="menu-item"><a asp-controller="Naturezas" asp-action="Index" class="@(currentController == "Naturezas" ? "active" : "")"><i class='bx bx-purchase-tag-alt'></i><span class="links_name">Naturezas</span></a></li>
-                            <li class="menu-item"><a asp-controller="Niveis" asp-action="Index" class="@(currentController == "Niveis" ? "active" : "")"><i class='bx bx-sitemap'></i><span class="links_name">Níveis</span></a></li>
+                            
+                            @* --- ITEM PROTEGIDO: NÍVEIS (BLOQUEIO ADICIONADO) --- *@
+                            @if (User.TemPermissao("NIVEL_VIEW"))
+                            {
+                                <li class="menu-item">
+                                    <a asp-controller="Niveis" asp-action="Index" class="@(currentController == "Niveis" ? "active" : "")">
+                                        <i class='bx bx-sitemap'></i><span class="links_name">Níveis</span>
+                                    </a>
+                                </li>
+                            }
+                            @* ---------------------------------------------------- *@
                             
                             @* --- ITEM PROTEGIDO: ORÇAMENTOS --- *@
                             @if (User.TemPermissao("ORCAMENTO_VIEW"))

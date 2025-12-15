@@ -9,10 +9,10 @@ using Financeiro.Models.ViewModels;
 namespace Financeiro.Repositorios
 {
     /// <summary>
-    /// Implementação Dapper para múltiplas contas com vínculo PF/PJ em PessoaConta.
-    /// Regras:
-    /// - Apenas 1 principal por PF e por PJ (índices únicos filtrados garantem no banco).
-    /// - DefinirPrincipal/Inserir com IsPrincipal sempre limpam as demais dentro de transação.
+    /// Implementação Dapper para múltiplas contas.
+    /// Suporta:
+    /// 1. Vínculo PF/PJ via PessoaConta (Regra de Negócio com IsPrincipal).
+    /// 2. CRUD Direto na tabela ContaBancaria (Usado por Entidades).
     /// </summary>
     public class ContaBancariaRepositorio : IContaBancariaRepositorio
     {
@@ -23,26 +23,75 @@ namespace Financeiro.Repositorios
             _connectionFactory = connectionFactory;
         }
 
-        /* ===================== CONSULTAS ===================== */
+        /* =============================================================
+           PARTE 1: CRUD DIRETO (Usado por Entidades e Lançamentos)
+           Esses métodos operam direto na tabela ContaBancaria sem PessoaConta
+           ============================================================= */
+
+        public async Task<int> InserirRetornandoIdAsync(ContaBancaria conta)
+        {
+            const string sql = @"
+                INSERT INTO ContaBancaria (Banco, Agencia, Conta, ChavePix)
+                VALUES (@Banco, @Agencia, @Conta, @ChavePix);
+                SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QuerySingleAsync<int>(sql, conta);
+        }
+
+        public async Task<ContaBancaria?> ObterPorIdAsync(int id)
+        {
+            const string sql = "SELECT * FROM ContaBancaria WHERE Id = @Id";
+            using var conn = _connectionFactory.CreateConnection();
+            return await conn.QuerySingleOrDefaultAsync<ContaBancaria>(sql, new { Id = id });
+        }
+
+        public async Task AtualizarAsync(ContaBancaria conta)
+        {
+            const string sql = @"
+                UPDATE ContaBancaria
+                SET Banco = @Banco,
+                    Agencia = @Agencia,
+                    Conta = @Conta,
+                    ChavePix = @ChavePix
+                WHERE Id = @Id";
+
+            using var conn = _connectionFactory.CreateConnection();
+            await conn.ExecuteAsync(sql, conta);
+        }
+
+        // Método auxiliar caso precise excluir direto (ex: limpeza de lixo)
+        public async Task ExcluirAsync(int id)
+        {
+            const string sql = "DELETE FROM ContaBancaria WHERE Id = @Id";
+            using var conn = _connectionFactory.CreateConnection();
+            await conn.ExecuteAsync(sql, new { Id = id });
+        }
+
+
+        /* =============================================================
+           PARTE 2: VÍNCULOS COM PESSOAS (PF/PJ via PessoaConta)
+           Lógica original mantida para gestão de Fornecedores/Usuários
+           ============================================================= */
 
         public async Task<IEnumerable<ContaBancariaViewModel>> ListarPorPessoaFisicaAsync(int pessoaFisicaId)
         {
             using var conn = _connectionFactory.CreateConnection();
             var sql = @"
-SELECT 
-    pc.Id               AS VinculoId,
-    cb.Id               AS Id,             -- ContaBancariaId
-    cb.Banco,
-    cb.Agencia,
-    cb.Conta,
-    cb.ChavePix,
-    pc.IsPrincipal,
-    pc.PessoaFisicaId,
-    pc.PessoaJuridicaId
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.PessoaFisicaId = @pessoaFisicaId
-ORDER BY pc.IsPrincipal DESC, pc.Id DESC;";
+                SELECT 
+                    pc.Id               AS VinculoId,
+                    cb.Id               AS Id,             -- ContaBancariaId
+                    cb.Banco,
+                    cb.Agencia,
+                    cb.Conta,
+                    cb.ChavePix,
+                    pc.IsPrincipal,
+                    pc.PessoaFisicaId,
+                    pc.PessoaJuridicaId
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.PessoaFisicaId = @pessoaFisicaId
+                ORDER BY pc.IsPrincipal DESC, pc.Id DESC;";
             return await conn.QueryAsync<ContaBancariaViewModel>(sql, new { pessoaFisicaId });
         }
 
@@ -50,20 +99,20 @@ ORDER BY pc.IsPrincipal DESC, pc.Id DESC;";
         {
             using var conn = _connectionFactory.CreateConnection();
             var sql = @"
-SELECT 
-    pc.Id               AS VinculoId,
-    cb.Id               AS Id,             -- ContaBancariaId
-    cb.Banco,
-    cb.Agencia,
-    cb.Conta,
-    cb.ChavePix,
-    pc.IsPrincipal,
-    pc.PessoaFisicaId,
-    pc.PessoaJuridicaId
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.PessoaJuridicaId = @pessoaJuridicaId
-ORDER BY pc.IsPrincipal DESC, pc.Id DESC;";
+                SELECT 
+                    pc.Id               AS VinculoId,
+                    cb.Id               AS Id,             -- ContaBancariaId
+                    cb.Banco,
+                    cb.Agencia,
+                    cb.Conta,
+                    cb.ChavePix,
+                    pc.IsPrincipal,
+                    pc.PessoaFisicaId,
+                    pc.PessoaJuridicaId
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.PessoaJuridicaId = @pessoaJuridicaId
+                ORDER BY pc.IsPrincipal DESC, pc.Id DESC;";
             return await conn.QueryAsync<ContaBancariaViewModel>(sql, new { pessoaJuridicaId });
         }
 
@@ -71,20 +120,20 @@ ORDER BY pc.IsPrincipal DESC, pc.Id DESC;";
         {
             using var conn = _connectionFactory.CreateConnection();
             var sql = @"
-SELECT TOP 1
-    pc.Id               AS VinculoId,
-    cb.Id               AS Id,
-    cb.Banco,
-    cb.Agencia,
-    cb.Conta,
-    cb.ChavePix,
-    pc.IsPrincipal,
-    pc.PessoaFisicaId,
-    pc.PessoaJuridicaId
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.PessoaFisicaId = @pessoaFisicaId AND pc.IsPrincipal = 1
-ORDER BY pc.Id DESC;";
+                SELECT TOP 1
+                    pc.Id               AS VinculoId,
+                    cb.Id               AS Id,
+                    cb.Banco,
+                    cb.Agencia,
+                    cb.Conta,
+                    cb.ChavePix,
+                    pc.IsPrincipal,
+                    pc.PessoaFisicaId,
+                    pc.PessoaJuridicaId
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.PessoaFisicaId = @pessoaFisicaId AND pc.IsPrincipal = 1
+                ORDER BY pc.Id DESC;";
             return await conn.QueryFirstOrDefaultAsync<ContaBancariaViewModel>(sql, new { pessoaFisicaId });
         }
 
@@ -92,20 +141,20 @@ ORDER BY pc.Id DESC;";
         {
             using var conn = _connectionFactory.CreateConnection();
             var sql = @"
-SELECT TOP 1
-    pc.Id               AS VinculoId,
-    cb.Id               AS Id,
-    cb.Banco,
-    cb.Agencia,
-    cb.Conta,
-    cb.ChavePix,
-    pc.IsPrincipal,
-    pc.PessoaFisicaId,
-    pc.PessoaJuridicaId
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.PessoaJuridicaId = @pessoaJuridicaId AND pc.IsPrincipal = 1
-ORDER BY pc.Id DESC;";
+                SELECT TOP 1
+                    pc.Id               AS VinculoId,
+                    cb.Id               AS Id,
+                    cb.Banco,
+                    cb.Agencia,
+                    cb.Conta,
+                    cb.ChavePix,
+                    pc.IsPrincipal,
+                    pc.PessoaFisicaId,
+                    pc.PessoaJuridicaId
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.PessoaJuridicaId = @pessoaJuridicaId AND pc.IsPrincipal = 1
+                ORDER BY pc.Id DESC;";
             return await conn.QueryFirstOrDefaultAsync<ContaBancariaViewModel>(sql, new { pessoaJuridicaId });
         }
 
@@ -113,14 +162,14 @@ ORDER BY pc.Id DESC;";
         {
             using var conn = _connectionFactory.CreateConnection();
             var sql = @"
-SELECT 
-    cb.Id     AS Id,
-    cb.Banco,
-    cb.Agencia,
-    cb.Conta,
-    cb.ChavePix
-FROM ContaBancaria cb
-WHERE cb.Id = @contaBancariaId;";
+                SELECT 
+                    cb.Id     AS Id,
+                    cb.Banco,
+                    cb.Agencia,
+                    cb.Conta,
+                    cb.ChavePix
+                FROM ContaBancaria cb
+                WHERE cb.Id = @contaBancariaId;";
             return await conn.QueryFirstOrDefaultAsync<ContaBancariaViewModel>(sql, new { contaBancariaId });
         }
 
@@ -128,55 +177,49 @@ WHERE cb.Id = @contaBancariaId;";
         {
             using var conn = _connectionFactory.CreateConnection();
             var sql = @"
-SELECT 
-    pc.Id               AS VinculoId,
-    cb.Id               AS Id,
-    cb.Banco,
-    cb.Agencia,
-    cb.Conta,
-    cb.ChavePix,
-    pc.IsPrincipal,
-    pc.PessoaFisicaId,
-    pc.PessoaJuridicaId
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.Id = @vinculoId;";
+                SELECT 
+                    pc.Id               AS VinculoId,
+                    cb.Id               AS Id,
+                    cb.Banco,
+                    cb.Agencia,
+                    cb.Conta,
+                    cb.ChavePix,
+                    pc.IsPrincipal,
+                    pc.PessoaFisicaId,
+                    pc.PessoaJuridicaId
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.Id = @vinculoId;";
             return await conn.QueryFirstOrDefaultAsync<ContaBancariaViewModel>(sql, new { vinculoId });
         }
 
-        /// <summary>
-        /// ✅ Compatibilidade: retorna a conta principal da PF como ENTIDADE (para controllers antigos).
-        /// </summary>
         public async Task<ContaBancaria?> ObterPorPessoaFisicaAsync(int pessoaFisicaId)
         {
             using var conn = _connectionFactory.CreateConnection();
             const string sql = @"
-SELECT TOP 1
-    cb.Id, cb.Banco, cb.Agencia, cb.Conta, cb.ChavePix
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.PessoaFisicaId = @pessoaFisicaId AND pc.IsPrincipal = 1
-ORDER BY pc.Id DESC;";
+                SELECT TOP 1
+                    cb.Id, cb.Banco, cb.Agencia, cb.Conta, cb.ChavePix
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.PessoaFisicaId = @pessoaFisicaId AND pc.IsPrincipal = 1
+                ORDER BY pc.Id DESC;";
             return await conn.QueryFirstOrDefaultAsync<ContaBancaria>(sql, new { pessoaFisicaId });
         }
 
-        /// <summary>
-        /// ✅ Compatibilidade: retorna a conta principal da PJ como ENTIDADE (para controllers antigos).
-        /// </summary>
         public async Task<ContaBancaria?> ObterPorPessoaJuridicaAsync(int pessoaJuridicaId)
         {
             using var conn = _connectionFactory.CreateConnection();
             const string sql = @"
-SELECT TOP 1
-    cb.Id, cb.Banco, cb.Agencia, cb.Conta, cb.ChavePix
-FROM PessoaConta pc
-JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
-WHERE pc.PessoaJuridicaId = @pessoaJuridicaId AND pc.IsPrincipal = 1
-ORDER BY pc.Id DESC;";
+                SELECT TOP 1
+                    cb.Id, cb.Banco, cb.Agencia, cb.Conta, cb.ChavePix
+                FROM PessoaConta pc
+                JOIN ContaBancaria cb ON cb.Id = pc.ContaBancariaId
+                WHERE pc.PessoaJuridicaId = @pessoaJuridicaId AND pc.IsPrincipal = 1
+                ORDER BY pc.Id DESC;";
             return await conn.QueryFirstOrDefaultAsync<ContaBancaria>(sql, new { pessoaJuridicaId });
         }
 
-        /* ===================== GRAVAÇÃO ====================== */
+        /* ===================== GRAVAÇÃO COM VÍNCULO ====================== */
 
         public async Task<int> InserirEVincularAsync(ContaBancariaViewModel vm)
         {
@@ -190,9 +233,10 @@ ORDER BY pc.Id DESC;";
             using var tx = conn.BeginTransaction();
 
             var sqlConta = @"
-INSERT INTO ContaBancaria (Banco, Agencia, Conta, ChavePix)
-VALUES (@Banco, @Agencia, @Conta, @ChavePix);
-SELECT CAST(SCOPE_IDENTITY() AS INT);";
+                INSERT INTO ContaBancaria (Banco, Agencia, Conta, ChavePix)
+                VALUES (@Banco, @Agencia, @Conta, @ChavePix);
+                SELECT CAST(SCOPE_IDENTITY() AS INT);";
+            
             var contaId = await conn.ExecuteScalarAsync<int>(sqlConta, new
             {
                 vm.Banco,
@@ -218,9 +262,10 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             }
 
             var sqlVinculo = @"
-INSERT INTO PessoaConta (PessoaJuridicaId, PessoaFisicaId, ContaBancariaId, IsPrincipal)
-VALUES (@PessoaJuridicaId, @PessoaFisicaId, @ContaBancariaId, @IsPrincipal);
-SELECT CAST(SCOPE_IDENTITY() AS INT);";
+                INSERT INTO PessoaConta (PessoaJuridicaId, PessoaFisicaId, ContaBancariaId, IsPrincipal)
+                VALUES (@PessoaJuridicaId, @PessoaFisicaId, @ContaBancariaId, @IsPrincipal);
+                SELECT CAST(SCOPE_IDENTITY() AS INT);";
+            
             var vinculoId = await conn.ExecuteScalarAsync<int>(sqlVinculo, new
             {
                 PessoaJuridicaId = vm.PessoaJuridicaId,
@@ -240,9 +285,10 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             using var tx = conn.BeginTransaction();
 
             var sql = @"
-UPDATE ContaBancaria
-SET Banco=@Banco, Agencia=@Agencia, Conta=@Conta, ChavePix=@ChavePix
-WHERE Id=@Id;";
+                UPDATE ContaBancaria
+                SET Banco=@Banco, Agencia=@Agencia, Conta=@Conta, ChavePix=@ChavePix
+                WHERE Id=@Id;";
+            
             await conn.ExecuteAsync(sql, new
             {
                 Id = contaBancariaId,
@@ -276,9 +322,9 @@ WHERE Id=@Id;";
             using var tx = conn.BeginTransaction();
 
             var who = await conn.QueryFirstOrDefaultAsync<(int ContaBancariaId, int? PF, int? PJ, bool IsPrincipal)>(@"
-SELECT pc.ContaBancariaId, pc.PessoaFisicaId AS PF, pc.PessoaJuridicaId AS PJ, pc.IsPrincipal
-FROM PessoaConta pc
-WHERE pc.Id = @vinculoId;", new { vinculoId }, tx);
+                SELECT pc.ContaBancariaId, pc.PessoaFisicaId AS PF, pc.PessoaJuridicaId AS PJ, pc.IsPrincipal
+                FROM PessoaConta pc
+                WHERE pc.Id = @vinculoId;", new { vinculoId }, tx);
 
             if (who.ContaBancariaId == 0 && who.PF == null && who.PJ == null)
             {
@@ -293,6 +339,7 @@ WHERE pc.Id = @vinculoId;", new { vinculoId }, tx);
                 var count = await conn.ExecuteScalarAsync<int>(
                     "SELECT COUNT(1) FROM PessoaConta WHERE ContaBancariaId=@id;",
                     new { id = who.ContaBancariaId }, tx);
+                
                 if (count == 0)
                 {
                     await conn.ExecuteAsync("DELETE FROM ContaBancaria WHERE Id=@id;", new { id = who.ContaBancariaId }, tx);
@@ -307,9 +354,9 @@ WHERE pc.Id = @vinculoId;", new { vinculoId }, tx);
         private static async Task DefinirPrincipalInternalAsync(IDbConnection conn, IDbTransaction tx, int vinculoId)
         {
             var dono = await conn.QueryFirstOrDefaultAsync<(int? PF, int? PJ)>(@"
-SELECT PessoaFisicaId AS PF, PessoaJuridicaId AS PJ
-FROM PessoaConta
-WHERE Id = @vinculoId;", new { vinculoId }, tx);
+                SELECT PessoaFisicaId AS PF, PessoaJuridicaId AS PJ
+                FROM PessoaConta
+                WHERE Id = @vinculoId;", new { vinculoId }, tx);
 
             if (dono.PF is null && dono.PJ is null)
                 throw new System.ArgumentException("Vínculo não encontrado para definição de principal.", nameof(vinculoId));
