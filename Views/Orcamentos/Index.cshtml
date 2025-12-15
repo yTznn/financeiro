@@ -8,9 +8,9 @@
     var br = new CultureInfo("pt-BR");
 
     // Cache de permissões
-    bool podeCriar  = User.TemPermissao("ORCAMENTO_ADD");
-    bool podeEditar = User.TemPermissao("ORCAMENTO_EDIT");
-    bool podeExcluir= User.TemPermissao("ORCAMENTO_DEL");
+    bool podeCriar   = User.TemPermissao("ORCAMENTO_ADD");
+    bool podeEditar  = User.TemPermissao("ORCAMENTO_EDIT");
+    bool podeExcluir = User.TemPermissao("ORCAMENTO_DEL");
 
     // Paginação
     int paginaAtual = ViewBag.PaginaAtual ?? 1;
@@ -23,10 +23,12 @@
         border: 1px solid #e9ecef;
         border-radius: 12px;
         transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        height: 100%;
         background: #fff;
         position: relative;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
     .card-orcamento:hover {
         transform: translateY(-4px);
@@ -61,17 +63,19 @@
     }
     .card-body-custom {
         padding: 1.25rem;
+        flex-grow: 1;
     }
     
     /* Barras de Progresso */
     .progress-thin {
-        height: 6px;
-        border-radius: 3px;
+        height: 8px;
+        border-radius: 4px;
         background-color: #e9ecef;
         margin-top: 8px;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.075);
     }
     
-    /* Stats */
+    /* Stats Principais */
     .stat-row {
         display: flex;
         justify-content: space-between;
@@ -80,8 +84,47 @@
     }
     .stat-label { color: #adb5bd; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
     .stat-value { font-weight: 600; color: #495057; }
-    .stat-value.money { font-family: 'Consolas', monospace; }
+    .stat-value.money { font-family: 'Consolas', monospace; letter-spacing: -0.5px; }
     
+    /* --- BI / BREAKDOWN --- */
+    .mini-bi-container {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 15px;
+        border: 1px solid #f1f3f5;
+    }
+    .bi-title {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        font-weight: 700;
+        margin-bottom: 8px;
+        display: block;
+    }
+    .bi-item {
+        margin-bottom: 8px;
+    }
+    .bi-item:last-child { margin-bottom: 0; }
+    
+    .bi-header {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        margin-bottom: 2px;
+    }
+    .bi-name { font-weight: 600; color: #495057; max-width: 65%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bi-percent { font-weight: 700; font-size: 0.75rem; }
+    
+    .progress-micro {
+        height: 4px;
+        border-radius: 2px;
+        background-color: #e2e6ea;
+        overflow: hidden;
+    }
+    /* --------------------------- */
+
     /* Botões */
     .btn-dots {
         width: 32px; height: 32px;
@@ -104,7 +147,7 @@
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
         <h2 class="mb-0 fw-bold text-dark">Orçamentos</h2>
-        <small class="text-muted">Planejamento financeiro da unidade</small>
+        <small class="text-muted">Planejamento financeiro e BI de consumo</small>
     </div>
     
     @if (podeCriar)
@@ -185,25 +228,74 @@ else
                             <span>até @item.VigenciaFim.ToString("dd/MM/yy")</span>
                         </div>
 
-                        <div class="mb-2">
+                        <div class="mb-3">
                             <div class="stat-row">
                                 <span class="stat-label">Total Orçado</span>
                                 <span class="stat-value money text-primary">@item.ValorPrevistoTotal.ToString("C", br)</span>
                             </div>
                             <div class="stat-row">
-                                <span class="stat-label">Comprometido</span>
+                                <span class="stat-label">Comprometido Total</span>
                                 <span class="stat-value money">@item.ValorComprometido.ToString("C", br)</span>
                             </div>
-                            <div class="progress progress-thin mb-2">
+                            <div class="progress progress-thin">
                                 <div class="progress-bar @corBarra" role="progressbar" style="width: @Math.Min(percentual, 100)%" 
                                      aria-valuenow="@percentual" aria-valuemin="0" aria-valuemax="100"></div>
                             </div>
-                            <div class="stat-row mt-2 pt-2 border-top">
-                                <span class="stat-label text-dark">Saldo Disponível</span>
-                                <span class="stat-value money @(item.SaldoDisponivel < 0 ? "text-danger" : "text-success")">
-                                    @item.SaldoDisponivel.ToString("C", br)
-                                </span>
+                            <div class="text-end mt-1">
+                                <small class="text-muted fw-bold" style="font-size: 0.75rem;">@percentual.ToString("N1")% Consumido</small>
                             </div>
+                        </div>
+
+                        @if (item.DetalhamentoConsumo != null && item.DetalhamentoConsumo.Any())
+                        {
+                            <div class="mini-bi-container">
+                                <span class="bi-title"><i class="bi bi-pie-chart-fill me-1"></i> Top 3 Consumo (Níveis)</span>
+                                
+                                @foreach (var subItem in item.DetalhamentoConsumo.Take(3))
+                                {
+                                    // Define cor dinamicamente baseada no percentual real
+                                    var corBi = subItem.PercentualDoTotal > 50 ? "bg-danger" 
+                                              : subItem.PercentualDoTotal > 20 ? "bg-warning" 
+                                              : "bg-info";
+
+                                    <div class="bi-item">
+                                        <div class="bi-header">
+                                            <span class="bi-name" title="@subItem.NomeItem">@subItem.NomeItem</span>
+                                            <span class="bi-percent @(subItem.PercentualDoTotal > 90 ? "text-danger" : "text-dark")">
+                                                @subItem.PercentualDoTotal.ToString("N1")%
+                                            </span>
+                                        </div>
+                                        <div class="progress progress-micro">
+                                            <div class="progress-bar @corBi" role="progressbar" 
+                                                 style="width: @subItem.PercentualDoTotal.ToString("F0", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                                        </div>
+                                        <div class="text-end lh-1 mt-1">
+                                            <small class="text-muted" style="font-size: 0.65rem;">@subItem.ValorConsumido.ToString("C", br)</small>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @if (item.DetalhamentoConsumo.Count > 3)
+                                {
+                                    <div class="text-center mt-2 border-top pt-1">
+                                        <a asp-action="Editar" asp-route-id="@item.Id" class="text-decoration-none small fw-bold" style="font-size: 0.7rem;">
+                                            + @(item.DetalhamentoConsumo.Count - 3) outros itens
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mini-bi-container text-center py-3">
+                                <small class="text-muted fst-italic">Nenhum lançamento registrado.</small>
+                            </div>
+                        }
+                        <div class="stat-row mt-3 pt-2 border-top">
+                            <span class="stat-label text-dark align-self-center">Saldo Geral Disponível</span>
+                            <span class="stat-value money fs-6 @(item.SaldoDisponivel < 0 ? "text-danger" : "text-success")">
+                                @item.SaldoDisponivel.ToString("C", br)
+                            </span>
                         </div>
 
                         @if (!item.Ativo)

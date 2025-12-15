@@ -19,6 +19,11 @@ namespace Financeiro.Models
         public decimal ValorContrato { get; set; }
         public string? Observacao { get; set; }
         public bool Ativo { get; set; }
+        
+        // Mantemos o OrcamentoId para consultas rápidas/macro
         public int? OrcamentoId { get; set; }
+
+        // --- NOVO CAMPO: Mapeia a coluna que criamos no SQL ---
+        public int? OrcamentoDetalheId { get; set; } 
     }
 }

@@ -13,7 +13,6 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Fornecedor")]
         public string FornecedorIdCompleto { get; set; }
 
-        // [VOLTOU PARA INT]
         [Required(ErrorMessage = "O número do contrato é obrigatório.")]
         [Display(Name = "Número")]
         public int NumeroContrato { get; set; } 
@@ -57,9 +56,16 @@ namespace Financeiro.Models.ViewModels
         public string? Observacao { get; set; }
         public bool Ativo { get; set; } = true;
 
-        [Display(Name = "Orçamento")]
-        [Required(ErrorMessage = "O contrato deve estar vinculado a um Orçamento.")]
+        // --- ATUALIZADO: Nome de exibição alterado para diferenciar ---
+        [Display(Name = "Orçamento (Macro)")]
+        [Required(ErrorMessage = "O orçamento principal é obrigatório.")]
         public int? OrcamentoId { get; set; }
+
+        // --- NOVO CAMPO: Vínculo específico com o nó da árvore ---
+        [Display(Name = "Item do Orçamento (Nível de Lançamento)")]
+        [Required(ErrorMessage = "É obrigatório selecionar o item específico para lançamento.")]
+        public int? OrcamentoDetalheId { get; set; }
+        // ---------------------------------------------------------
 
         [Display(Name = "Naturezas do Contrato")]
         public List<ContratoNaturezaViewModel> Naturezas { get; set; } = new List<ContratoNaturezaViewModel>();

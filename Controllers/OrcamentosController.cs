@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient; // Adicionado para garantir compatibilidade
 using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
@@ -21,7 +21,7 @@ namespace Financeiro.Controllers
     public class OrcamentosController : Controller
     {
         private static readonly DateTime MinAppDate = new DateTime(2020, 1, 1);
-        private const int TAMANHO_PAGINA = 3; // Paginação com 3 itens
+        private const int TAMANHO_PAGINA = 3; 
 
         private readonly IOrcamentoRepositorio _orcamentoRepo;
         private readonly IInstrumentoRepositorio _instrumentoRepo; 
@@ -44,19 +44,13 @@ namespace Financeiro.Controllers
 
         private async Task CarregarInstrumentos(int? selecionado = null)
         {
-            // 1. Pega Entidade Logada
             int entidadeId = User.ObterEntidadeId();
-
-            // 2. Busca lista COMPLETA (repositorio generico) e filtra em memória 
-            // OU melhor: cria um metodo no repositorio para listar por entidade.
-            // Para simplificar e usar o que temos: buscamos todos e filtramos aqui.
-            // Se a lista for gigante, ideal é filtrar no banco.
             var lista = await _instrumentoRepo.ListarAsync();
             
             ViewBag.Instrumentos = lista
-                .Where(i => i.Ativo && i.EntidadeId == entidadeId) // <--- Filtro de Isolamento
+                .Where(i => i.Ativo && i.EntidadeId == entidadeId) 
                 .Select(i => new SelectListItem(
-                    $"{i.Numero} - {(i.Objeto.Length > 50 ? i.Objeto.Substring(0, 50) + "..." : i.Objeto)}", // <--- Formatação melhorada
+                    $"{i.Numero} - {(i.Objeto.Length > 50 ? i.Objeto.Substring(0, 50) + "..." : i.Objeto)}", 
                     i.Id.ToString(), 
                     selecionado == i.Id))
                 .ToList();
@@ -147,8 +141,6 @@ namespace Financeiro.Controllers
                 return View("OrcamentoForm", vm);
             }
 
-            // ===== VALIDAÇÃO DE NEGÓCIO =====
-            
             var instrumentoResumo = await _instrumentoRepo.ObterResumoAsync(vm.InstrumentoId);
             if (instrumentoResumo == null)
             {
@@ -157,10 +149,6 @@ namespace Financeiro.Controllers
                 return View("OrcamentoForm", vm);
             }
 
-            // [SEGURANÇA] Verifica se o Instrumento pertence à unidade do usuário
-            // Como ObterResumoAsync já carrega o objeto, e o objeto é isolado, teoricamente ok.
-            // Mas para garantir, podemos checar o EntidadeId se disponível no resumo, ou confiar no CarregarInstrumentos que só mostrou os permitidos.
-            
             if (vm.VigenciaInicio < instrumentoResumo.VigenciaInicio || vm.VigenciaFim > instrumentoResumo.VigenciaFimAtual)
             {
                 string msg = $"A vigência do orçamento deve estar dentro do prazo do instrumento ({instrumentoResumo.VigenciaInicio:dd/MM/yyyy} a {instrumentoResumo.VigenciaFimAtual:dd/MM/yyyy}).";
@@ -214,7 +202,6 @@ namespace Financeiro.Controllers
             var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(id);
             if (orcamentoHeader == null) return NotFound();
 
-            // [SEGURANÇA] Verifica se pertence à unidade
             var instrumento = await _instrumentoRepo.ObterPorIdAsync(orcamentoHeader.InstrumentoId);
             if (instrumento == null || instrumento.EntidadeId != User.ObterEntidadeId())
             {
@@ -264,18 +251,15 @@ namespace Financeiro.Controllers
             var existe = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.Id);
             if (existe == null) return NotFound();
 
-            // [SEGURANÇA] Verifica dono original
             var instrumentoOriginal = await _instrumentoRepo.ObterPorIdAsync(existe.InstrumentoId);
             if (instrumentoOriginal.EntidadeId != User.ObterEntidadeId()) return Forbid();
 
-            // [SEGURANÇA] Verifica se o NOVO instrumento (se mudou) também é meu
             if (vm.InstrumentoId != existe.InstrumentoId)
             {
                  var novoInstrumento = await _instrumentoRepo.ObterPorIdAsync(vm.InstrumentoId);
                  if (novoInstrumento.EntidadeId != User.ObterEntidadeId()) return Forbid();
             }
 
-            // ===== VALIDAÇÃO DE NEGÓCIO =====
             var instrumentoResumo = await _instrumentoRepo.ObterResumoAsync(vm.InstrumentoId);
             if (instrumentoResumo == null)
             {
@@ -318,6 +302,7 @@ namespace Financeiro.Controllers
             }
             catch (Exception ex)
             {
+                // Aqui capturamos a mensagem amigável ("Não é possível remover itens...") que lançamos no Repo
                 TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
             }
 
@@ -340,7 +325,6 @@ namespace Financeiro.Controllers
             var existente = await _orcamentoRepo.ObterHeaderPorIdAsync(id);
             if (existente == null) return NotFound();
 
-            // [SEGURANÇA]
             var instrumento = await _instrumentoRepo.ObterPorIdAsync(existente.InstrumentoId);
             if (instrumento.EntidadeId != User.ObterEntidadeId()) return Forbid();
 

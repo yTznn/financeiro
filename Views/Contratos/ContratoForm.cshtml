@@ -73,12 +73,24 @@
                             }
                         </select>
                     </div>
-                    <div class="col-md-6">
-                        <label asp-for="OrcamentoId" class="form-label">Orçamento Vinculado</label>
-                        <select asp-for="OrcamentoId" class="form-select" asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
+                    
+                    @* --- LINHA DOS ORÇAMENTOS (MACRO E DETALHE) --- *@
+                    <div class="col-md-3">
+                        <label asp-for="OrcamentoId" class="form-label">Orçamento (Macro)</label>
+                        <select asp-for="OrcamentoId" class="form-select" id="OrcamentoId" asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
                             <option value="">-- Selecione --</option>
                         </select>
                     </div>
+                    <div class="col-md-3">
+                        <label asp-for="OrcamentoDetalheId" class="form-label">Item do Orçamento</label>
+                        <select asp-for="OrcamentoDetalheId" class="form-select" id="OrcamentoDetalheId" 
+                                asp-items="@(ViewBag.ItensOrcamento != null ? ViewBag.ItensOrcamento : new List<SelectListItem>())">
+                            <option value="">-- Selecione o Macro primeiro --</option>
+                        </select>
+                        <div class="invalid-feedback">Obrigatório selecionar o item específico.</div>
+                    </div>
+                    @* --------------------------------------------- *@
+
                     <div class="col-md-3">
                         <label asp-for="NumeroContrato" class="form-label">Número</label>
                         <div class="input-group">
@@ -112,7 +124,6 @@
                     <div class="row g-3">
                         <div class="col-md-3">
                             <label class="form-label">Data Assinatura</label>
-                            @* CORREÇÃO AQUI: Proteção contra nulos no ToString *@
                             <input type="text" class="form-control" 
                                    value="@(Model.DataAssinatura.HasValue ? Model.DataAssinatura.Value.ToString("dd/MM/yyyy") : "")" 
                                    disabled />
@@ -165,7 +176,6 @@
 
                     <div class="col-md-4">
                         <label class="form-label">Valor Total Vigente (R$)</label>
-                        @* O valor aqui vem do Banco (Contrato.ValorContrato) que foi atualizado pelo Aditivo *@
                         <input type="text" 
                                name="ValorContrato" 
                                id="ValorTotal"
@@ -306,7 +316,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
     
     <script>
-        // Variável global de controle
         var formChanged = false;
         var rateioValido = false; 
 
@@ -317,17 +326,44 @@
         }
 
         $(document).ready(function() {
-            // Máscaras
             $('.money').mask('#.##0,00', {reverse: true});
 
-            // Detecta alterações para a justificativa
+            // --- LÓGICA DO DROPDOWN EM CASCATA (AJAX) ---
+            $('#OrcamentoId').change(function() {
+                var orcamentoId = $(this).val();
+                var $comboDetalhe = $('#OrcamentoDetalheId');
+                
+                // Limpa e mostra estado carregando
+                $comboDetalhe.empty().append('<option value="">Carregando...</option>').prop('disabled', true);
+
+                if (orcamentoId) {
+                    $.getJSON('@Url.Action("ListarItensOrcamento", "Contratos")', { orcamentoId: orcamentoId })
+                        .done(function(data) {
+                            $comboDetalhe.empty().append('<option value="">-- Selecione o Item --</option>');
+                            if (data.length > 0) {
+                                $.each(data, function(i, item) {
+                                    $comboDetalhe.append($('<option>', { value: item.id, text: item.nome }));
+                                });
+                                $comboDetalhe.prop('disabled', false);
+                            } else {
+                                $comboDetalhe.append('<option value="">Nenhum item disponível para lançamento</option>');
+                            }
+                        })
+                        .fail(function() {
+                            $comboDetalhe.empty().append('<option value="">Erro ao carregar</option>');
+                        });
+                } else {
+                    $comboDetalhe.empty().append('<option value="">-- Selecione o Macro primeiro --</option>').prop('disabled', true);
+                }
+            });
+            // --------------------------------------------------
+
             $('form input, form select, form textarea').on('change input', function() {
                 if (!$(this).prop('readonly')) {
                     formChanged = true;
                 }
             });
 
-            // Funções de Conversão
             function brlToFloat(str) {
                 if (!str) return 0;
                 return parseFloat(str.replace(/\./g, '').replace(',', '.'));
@@ -371,12 +407,11 @@
                 var meses = (fim.getFullYear() - inicio.getFullYear()) * 12;
                 meses -= inicio.getMonth();
                 meses += fim.getMonth();
-                meses += 1; // inclusivo
+                meses += 1; 
                 if (meses <= 0) meses = 1;
                 return meses;
             }
 
-            // [IMPORTANTE] Recalcula o Mensal com base no Total (que veio do Aditivo)
             function recalcularMensalPeloTotal() {
                 var totalVigente = brlToFloat($('#ValorTotal').val());
                 var dIni = $('#DataInicio').val();
@@ -385,14 +420,12 @@
                 if (totalVigente > 0 && dIni && dFim) {
                     var meses = getMesesEntre(dIni, dFim);
                     var mensal = totalVigente / meses;
-                    // Atualiza o visual
                     $('#ValorMensal').val(floatToBrl(mensal));
                     $('#infoCalculo').text(`Recalculado: Total ${floatToBrl(totalVigente)} ÷ ${meses} meses = ${floatToBrl(mensal)}`);
                 }
             }
 
             function calcularTotalPeloMensal() {
-                // Só roda se o usuário estiver digitando no mensal
                 var dIni = $('#DataInicio').val();
                 var dFim = $('#DataFim').val();
                 var valMensal = brlToFloat($('#ValorMensal').val());
@@ -405,12 +438,11 @@
                 }
             }
 
-            // --- VALIDAÇÃO DE RATEIO (O Bloqueio) ---
+            // --- VALIDAÇÃO DE RATEIO ---
             function atualizarRateio() {
                 var totalNaturezas = 0;
                 var count = 0;
                 
-                // Soma a tabela
                 $('#tbodyNaturezas .nat-valor-raw').each(function() {
                     totalNaturezas += brlToFloat($(this).val());
                     count++;
@@ -418,9 +450,7 @@
 
                 if(count === 0) $('#msgSemNaturezas').show(); else $('#msgSemNaturezas').hide();
 
-                // Compara com o Valor Mensal (que já foi ajustado pelo recalcularMensalPeloTotal)
                 var valMensalEsperado = brlToFloat($('#ValorMensal').val());
-                
                 var diff = totalNaturezas - valMensalEsperado;
                 var diffAbs = Math.abs(diff);
                 
@@ -429,25 +459,20 @@
                 var msgDiff = $('#msgDiferenca');
                 var btnSalvar = $('#btnSalvar');
 
-                // Margem de 5 centavos para arredondamento
                 if (diffAbs < 0.05) { 
-                    // OK
                     rateioValido = true;
                     badge.text("Total Rateio: " + floatToBrl(totalNaturezas)).attr('class', 'badge bg-success');
                     aviso.hide();
 
-                    // Restaura botão
                     if(btnSalvar.hasClass('btn-danger')) {
                         btnSalvar.html('<i class="bi bi-check-lg me-1"></i> Salvar Alterações Cadastrais');
                         btnSalvar.removeClass('btn-danger').addClass('btn-success');
                     }
                 }
                 else {
-                    // ERRO - Bloqueia e Avisa
                     rateioValido = false;
                     aviso.show();
                     
-                    // Transforma botão em alerta
                     btnSalvar.html('<i class="bi bi-exclamation-octagon-fill me-1"></i> Refaça o Rateio para Salvar');
                     btnSalvar.removeClass('btn-success btn-warning').addClass('btn-danger');
 
@@ -507,36 +532,22 @@
                 });
             }
 
-            // LISTENERS
-            // Se mudar data, recalcula mensal com base no total (prioridade ao total vigente)
             $('#DataInicio, #DataFim').on('change', function() {
                 recalcularMensalPeloTotal();
                 atualizarRateio();
                 formChanged = true;
             });
 
-            // Se mudar o mensal manualmente, recalcula o total (comportamento padrão de edição)
             $('#ValorMensal').on('keyup', function() {
                 calcularTotalPeloMensal();
                 atualizarRateio();
                 formChanged = true;
             });
 
-            // Detecta alterações gerais para justificativa
-            $('form input, form select, form textarea').on('change input', function() {
-                if (!$(this).prop('readonly') && $(this).attr('id') !== 'ValorMensal') {
-                    formChanged = true;
-                }
-            });
-
-            // === INICIALIZAÇÃO ===
-            // Força o Valor Mensal a se ajustar ao Valor Total (que veio do Aditivo)
             recalcularMensalPeloTotal();
             
-            // Verifica o rateio imediatamente
             setTimeout(atualizarRateio, 200);
 
-            // SUBMIT
             $('#formContrato').on('submit', async function(e) {
                 var isEdicao = '@isEdicao';
                 
@@ -545,7 +556,6 @@
                     e.preventDefault(); return;
                 }
 
-                // TRAVA VISUAL
                 if (rateioValido === false) {
                     Swal.fire({
                         icon: 'error',
@@ -565,7 +575,6 @@
                 e.preventDefault();
                 if (!this.checkValidity()) { this.classList.add('was-validated'); return; }
 
-                // Se não mudou nada e o rateio está certo, salva direto
                 if (formChanged === false) {
                     this.submit();
                     return;
@@ -586,7 +595,6 @@
                 }
             });
 
-            // Botão Cancelar Aditivo
             $('#btnCancelarAditivo').click(async function() {
                 const contratoId = $(this).data('contrato');
                 const versao = $(this).data('versao');
@@ -612,7 +620,6 @@
                 }
             });
 
-            // Alertas
             const pageFlags = document.getElementById('pageFlags');
             if (pageFlags) {
                 const successMsg = pageFlags.getAttribute('data-success');

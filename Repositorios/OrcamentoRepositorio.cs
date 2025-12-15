@@ -2,6 +2,7 @@ using Dapper;
 using Financeiro.Infraestrutura;
 using Financeiro.Models;
 using Financeiro.Models.ViewModels;
+using Microsoft.Data.SqlClient; // <--- AQUI ESTAVA O SEGREDO
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -19,23 +20,12 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
-        // [ALTERADO] Listagem Paginada e Isolada por Unidade
         public async Task<(IEnumerable<OrcamentoListViewModel> Itens, int TotalItens)> ListarPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina)
         {
             using var conn = _factory.CreateConnection();
 
-            // 1. Total (Filtrado por Entidade via Instrumento)
-            const string sqlCount = @"
-                SELECT COUNT(*) 
-                FROM [dbo].[Orcamento] o
-                INNER JOIN [dbo].[Instrumento] i ON o.InstrumentoId = i.Id
-                WHERE i.EntidadeId = @entidadeId";
-            
-            var total = await conn.ExecuteScalarAsync<int>(sqlCount, new { entidadeId });
-
-            // 2. Busca Paginada
-            const string sql = @"
-                SELECT
+            const string sqlHeader = @"
+                SELECT 
                     o.Id, 
                     o.Nome, 
                     o.Observacao, 
@@ -43,67 +33,68 @@ namespace Financeiro.Repositorios
                     o.VigenciaFim,
                     o.ValorPrevistoTotal, 
                     o.Ativo,
-                    i.Numero + ' - ' + i.Objeto AS InstrumentoNome, -- Traz info do instrumento
-                    ISNULL(c.TotalComprometido, 0) AS ValorComprometido,
-                    (o.ValorPrevistoTotal - ISNULL(c.TotalComprometido, 0)) AS SaldoDisponivel
+                    i.Numero + ' - ' + i.Objeto AS InstrumentoNome,
+                    ISNULL((SELECT SUM(ValorContrato) FROM Contrato WHERE OrcamentoId = o.Id AND Ativo = 1), 0) AS ValorComprometido
                 FROM [dbo].[Orcamento] o
                 INNER JOIN [dbo].[Instrumento] i ON o.InstrumentoId = i.Id
-                LEFT JOIN (
-                      SELECT OrcamentoId, SUM(ValorContrato) AS TotalComprometido
-                      FROM [dbo].[Contrato]
-                      WHERE OrcamentoId IS NOT NULL
-                      GROUP BY OrcamentoId
-                ) c ON o.Id = c.OrcamentoId
                 WHERE i.EntidadeId = @entidadeId
-                ORDER BY o.Nome
-                OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY;";
+                ORDER BY o.Id DESC
+                OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
 
-            var skip = (pagina - 1) * tamanhoPagina;
-            var itens = await conn.QueryAsync<OrcamentoListViewModel>(sql, new { entidadeId, skip, take = tamanhoPagina });
+                SELECT COUNT(*) 
+                FROM [dbo].[Orcamento] o
+                INNER JOIN [dbo].[Instrumento] i ON o.InstrumentoId = i.Id
+                WHERE i.EntidadeId = @entidadeId;";
 
-            return (itens ?? Enumerable.Empty<OrcamentoListViewModel>(), total);
-        }
-        public async Task<IEnumerable<OrcamentoListViewModel>> ListarAtivosPorEntidadeAsync(int entidadeId)
-        {
-            using var conn = _factory.CreateConnection();
-            const string sql = @"
+            using var multi = await conn.QueryMultipleAsync(sqlHeader, new 
+            { 
+                entidadeId, 
+                Offset = (pagina - 1) * tamanhoPagina, 
+                TamanhoPagina = tamanhoPagina 
+            });
+
+            var orcamentos = (await multi.ReadAsync<OrcamentoListViewModel>()).ToList();
+            var totalItens = await multi.ReadSingleAsync<int>();
+
+            if (!orcamentos.Any()) return (orcamentos, totalItens);
+
+            var idsOrcamentos = orcamentos.Select(o => o.Id).ToList();
+
+            const string sqlBI = @"
                 SELECT 
-                    o.Id, o.Nome, o.ValorPrevistoTotal, o.VigenciaInicio, o.VigenciaFim
-                FROM Orcamento o
-                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
-                WHERE i.EntidadeId = @entidadeId
-                AND o.Ativo = 1
-                ORDER BY o.Nome";
+                    c.OrcamentoId,
+                    d.Nome as NomeItem,
+                    SUM(c.ValorContrato) as ValorConsumido
+                FROM Contrato c
+                INNER JOIN OrcamentoDetalhe d ON c.OrcamentoDetalheId = d.Id
+                WHERE c.OrcamentoId IN @Ids 
+                  AND c.Ativo = 1
+                GROUP BY c.OrcamentoId, d.Nome
+                ORDER BY ValorConsumido DESC";
 
-            return await conn.QueryAsync<OrcamentoListViewModel>(sql, new { entidadeId });
-        }
+            var detalhesRaw = await conn.QueryAsync<dynamic>(sqlBI, new { Ids = idsOrcamentos });
 
-        public async Task<Orcamento?> ObterHeaderPorIdAsync(int id)
-        {
-            const string sql = "SELECT * FROM Orcamento WHERE Id = @id;";
-            using var conn = _factory.CreateConnection();
-            return await conn.QuerySingleOrDefaultAsync<Orcamento>(sql, new { id });
-        }
-        
-        public async Task<IEnumerable<OrcamentoDetalhe>> ObterDetalhesPorOrcamentoIdAsync(int orcamentoId)
-        {
-            const string sql = "SELECT * FROM OrcamentoDetalhe WHERE OrcamentoId = @orcamentoId;";
-            using var conn = _factory.CreateConnection();
-            return await conn.QueryAsync<OrcamentoDetalhe>(sql, new { orcamentoId });
-        }
+            foreach (var orcamento in orcamentos)
+            {
+                var itensDesteOrcamento = detalhesRaw.Where(x => x.OrcamentoId == orcamento.Id);
 
-        public async Task<decimal> ObterTotalComprometidoPorInstrumentoAsync(int instrumentoId, int? ignorarOrcamentoId = null)
-        {
-            using var conn = _factory.CreateConnection();
-            const string sql = @"
-                SELECT SUM(ValorPrevistoTotal) 
-                FROM Orcamento 
-                WHERE InstrumentoId = @instrumentoId 
-                  AND Ativo = 1
-                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+                foreach (var item in itensDesteOrcamento)
+                {
+                    decimal valor = (decimal)item.ValorConsumido;
+                    decimal percent = orcamento.ValorPrevistoTotal > 0 
+                                      ? (valor / orcamento.ValorPrevistoTotal) * 100 
+                                      : 0;
 
-            var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { instrumentoId, ignorarId = ignorarOrcamentoId });
-            return total ?? 0m;
+                    orcamento.DetalhamentoConsumo.Add(new OrcamentoDetalheBI
+                    {
+                        NomeItem = item.NomeItem,
+                        ValorConsumido = valor,
+                        PercentualDoTotal = percent
+                    });
+                }
+            }
+
+            return (orcamentos, totalItens);
         }
 
         public async Task InserirAsync(OrcamentoViewModel vm)
@@ -121,20 +112,72 @@ namespace Financeiro.Repositorios
                 
                 var orcamentoId = await conn.QuerySingleAsync<int>(sqlHeader, new 
                 {
-                    vm.InstrumentoId,
-                    vm.Nome,
-                    vm.VigenciaInicio,
-                    vm.VigenciaFim,
-                    vm.ValorPrevistoTotal,
-                    vm.Ativo,
-                    DataCriacao = DateTime.Now,
-                    vm.Observacao
+                    vm.InstrumentoId, vm.Nome, vm.VigenciaInicio, vm.VigenciaFim,
+                    vm.ValorPrevistoTotal, vm.Ativo, DataCriacao = DateTime.Now, vm.Observacao
                 }, transaction);
 
                 vm.Id = orcamentoId;
                 await InserirDetalhesRecursivo(conn, transaction, orcamentoId, null, vm.Detalhamento);
 
                 transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        public async Task AtualizarAsync(int id, OrcamentoViewModel vm)
+        {
+            using var conn = _factory.CreateConnection();
+            conn.Open();
+            using var transaction = conn.BeginTransaction();
+
+            try
+            {
+                const string sqlHeader = @"
+                    UPDATE Orcamento SET
+                        InstrumentoId = @InstrumentoId,
+                        Nome = @Nome,
+                        VigenciaInicio = @VigenciaInicio,
+                        VigenciaFim = @VigenciaFim,
+                        ValorPrevistoTotal = @ValorPrevistoTotal,
+                        Ativo = @Ativo,
+                        Observacao = @Observacao
+                    WHERE Id = @Id;";
+                
+                await conn.ExecuteAsync(sqlHeader, new 
+                { 
+                    vm.InstrumentoId, vm.Nome, vm.VigenciaInicio, vm.VigenciaFim, 
+                    vm.ValorPrevistoTotal, vm.Ativo, vm.Observacao, Id = id 
+                }, transaction);
+
+                var idsParaManter = ObterIdsRecursivos(vm.Detalhamento);
+
+                if (idsParaManter.Any())
+                {
+                    const string sqlDeleteObsoletos = "DELETE FROM OrcamentoDetalhe WHERE OrcamentoId = @OrcamentoId AND Id NOT IN @Ids;";
+                    await conn.ExecuteAsync(sqlDeleteObsoletos, new { OrcamentoId = id, Ids = idsParaManter }, transaction);
+                }
+                else
+                {
+                    const string sqlDeleteAll = "DELETE FROM OrcamentoDetalhe WHERE OrcamentoId = @OrcamentoId;";
+                    await conn.ExecuteAsync(sqlDeleteAll, new { OrcamentoId = id }, transaction);
+                }
+
+                await UpsertDetalhesRecursivo(conn, transaction, id, null, vm.Detalhamento);
+
+                transaction.Commit();
+            }
+            catch (SqlException ex) // <--- CORRIGIDO AQUI
+            {
+                transaction.Rollback();
+                if (ex.Number == 547) 
+                {
+                    throw new Exception("Não é possível remover itens que possuem contratos vinculados. Inative o item ou remova os contratos primeiro.");
+                }
+                throw;
             }
             catch
             {
@@ -170,42 +213,124 @@ namespace Financeiro.Repositorios
             }
         }
 
-        public async Task AtualizarAsync(int id, OrcamentoViewModel vm)
+        private async Task UpsertDetalhesRecursivo(IDbConnection conn, IDbTransaction transaction, int orcamentoId, int? parentId, List<OrcamentoDetalheViewModel> detalhes)
+        {
+            if (detalhes == null || !detalhes.Any()) return;
+
+            foreach (var detalhe in detalhes)
+            {
+                int currentId;
+
+                if (detalhe.Id.HasValue && detalhe.Id.Value > 0)
+                {
+                    const string sqlUpdate = @"
+                        UPDATE OrcamentoDetalhe SET 
+                            ParentId = @ParentId,
+                            Nome = @Nome, 
+                            ValorPrevisto = @ValorPrevisto, 
+                            PermiteLancamento = @PermiteLancamento
+                        WHERE Id = @Id AND OrcamentoId = @OrcamentoId";
+
+                    await conn.ExecuteAsync(sqlUpdate, new
+                    {
+                        Id = detalhe.Id.Value,
+                        OrcamentoId = orcamentoId,
+                        ParentId = parentId,
+                        detalhe.Nome,
+                        detalhe.ValorPrevisto,
+                        PermiteLancamento = (detalhe.Filhos == null || !detalhe.Filhos.Any())
+                    }, transaction);
+
+                    currentId = detalhe.Id.Value;
+                }
+                else 
+                {
+                    const string sqlInsert = @"
+                        INSERT INTO OrcamentoDetalhe (OrcamentoId, ParentId, Nome, ValorPrevisto, PermiteLancamento)
+                        VALUES (@OrcamentoId, @ParentId, @Nome, @ValorPrevisto, @PermiteLancamento);
+                        SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+                    currentId = await conn.QuerySingleAsync<int>(sqlInsert, new
+                    {
+                        OrcamentoId = orcamentoId,
+                        ParentId = parentId,
+                        detalhe.Nome,
+                        detalhe.ValorPrevisto,
+                        PermiteLancamento = (detalhe.Filhos == null || !detalhe.Filhos.Any())
+                    }, transaction);
+                }
+
+                if (detalhe.Filhos != null && detalhe.Filhos.Any())
+                {
+                    await UpsertDetalhesRecursivo(conn, transaction, orcamentoId, currentId, detalhe.Filhos);
+                }
+            }
+        }
+
+        private List<int> ObterIdsRecursivos(List<OrcamentoDetalheViewModel> detalhes)
+        {
+            var ids = new List<int>();
+            if (detalhes == null) return ids;
+
+            foreach (var item in detalhes)
+            {
+                if (item.Id.HasValue && item.Id.Value > 0)
+                {
+                    ids.Add(item.Id.Value);
+                }
+                if (item.Filhos != null && item.Filhos.Any())
+                {
+                    ids.AddRange(ObterIdsRecursivos(item.Filhos));
+                }
+            }
+            return ids;
+        }
+
+        public async Task<IEnumerable<OrcamentoListViewModel>> ListarAtivosPorEntidadeAsync(int entidadeId)
+        {
+            using var conn = _factory.CreateConnection();
+            const string sql = @"
+                SELECT o.Id, o.Nome, o.ValorPrevistoTotal, o.VigenciaInicio, o.VigenciaFim
+                FROM Orcamento o
+                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                WHERE i.EntidadeId = @entidadeId AND o.Ativo = 1
+                ORDER BY o.Nome";
+            return await conn.QueryAsync<OrcamentoListViewModel>(sql, new { entidadeId });
+        }
+
+        public async Task<Orcamento?> ObterHeaderPorIdAsync(int id)
+        {
+            const string sql = "SELECT * FROM Orcamento WHERE Id = @id;";
+            using var conn = _factory.CreateConnection();
+            return await conn.QuerySingleOrDefaultAsync<Orcamento>(sql, new { id });
+        }
+        
+        public async Task<IEnumerable<OrcamentoDetalhe>> ObterDetalhesPorOrcamentoIdAsync(int orcamentoId)
+        {
+            const string sql = "SELECT * FROM OrcamentoDetalhe WHERE OrcamentoId = @orcamentoId;";
+            using var conn = _factory.CreateConnection();
+            return await conn.QueryAsync<OrcamentoDetalhe>(sql, new { orcamentoId });
+        }
+
+        public async Task<decimal> ObterTotalComprometidoPorInstrumentoAsync(int instrumentoId, int? ignorarOrcamentoId = null)
+        {
+            using var conn = _factory.CreateConnection();
+            const string sql = @"
+                SELECT SUM(ValorPrevistoTotal) FROM Orcamento 
+                WHERE InstrumentoId = @instrumentoId AND Ativo = 1 AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+            var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { instrumentoId, ignorarId = ignorarOrcamentoId });
+            return total ?? 0m;
+        }
+
+        public async Task ExcluirAsync(int id)
         {
             using var conn = _factory.CreateConnection();
             conn.Open();
             using var transaction = conn.BeginTransaction();
-
             try
             {
-                const string sqlHeader = @"
-                    UPDATE Orcamento SET
-                        InstrumentoId = @InstrumentoId,
-                        Nome = @Nome,
-                        VigenciaInicio = @VigenciaInicio,
-                        VigenciaFim = @VigenciaFim,
-                        ValorPrevistoTotal = @ValorPrevistoTotal,
-                        Ativo = @Ativo,
-                        Observacao = @Observacao
-                    WHERE Id = @Id;";
-                
-                await conn.ExecuteAsync(sqlHeader, new 
-                { 
-                    vm.InstrumentoId,
-                    vm.Nome,
-                    vm.VigenciaInicio,
-                    vm.VigenciaFim,
-                    vm.ValorPrevistoTotal,
-                    vm.Ativo,
-                    vm.Observacao,
-                    Id = id 
-                }, transaction);
-
-                const string sqlDeleteDetalhes = "DELETE FROM OrcamentoDetalhe WHERE OrcamentoId = @Id;";
-                await conn.ExecuteAsync(sqlDeleteDetalhes, new { Id = id }, transaction);
-
-                await InserirDetalhesRecursivo(conn, transaction, id, null, vm.Detalhamento);
-
+                await conn.ExecuteAsync("DELETE FROM OrcamentoDetalhe WHERE OrcamentoId = @id;", new { id }, transaction);
+                await conn.ExecuteAsync("DELETE FROM Orcamento WHERE Id = @id;", new { id }, transaction);
                 transaction.Commit();
             }
             catch
@@ -215,27 +340,21 @@ namespace Financeiro.Repositorios
             }
         }
 
-        public async Task ExcluirAsync(int id)
+        public async Task<OrcamentoDetalhe?> ObterDetalhePorIdAsync(int id)
         {
+            const string sql = "SELECT * FROM OrcamentoDetalhe WHERE Id = @id";
             using var conn = _factory.CreateConnection();
-            conn.Open();
-            using var transaction = conn.BeginTransaction();
+            return await conn.QuerySingleOrDefaultAsync<OrcamentoDetalhe>(sql, new { id });
+        }
 
-            try
-            {
-                const string sqlDetalhes = "DELETE FROM OrcamentoDetalhe WHERE OrcamentoId = @id;";
-                await conn.ExecuteAsync(sqlDetalhes, new { id }, transaction);
-
-                const string sqlHeader = "DELETE FROM Orcamento WHERE Id = @id;";
-                await conn.ExecuteAsync(sqlHeader, new { id }, transaction);
-
-                transaction.Commit();
-            }
-            catch
-            {
-                transaction.Rollback();
-                throw;
-            }
+        public async Task<IEnumerable<OrcamentoDetalhe>> ListarDetalhesParaLancamentoAsync(int orcamentoId)
+        {
+            const string sql = @"
+                SELECT * FROM OrcamentoDetalhe 
+                WHERE OrcamentoId = @orcamentoId AND PermiteLancamento = 1
+                ORDER BY Nome";
+            using var conn = _factory.CreateConnection();
+            return await conn.QueryAsync<OrcamentoDetalhe>(sql, new { orcamentoId });
         }
     }
 }

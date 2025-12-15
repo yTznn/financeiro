@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering; // Adicionado para SelectListItem
 using Financeiro.Repositorios;
 using System.Threading.Tasks;
 using Financeiro.Models.ViewModels;
@@ -99,21 +100,31 @@ namespace Financeiro.Controllers
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número/ano nesta unidade.");
             }
 
-            if (vm.OrcamentoId.HasValue)
+            // --- NOVA LÓGICA DE VALIDAÇÃO DE SALDO POR ITEM (GRANULAR) ---
+            if (vm.OrcamentoDetalheId.HasValue)
             {
-                var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
-                if (orcamentoHeader != null)
+                // 1. Busca o Item específico para saber quanto foi previsto nele
+                var detalheItem = await _orcamentoRepo.ObterDetalhePorIdAsync(vm.OrcamentoDetalheId.Value);
+                
+                if (detalheItem != null)
                 {
-                    var jaGasto = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value);
-                    var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGasto;
+                    // 2. Busca quanto já foi gasto ESPECIFICAMENTE neste item
+                    var jaGastoNoItem = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(vm.OrcamentoDetalheId.Value);
+                    
+                    var saldoDisponivelItem = detalheItem.ValorPrevisto - jaGastoNoItem;
 
-                    if (vm.ValorContrato > (saldoOrcamento + 0.01m))
+                    if (vm.ValorContrato > (saldoDisponivelItem + 0.01m))
                     {
                         ModelState.AddModelError("ValorMensal", 
-                            $"Saldo insuficiente no Orçamento. Disponível: {saldoOrcamento:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                            $"Saldo insuficiente no item '{detalheItem.Nome}'. Disponível: {saldoDisponivelItem:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
                     }
                 }
+                else
+                {
+                    ModelState.AddModelError("OrcamentoDetalheId", "O item de orçamento selecionado é inválido.");
+                }
             }
+            // -------------------------------------------------------------
 
             if (!ModelState.IsValid)
             {
@@ -190,18 +201,26 @@ namespace Financeiro.Controllers
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número/ano nesta unidade.");
             }
 
-            if (vm.OrcamentoId.HasValue)
+            // --- NOVA LÓGICA DE VALIDAÇÃO DE SALDO POR ITEM (GRANULAR) ---
+            if (vm.OrcamentoDetalheId.HasValue)
             {
-                var orcamentoHeader = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
-                var jaGastoOutros = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(vm.OrcamentoId.Value, ignorarContratoId: vm.Id);
-                var saldoOrcamento = orcamentoHeader.ValorPrevistoTotal - jaGastoOutros;
+                var detalheItem = await _orcamentoRepo.ObterDetalhePorIdAsync(vm.OrcamentoDetalheId.Value);
 
-                if (vm.ValorContrato > (saldoOrcamento + 0.01m))
+                if (detalheItem != null)
                 {
-                    ModelState.AddModelError("ValorMensal", 
-                        $"Saldo insuficiente. Disponível: {saldoOrcamento:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                    // Ignora o contrato atual na soma, pois estamos editando ele
+                    var jaGastoNoItem = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(vm.OrcamentoDetalheId.Value, ignorarContratoId: vm.Id);
+                    
+                    var saldoDisponivelItem = detalheItem.ValorPrevisto - jaGastoNoItem;
+
+                    if (vm.ValorContrato > (saldoDisponivelItem + 0.01m))
+                    {
+                        ModelState.AddModelError("ValorMensal", 
+                            $"Saldo insuficiente no item '{detalheItem.Nome}'. Disponível: {saldoDisponivelItem:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                    }
                 }
             }
+            // -------------------------------------------------------------
 
             if (!ModelState.IsValid)
             {
@@ -291,6 +310,16 @@ namespace Financeiro.Controllers
             var (itens, total) = await _contratoRepo.BuscarFornecedoresPaginadoAsync(term, page, 10);
             return Json(new { results = itens.Select(f => new { id = $"{f.Tipo}-{f.FornecedorId}", text = $"{f.Nome} ({f.Documento})" }), pagination = new { more = (page * 10) < total } });
         }
+
+        // --- NOVO ENDPOINT AJAX: Lista os itens do orçamento para o dropdown ---
+        [HttpGet]
+        public async Task<IActionResult> ListarItensOrcamento(int orcamentoId)
+        {
+            // Busca apenas os itens que aceitam lançamentos (folhas da árvore)
+            var itens = await _orcamentoRepo.ListarDetalhesParaLancamentoAsync(orcamentoId);
+            return Json(itens.Select(x => new { id = x.Id, nome = x.Nome }));
+        }
+        // -----------------------------------------------------------------------
         
         [HttpGet]
         public async Task<IActionResult> Historico(int id, int pag = 1)
@@ -307,6 +336,15 @@ namespace Financeiro.Controllers
             ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
             int entidadeId = User.ObterEntidadeId();
             ViewBag.Orcamentos = await _orcamentoRepo.ListarAtivosPorEntidadeAsync(entidadeId); 
+            
+            // --- NOVO: Se estiver editando ou houve erro, carrega os itens do orçamento selecionado ---
+            if (vm.OrcamentoId.HasValue)
+            {
+                var listaItens = await _orcamentoRepo.ListarDetalhesParaLancamentoAsync(vm.OrcamentoId.Value);
+                ViewBag.ItensOrcamento = listaItens.Select(x => new SelectListItem(x.Nome, x.Id.ToString(), x.Id == vm.OrcamentoDetalheId)).ToList();
+            }
+            // ------------------------------------------------------------------------------------------
+
             if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto)) ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
         }
 

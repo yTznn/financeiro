@@ -27,5 +27,6 @@ namespace Financeiro.Repositorios
 
         // [NOVO] Adicione esta linha aqui:
         Task<IEnumerable<ContratoNatureza>> ListarNaturezasPorContratoAsync(int contratoId);
+        Task<decimal> ObterTotalComprometidoPorDetalheAsync(int orcamentoDetalheId, int? ignorarContratoId = null);
     }
 }
