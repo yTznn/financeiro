@@ -1,2 +1,35 @@
 ﻿<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
 <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+
+<script>
+    // --- CORREÇÃO 1: Aceitar vírgula como decimal (Padrão Brasileiro) ---
+    $.validator.methods.range = function (value, element, param) {
+        var globalizedValue = value.replace(".", "").replace(",", ".");
+        return this.optional(element) || (globalizedValue >= param[0] && globalizedValue <= param[1]);
+    }
+    
+    $.validator.methods.number = function (value, element) {
+        return this.optional(element) || /^-?(?:\d+|\d{1,3}(?:[\s\.,]\d{3})+)(?:[\.,]\d+)?$/.test(value);
+    }
+
+    // --- CORREÇÃO 2: Tradução das mensagens de erro do jQuery ---
+    $.extend($.validator.messages, {
+        required: "Este campo é obrigatório.",
+        remote: "Por favor, corrija este campo.",
+        email: "Por favor, insira um endereço de e-mail válido.",
+        url: "Por favor, insira uma URL válida.",
+        date: "Por favor, insira uma data válida.",
+        dateISO: "Por favor, insira uma data válida (ISO).",
+        number: "Por favor, insira um número válido.",
+        digits: "Por favor, insira apenas dígitos.",
+        creditcard: "Por favor, insira um cartão de crédito válido.",
+        equalTo: "Por favor, insira o mesmo valor novamente.",
+        accept: "Por favor, insira um arquivo com uma extensão válida.",
+        maxlength: $.validator.format("Por favor, não insira mais que {0} caracteres."),
+        minlength: $.validator.format("Por favor, insira pelo menos {0} caracteres."),
+        rangelength: $.validator.format("Por favor, insira entre {0} e {1} caracteres."),
+        range: $.validator.format("Por favor, insira um valor entre {0} e {1}."),
+        max: $.validator.format("Por favor, insira um valor menor ou igual a {0}."),
+        min: $.validator.format("Por favor, insira um valor maior ou igual a {0}.")
+    });
+</script>

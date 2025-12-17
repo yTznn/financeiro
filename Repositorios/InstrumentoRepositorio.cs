@@ -296,5 +296,14 @@ namespace Financeiro.Repositorios
 
             return resumo;
         }
+        public async Task<IEnumerable<dynamic>> ListarInstrumentosParaSelectAsync()
+        {
+            // Esta query retorna apenas os dados essenciais para um SelectList/Select2
+            const string sql = "SELECT Id, Numero AS Text FROM Instrumento WHERE Ativo = 1 ORDER BY Numero";
+            
+            using var conn = _connectionFactory.CreateConnection();
+            // Dapper mapeia automaticamente para { Id, Text }
+            return await conn.QueryAsync<dynamic>(sql);
+        }
     }
 }

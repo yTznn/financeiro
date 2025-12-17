@@ -1,194 +1,370 @@
+@using Financeiro.Extensions
 @model IEnumerable<Financeiro.Models.ViewModels.UsuarioListagemViewModel>
 
 @{
-    ViewBag.Title = "Usuários do Sistema";
+    ViewData["Title"] = "Gestão de Usuários";
     Layout = "_Layout";
+
+    // Permissões
+    bool podeCriar = User.TemPermissao("USUARIO_ADD");
+    bool podeEditar = User.TemPermissao("USUARIO_EDIT");
+    bool podeInativar = User.TemPermissao("USUARIO_DEL");
+    bool podeAcoes = podeEditar || podeInativar;
+
+    // Filtros
+    bool exibirInativos = ViewBag.ExibirInativos ?? false;
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
 <style>
-    /* Estilo "Blue & White" Consistente */
-    .table-header-blue {
-        background-color: #0d6efd;
-        color: #ffffff;
-    }
-    .table-header-blue th {
-        font-weight: 500;
-        border-bottom: none;
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+    /* === Estilo do Modal (Premium) === */
+    .swal-menu-container {
+        text-align: left;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     
-    /* Avatar Circular */
-    .avatar-cell img {
-        object-fit: cover;
-        border: 2px solid #fff;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    .swal-menu-header {
+        background-color: #f8f9fa;
+        padding: 15px 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        border-left: 5px solid #0d6efd;
     }
-    .avatar-placeholder {
-        width: 40px;
-        height: 40px;
-        background-color: #e9ecef;
-        color: #adb5bd;
-        border-radius: 50%;
+
+    /* Botão de Ação do Modal */
+    .swal-action-btn {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 15px 20px; /* Mais espaço para clique */
+        border: 1px solid #e9ecef;
+        background: white;
+        border-radius: 10px;
+        color: #495057;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+    
+    .swal-action-btn:hover {
+        background-color: #f0f8ff;
+        border-color: #0d6efd;
+        color: #0d6efd;
+        transform: translateX(5px); /* Pequena animação */
+    }
+
+    /* Ícones dentro dos botões do modal */
+    .swal-action-btn i {
+        font-size: 1.5rem; /* Ícone grande */
+        width: 35px;       /* Largura fixa para alinhar o texto */
+        margin-right: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.2rem;
     }
 
-    /* Linha da Tabela */
-    .align-middle td {
-        vertical-align: middle;
-        padding: 0.8rem 1rem;
+    /* Cores de Hover Específicas */
+    .btn-action-delete:hover {
+        background-color: #fff5f5 !important;
+        border-color: #dc3545 !important;
+        color: #dc3545 !important;
     }
-    
-    /* Badges */
-    .badge-status-active {
-        background-color: #d1e7dd;
-        color: #0f5132;
-        font-weight: 600;
-        padding: 0.4em 0.8em;
-        border-radius: 20px;
-    }
-    .badge-status-inactive {
-        background-color: #f8d7da;
-        color: #842029;
-        font-weight: 600;
-        padding: 0.4em 0.8em;
-        border-radius: 20px;
+    .btn-action-perm:hover {
+        background-color: #fff9db !important;
+        border-color: #ffc107 !important;
+        color: #bfa100 !important;
     }
 </style>
 
-<div class="container-fluid px-0 py-3">
-    <div class="d-flex align-items-center justify-content-between mb-4">
+<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
+
+<div class="container py-4">
+    
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-            <h2 class="fw-bold text-dark mb-0">@ViewBag.Title</h2>
-            <small class="text-muted">Gerencie o acesso e as permissões da equipe</small>
+            <h2 class="text-primary fw-bold mb-0">
+                <i class="bi bi-people-fill me-2"></i>@ViewData["Title"]
+            </h2>
+            <small class="text-muted">Administração de contas e acessos.</small>
         </div>
-        <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm">
-            <i class="bi bi-person-plus-fill me-2"></i>Novo Usuário
-        </a>
+
+        <div class="d-flex align-items-center gap-3">
+            <form method="get" class="d-flex align-items-center bg-white px-3 py-2 rounded-pill shadow-sm border">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input cursor-pointer" type="checkbox" role="switch" 
+                           id="switchInativos" name="exibirInativos" value="true" 
+                           @(exibirInativos ? "checked" : "") onchange="this.form.submit()">
+                    <label class="form-check-label small fw-semibold text-secondary cursor-pointer" for="switchInativos">
+                        Exibir Inativos
+                    </label>
+                </div>
+                <input type="hidden" name="p" value="1" />
+            </form>
+
+            @if (podeCriar)
+            {
+                <a asp-action="Novo" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="bi bi-person-plus-fill me-2"></i>Novo Usuário
+                </a>
+            }
+        </div>
     </div>
 
-    <div class="card shadow-sm border-0 overflow-hidden" style="border-radius: 12px;">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-header-blue">
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Usuário</th>
+                        <th>Perfil</th>
+                        <th>E-mail</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center pe-4" style="width: 100px;">Opções</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
                         <tr>
-                            <th class="ps-4">Usuário / Login</th>
-                            <th>Pessoa Vinculada</th>
-                            <th>Email</th>
-                            <th class="text-center">Status</th>
-                            <th class="text-center">Foto</th>
-                            <th class="text-center" style="width: 180px;">Ações</th>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-search fs-1 d-block mb-2 opacity-25"></i>
+                                Nenhum usuário encontrado.
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var usuario in Model)
+                    }
+                    else
+                    {
+                        @foreach (var u in Model)
                         {
-                            <tr>
-                                <td class="ps-4 fw-semibold text-dark">
-                                    @usuario.NameSkip
-                                </td>
-                                <td class="text-muted">
-                                    @if (!string.IsNullOrEmpty(usuario.NomePessoaFisica))
-                                    {
-                                        <i class="bi bi-person-badge me-1"></i> @usuario.NomePessoaFisica
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted small fst-italic">- não vinculado -</span>
-                                    }
-                                </td>
-                                <td class="text-muted">@usuario.Email</td>
-                                <td class="text-center">
-                                    @if (usuario.Ativo)
-                                    {
-                                        <span class="badge-status-active"><i class="bi bi-check-circle me-1"></i>Ativo</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge-status-inactive"><i class="bi bi-x-circle me-1"></i>Inativo</span>
-                                    }
-                                </td>
-                                <td class="text-center">
-                                    <div class="d-flex justify-content-center avatar-cell">
-                                        @if (!string.IsNullOrEmpty(usuario.HashImagem))
+                            <tr class="@(!u.Ativo ? "bg-light text-muted" : "")">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        @if (!string.IsNullOrEmpty(u.HashImagem))
                                         {
-                                            <img src="/Usuarios/ImagemPerfil?hash=@usuario.HashImagem" alt="Foto" width="40" height="40" class="rounded-circle" />
+                                            <img src="/Usuarios/ImagemPerfil?hash=@u.HashImagem" 
+                                                 class="rounded-circle me-3 border shadow-sm" 
+                                                 width="45" height="45" style="object-fit: cover;">
                                         }
                                         else
                                         {
-                                            <div class="avatar-placeholder" title="Sem imagem">
-                                                <i class="bi bi-person"></i>
+                                            var partes = u.NameSkip.Trim().Split(' ');
+                                            var iniciais = (partes.Length > 1 ? $"{partes[0][0]}{partes[1][0]}" : $"{partes[0][0]}").ToUpper();
+                                            <div class="rounded-circle me-3 bg-secondary bg-opacity-10 text-secondary d-flex align-items-center justify-content-center fw-bold border" 
+                                                 style="width: 45px; height: 45px; font-size: 0.9rem;">
+                                                @iniciais
                                             </div>
                                         }
+                                        <div>
+                                            <div class="fw-bold text-dark">@u.NameSkip</div>
+                                            <div class="small text-muted" style="font-size: 0.75rem;">
+                                                @if(!string.IsNullOrEmpty(u.NomePessoaFisica)) { 
+                                                    <i class="bi bi-person-badge me-1"></i>@u.NomePessoaFisica
+                                                } else {
+                                                    <span class="fst-italic opacity-75">Sem vínculo PF</span>
+                                                }
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
+                                
+                                <td>
+                                    <span class="badge bg-light text-dark border">
+                                        <i class="bi bi-shield-lock me-1"></i> @u.NomePerfil
+                                    </span>
+                                </td>
+                                
+                                <td class="text-muted small">@u.Email</td>
+
                                 <td class="text-center">
-                                    <div class="btn-group">
-                                        <a asp-action="Editar" asp-route-id="@usuario.Id" 
-                                           class="btn btn-sm btn-outline-primary border-0" 
-                                           data-bs-toggle="tooltip" title="Editar Dados">
-                                            <i class="bi bi-pencil-square fs-5"></i>
-                                        </a>
+                                    @if (u.Ativo)
+                                    {
+                                        <span class="badge rounded-pill bg-success bg-opacity-75">Ativo</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge rounded-pill bg-danger">Inativo</span>
+                                    }
+                                </td>
 
-                                        <a asp-action="EditarPermissoes" asp-route-id="@usuario.Id" 
-                                           class="btn btn-sm btn-outline-warning border-0" 
-                                           data-bs-toggle="tooltip" title="Gerenciar Permissões">
-                                            <i class="bi bi-shield-lock-fill fs-5"></i>
-                                        </a>
-
-                                        <form asp-action="Excluir" asp-route-id="@usuario.Id" method="post" class="d-inline js-delete" data-nome="@usuario.NameSkip">
-                                            @Html.AntiForgeryToken()
-                                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" 
-                                                    data-bs-toggle="tooltip" title="Excluir">
-                                                <i class="bi bi-trash fs-5"></i>
-                                            </button>
-                                        </form>
-                                    </div>
+                                <td class="text-center pe-4">
+                                    @if (podeAcoes)
+                                    {
+                                        @* BOTÃO COM ÍCONE DE ENGRENAGEM E BORDA AZUL *@
+                                        <button class="btn btn-outline-primary btn-sm js-open-menu px-3 py-1 border-2"
+                                                title="Gerenciar Usuário"
+                                                data-id="@u.Id"
+                                                data-nome="@u.NameSkip"
+                                                data-perfil="@u.NomePerfil"
+                                                data-ativo="@u.Ativo.ToString().ToLower()"
+                                                data-pode-editar="@podeEditar.ToString().ToLower()"
+                                                data-pode-inativar="@podeInativar.ToString().ToLower()">
+                                            <i class="bi bi-gear-fill fs-5"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-lock-fill text-muted opacity-25"></i>
+                                    }
                                 </td>
                             </tr>
                         }
-                    </tbody>
-                </table>
-            </div>
+                    }
+                </tbody>
+            </table>
         </div>
+
+        @if (totalPaginas > 1)
+        {
+            <div class="card-footer bg-white border-0 py-3">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" 
+                               asp-route-p="@(paginaAtual - 1)" asp-route-exibirInativos="@exibirInativos"><i class="bi bi-chevron-left"></i></a>
+                        </li>
+                        @for (int i = 1; i <= totalPaginas; i++)
+                        {
+                            <li class="page-item @(i == paginaAtual ? "active" : "")">
+                                <a class="page-link border-0 shadow-none" asp-action="Index" 
+                                   asp-route-p="@i" asp-route-exibirInativos="@exibirInativos">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" 
+                               asp-route-p="@(paginaAtual + 1)" asp-route-exibirInativos="@exibirInativos"><i class="bi bi-chevron-right"></i></a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        }
     </div>
 </div>
 
+<form id="form-inativar" method="post" style="display:none;">
+    @Html.AntiForgeryToken()
+</form>
+
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-
     <script>
-        // Inicializa Tooltips do Bootstrap (para aparecer o texto ao passar o mouse nos botões)
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
+        $(document).ready(function() {
+            const flags = document.getElementById('pageFlags');
+            if(flags && flags.dataset.success) Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: flags.dataset.success, showConfirmButton: false, timer: 3000 });
+            if(flags && flags.dataset.error) Swal.fire({ icon: 'error', title: 'Erro', text: flags.dataset.error });
 
-        // Mensagens de Sucesso
-        const ok = '@(TempData["MensagemSucesso"] ?? "")';
-        if (ok) Swal.fire({ icon: 'success', title: 'Sucesso', text: ok, timer: 3000, showConfirmButton: false });
+            // ABRIR MENU MODAL
+            $('.js-open-menu').click(function() {
+                const btn = $(this);
+                const d = btn.data(); // Pega dados: id, nome, ativo (true/false)
 
-        // Confirmação de Exclusão estilizada
-        document.querySelectorAll('form.js-delete').forEach(f => {
-            f.addEventListener('submit', function (e) {
-                e.preventDefault();
-                const nome = this.getAttribute('data-nome');
+                let htmlContent = `
+                    <div class="swal-menu-container">
+                        <div class="swal-menu-header">
+                            <div class="small text-muted text-uppercase fw-bold">Gerenciar Usuário</div>
+                            <div class="fs-4 fw-bold text-dark mb-1 text-truncate">${d.nome}</div>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 me-2">
+                                    <i class="bi bi-shield-lock me-1"></i>${d.perfil}
+                                </span>
+                                ${d.ativo === true 
+                                    ? '<span class="badge bg-success bg-opacity-75">Ativo</span>' 
+                                    : '<span class="badge bg-danger">Inativo</span>'}
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">`;
+
+                if (d.podeEditar === true) {
+                    htmlContent += `
+                        <a href="/Usuarios/Editar/${d.id}" class="swal-action-btn">
+                            <i class="bi bi-pencil-square text-primary"></i>
+                            <span>Editar Dados Cadastrais</span>
+                        </a>
+                        <a href="/Usuarios/EditarPermissoes/${d.id}" class="swal-action-btn btn-action-perm">
+                            <i class="bi bi-key-fill text-warning"></i>
+                            <span>Gerenciar Permissões</span>
+                        </a>`;
+                }
+
+                // LÓGICA DO TOGGLE (ATIVAR/INATIVAR)
+                if (d.podeInativar === true) {
+                    if (d.ativo === true) {
+                        // SE ESTÁ ATIVO -> MOSTRA BOTÃO VERMELHO (INATIVAR)
+                        htmlContent += `
+                            <button onclick="swalInativar(${d.id}, '${d.nome}')" class="swal-action-btn btn-action-delete">
+                                <i class="bi bi-ban text-danger"></i>
+                                <span>Inativar Acesso</span>
+                            </button>`;
+                    } else {
+                        // SE ESTÁ INATIVO -> MOSTRA BOTÃO VERDE (REATIVAR)
+                        htmlContent += `
+                            <button onclick="swalReativar(${d.id}, '${d.nome}')" class="swal-action-btn" style="border-color: #198754; color: #198754;">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Reativar Acesso</span>
+                            </button>`;
+                    }
+                }
+
+                htmlContent += `</div></div>`;
+
                 Swal.fire({
-                    title: 'Excluir Usuário?',
-                    html: `Tem certeza que deseja remover o usuário <b>${nome}</b>?<br>Ele perderá o acesso imediatamente.`,
+                    html: htmlContent,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    width: 420,
+                    padding: '0',
+                    customClass: { popup: 'rounded-4 overflow-hidden', htmlContainer: 'm-0' }
+                });
+            });
+
+            // Função Inativar (Vermelho)
+            window.swalInativar = function(id, nome) {
+                Swal.fire({
+                    title: 'Inativar Usuário?',
+                    html: `Deseja revogar o acesso de <b>${nome}</b>?`,
                     icon: 'warning',
                     showCancelButton: true,
+                    confirmButtonText: 'Sim, Inativar',
                     confirmButtonColor: '#dc3545',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Sim, excluir',
-                    cancelButtonText: 'Cancelar'
-                }).then((r) => { if (r.isConfirmed) this.submit(); });
-            });
+                    cancelButtonText: 'Cancelar',
+                    reverseButtons: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        submitForm('/Usuarios/Excluir/' + id);
+                    }
+                });
+            };
+
+            // Função Reativar (Verde)
+            window.swalReativar = function(id, nome) {
+                Swal.fire({
+                    title: 'Reativar Usuário?',
+                    html: `Deseja liberar o acesso de <b>${nome}</b> novamente?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sim, Reativar',
+                    confirmButtonColor: '#198754', // Verde
+                    cancelButtonText: 'Cancelar',
+                    reverseButtons: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        submitForm('/Usuarios/Reativar/' + id);
+                    }
+                });
+            };
+
+            // Helper para submeter o form oculto
+            function submitForm(actionUrl) {
+                const form = document.getElementById('form-inativar'); // Reutilizamos o mesmo form
+                form.action = actionUrl;
+                form.submit();
+            }
         });
     </script>
 }

@@ -5,57 +5,97 @@
     ViewData["Title"] = "Relatório Geral de Recebimentos";
     var br = new CultureInfo("pt-BR");
     
-    // Agrupa todos os recebimentos pelo número do instrumento
+    // Agrupa e ordena
     var recebimentosAgrupados = Model.GroupBy(r => r.InstrumentoNumero).OrderBy(g => g.Key);
 }
 
-<h2 class="mb-4">@ViewData["Title"]</h2>
-
-@if (!Model.Any())
-{
-    <div class="alert alert-info text-center">
-        <i class='bx bx-info-circle fs-4 align-middle'></i>
-        Nenhum recebimento foi lançado no sistema ainda.
+<div class="container py-4">
+    
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="fw-bold text-secondary mb-0">
+                <i class='bx bxs-report me-2'></i>@ViewData["Title"]
+            </h2>
+            <small class="text-muted">Visão consolidada de todos os repasses financeiros lançados.</small>
+        </div>
+        <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class='bx bx-arrow-back'></i> Voltar ao Início
+        </a>
     </div>
-}
-else
-{
-    foreach (var grupo in recebimentosAgrupados)
-    {
-        <div class="mb-4">
-            <h4 class="mb-3">
-                <i class='bx bx-book-content align-middle'></i>
-                Instrumento Nº: <strong>@grupo.Key</strong>
-            </h4>
 
-            <div class="row g-3">
-                @foreach (var recebimento in grupo.OrderByDescending(r => r.DataInicio))
-                {
-                    <div class="col-md-6 col-lg-4">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-body">
-                                <h5 class="card-title text-success d-flex justify-content-between">
-                                    <span>
-                                        <i class='bx bxs-dollar-circle align-middle'></i>
-                                        @recebimento.Valor.ToString("C", br)
-                                    </span>
-                                    <span class="badge bg-secondary fw-normal">
-                                        ID: @recebimento.Id
-                                    </span>
-                                </h5>
-                                <h6 class="card-subtitle mb-2 text-muted">
-                                    <i class='bx bx-calendar align-middle'></i>
-                                    @recebimento.DataInicio.ToString("dd/MM/yy") a @recebimento.DataFim.ToString("dd/MM/yy")
-                                </h6>
-                                <p class="card-text small">
-                                    @recebimento.Observacao
-                                </p>
-                            </div>
+    @if (!Model.Any())
+    {
+        <div class="text-center py-5 bg-white rounded-3 shadow-sm">
+            <div class="mb-3">
+                <i class='bx bx-file-blank text-muted opacity-25' style="font-size: 4rem;"></i>
+            </div>
+            <h4 class="text-muted fw-normal">Nenhum dado encontrado</h4>
+            <p class="text-muted small">Não há registros de recebimentos no sistema até o momento.</p>
+        </div>
+    }
+    else
+    {
+        <div class="vstack gap-4">
+            @foreach (var grupo in recebimentosAgrupados)
+            {
+                // Calcula o total deste instrumento para exibir no cabeçalho
+                var totalInstrumento = grupo.Sum(x => x.Valor);
+
+                <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+                    
+                    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-primary fw-bold">
+                            <i class='bx bx-folder-open me-2'></i>Instrumento Nº @grupo.Key
+                        </h5>
+                        <div class="text-end">
+                            <small class="text-muted d-block text-uppercase" style="font-size: 0.7rem; letter-spacing: 1px;">Total Acumulado</small>
+                            <span class="fw-bold text-dark fs-5">@totalInstrumento.ToString("C", br)</span>
                         </div>
                     </div>
-                }
-            </div>
+                    
+                    <div class="card-body bg-light bg-opacity-10">
+                        <div class="row g-3">
+                            @foreach (var recebimento in grupo.OrderByDescending(r => r.DataInicio))
+                            {
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="card h-100 border shadow-none bg-white hover-shadow transition-all">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <span class="badge bg-success bg-opacity-10 text-success mb-1">
+                                                        @recebimento.DataInicio.ToString("MMM/yyyy", br).ToUpper()
+                                                    </span>
+                                                    <div class="small text-muted">
+                                                        <i class='bx bx-calendar'></i> 
+                                                        @recebimento.DataInicio.ToString("dd/MM") a @recebimento.DataFim.ToString("dd/MM/yyyy")
+                                                    </div>
+                                                </div>
+                                                <span class="fw-bold text-success fs-5">
+                                                    @recebimento.Valor.ToString("C", br)
+                                                </span>
+                                            </div>
+                                            
+                                            @if(!string.IsNullOrEmpty(recebimento.Observacao))
+                                            {
+                                                <hr class="my-2 border-light" />
+                                                <p class="card-text small text-muted mb-0 fst-italic">
+                                                    <i class='bx bx-comment-detail me-1'></i> @recebimento.Observacao
+                                                </p>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
-        <hr class="my-4"/>
     }
-}
+</div>
+
+<style>
+    /* Pequeno efeito visual ao passar o mouse nos cards */
+    .hover-shadow { transition: transform 0.2s, box-shadow 0.2s; }
+    .hover-shadow:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.08)!important; }
+</style>

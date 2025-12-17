@@ -1,86 +1,137 @@
 using Microsoft.AspNetCore.Mvc;
 using Financeiro.Models;
-using System.Data.SqlClient;
-using Dapper;
 using Microsoft.AspNetCore.Authorization;
-using Financeiro.Infraestrutura;
+using Financeiro.Repositorios; // Novo Repo
+using Financeiro.Servicos;     // Logs
+using Financeiro.Atributos;    // Permissões
+using System;
+using System.Threading.Tasks;
 
 namespace Financeiro.Controllers
 {
     [Authorize]
     public class PerfisController : Controller
     {
-        private readonly IDbConnectionFactory _connectionFactory;
+        private readonly IPerfilRepositorio _repo;
+        private readonly ILogService _logService;
 
-        public PerfisController(IDbConnectionFactory connectionFactory)
+        public PerfisController(IPerfilRepositorio repo, ILogService logService)
         {
-            _connectionFactory = connectionFactory;
+            _repo = repo;
+            _logService = logService;
         }
 
-        // GET: /Perfis
-        public async Task<IActionResult> Index()
+        /* ---------- LISTAR (Paginado) ---------- */
+        [HttpGet]
+        [AutorizarPermissao("PERFIL_VIEW")]
+        public async Task<IActionResult> Index(int p = 1)
         {
-            using var conn = _connectionFactory.CreateConnection();
-            var perfis = await conn.QueryAsync<Perfil>("SELECT * FROM Perfis ORDER BY Nome");
-            return View(perfis);
+            const int TAMANHO_PAGINA = 10;
+            
+            // Busca dados paginados do repositório
+            var (lista, total) = await _repo.ListarPaginadoAsync(p, TAMANHO_PAGINA);
+
+            // Passa informações de paginação para a View
+            ViewBag.PaginaAtual = p;
+            ViewBag.TotalPaginas = (int)Math.Ceiling((double)total / TAMANHO_PAGINA);
+
+            return View(lista);
         }
 
-        // GET: /Perfis/Novo
+        /* ---------- NOVO ---------- */
+        [HttpGet]
+        [AutorizarPermissao("PERFIL_ADD")]
         public IActionResult Novo()
         {
-            return View("PerfilForm", new Perfil());
+            // Inicia com Ativo = true por padrão
+            return View("PerfilForm", new Perfil { Ativo = true });
         }
 
-        // POST: /Perfis/Salvar
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("PERFIL_ADD")]
         public async Task<IActionResult> Salvar(Perfil perfil)
         {
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) return View("PerfilForm", perfil);
+
+            try
+            {
+                await _repo.InserirAsync(perfil);
+                
+                // Log de criação
+                await _logService.RegistrarCriacaoAsync("Perfil", perfil, 0);
+
+                TempData["Sucesso"] = "Perfil cadastrado com sucesso!";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Erro ao salvar: {ex.Message}";
                 return View("PerfilForm", perfil);
-
-            using var conn = _connectionFactory.CreateConnection();
-            var sql = @"INSERT INTO Perfis (Nome, Ativo) VALUES (@Nome, @Ativo)";
-            await conn.ExecuteAsync(sql, perfil);
-
-            return RedirectToAction("Index");
+            }
         }
 
-        // GET: /Perfis/Editar/5
+        /* ---------- EDITAR ---------- */
+        [HttpGet]
+        [AutorizarPermissao("PERFIL_EDIT")]
         public async Task<IActionResult> Editar(int id)
         {
-            using var conn = _connectionFactory.CreateConnection();
-            var perfil = await conn.QueryFirstOrDefaultAsync<Perfil>(
-                "SELECT * FROM Perfis WHERE Id = @Id", new { Id = id });
-
-            if (perfil == null)
-                return NotFound();
-
+            var perfil = await _repo.ObterPorIdAsync(id);
+            if (perfil == null) return NotFound();
+            
             return View("PerfilForm", perfil);
         }
 
-        // POST: /Perfis/Atualizar
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("PERFIL_EDIT")]
         public async Task<IActionResult> Atualizar(Perfil perfil)
         {
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) return View("PerfilForm", perfil);
+
+            try
+            {
+                // Busca o anterior para logar o "Antes e Depois"
+                var antigo = await _repo.ObterPorIdAsync(perfil.Id);
+                
+                await _repo.AtualizarAsync(perfil);
+                
+                // Log de edição
+                await _logService.RegistrarEdicaoAsync("Perfil", antigo, perfil, perfil.Id);
+
+                TempData["Sucesso"] = "Perfil atualizado com sucesso!";
+                return RedirectToAction("Index");
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
                 return View("PerfilForm", perfil);
-
-            using var conn = _connectionFactory.CreateConnection();
-            var sql = @"UPDATE Perfis SET Nome = @Nome, Ativo = @Ativo WHERE Id = @Id";
-            await conn.ExecuteAsync(sql, perfil);
-
-            return RedirectToAction("Index");
+            }
         }
 
-        // POST: /Perfis/Excluir/5
+        /* ---------- EXCLUIR (Inativar) ---------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("PERFIL_DEL")]
         public async Task<IActionResult> Excluir(int id)
         {
-            using var conn = _connectionFactory.CreateConnection();
-            await conn.ExecuteAsync("DELETE FROM Perfis WHERE Id = @Id", new { Id = id });
+            try
+            {
+                var item = await _repo.ObterPorIdAsync(id);
+                if (item == null) return NotFound();
+
+                await _repo.InativarAsync(id);
+                
+                // Log de exclusão
+                await _logService.RegistrarExclusaoAsync("Perfil", item, id);
+
+                TempData["Sucesso"] = "Perfil inativado com sucesso!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Erro"] = $"Erro ao inativar: {ex.Message}";
+            }
+            
             return RedirectToAction("Index");
         }
     }

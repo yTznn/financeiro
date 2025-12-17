@@ -28,5 +28,6 @@ namespace Financeiro.Repositorios
 
         // Método auxiliar da lógica de vigência
         Task<Instrumento?> ObterVigentePorEntidadeAsync(int entidadeId);
+        Task<IEnumerable<dynamic>> ListarInstrumentosParaSelectAsync();
     }
 }

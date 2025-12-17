@@ -1,0 +1,203 @@
+@model IEnumerable<Financeiro.Models.ViewModels.LogListagemViewModel>
+
+@{
+    ViewData["Title"] = "Logs de Auditoria";
+    Layout = "_Layout";
+    
+    int paginaAtual = ViewBag.PaginaAtual;
+    int totalPaginas = ViewBag.TotalPaginas;
+    int? filtroUsuarioId = ViewBag.UsuarioId;
+    string usuarioNome = ViewBag.UsuarioNomeSelecionado;
+}
+
+<style>
+    .log-time { font-size: 0.85rem; color: #6c757d; font-family: monospace; }
+    .log-action-badge { min-width: 90px; }
+    
+    /* Estilo Select2 no padrão do filtro */
+    .select2-container--bootstrap-5 .select2-selection { 
+        border-radius: 25px !important; 
+        padding-left: 15px; 
+        min-height: 40px;
+    }
+    .select2-container--bootstrap-5 .select2-selection__rendered {
+        padding-top: 5px;
+    }
+</style>
+
+<div class="container py-4">
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end mb-4 gap-3">
+        <div>
+            <h2 class="text-secondary fw-bold mb-0">
+                <i class="bi bi-activity me-2"></i>@ViewData["Title"]
+            </h2>
+            <small class="text-muted">Rastreabilidade completa das ações do sistema.</small>
+        </div>
+
+        <form method="get" class="d-flex gap-2 w-100" style="max-width: 500px;">
+            <div class="flex-grow-1">
+                <label class="form-label small text-muted mb-1 ms-2">Filtrar por Usuário</label>
+                <select name="usuarioId" id="filtroUsuario" class="form-select">
+                    @if (filtroUsuarioId.HasValue)
+                    {
+                        <option value="@filtroUsuarioId" selected>@usuarioNome</option>
+                    }
+                </select>
+            </div>
+            <div class="d-flex align-items-end">
+                <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm" title="Aplicar Filtro">
+                    <i class="bi bi-filter"></i>
+                </button>
+                @if (filtroUsuarioId.HasValue)
+                {
+                    <a asp-action="Index" class="btn btn-light rounded-pill ms-1 border text-danger" title="Limpar Filtro">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Ação</th>
+                        <th>Entidade / Módulo</th>
+                        <th>Usuário</th>
+                        <th>Detalhes</th>
+                        <th class="text-end pe-4">Data & Hora</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-clipboard-x fs-1 d-block mb-2 opacity-25"></i>
+                                Nenhum registro de log encontrado.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model)
+                        {
+                            // Lógica de Cores dos Badges
+                            string badgeClass = "bg-secondary";
+                            string icon = "bi-circle";
+                            
+                            if (item.Acao.Contains("CRIACAO", StringComparison.OrdinalIgnoreCase) || item.Acao.Contains("ADICIONA", StringComparison.OrdinalIgnoreCase)) { badgeClass = "bg-success"; icon = "bi-plus-circle"; }
+                            else if (item.Acao.Contains("EDICAO", StringComparison.OrdinalIgnoreCase) || item.Acao.Contains("ATUALIZA", StringComparison.OrdinalIgnoreCase)) { badgeClass = "bg-primary"; icon = "bi-pencil"; }
+                            else if (item.Acao.Contains("EXCLUSAO", StringComparison.OrdinalIgnoreCase) || item.Acao.Contains("INATIVA", StringComparison.OrdinalIgnoreCase)) { badgeClass = "bg-danger"; icon = "bi-trash"; }
+                            else if (item.Acao.Contains("LOGIN", StringComparison.OrdinalIgnoreCase) || item.Acao.Contains("ACESSO", StringComparison.OrdinalIgnoreCase)) { badgeClass = "bg-info text-dark"; icon = "bi-box-arrow-in-right"; }
+                            else if (item.Acao.Contains("LOGOUT", StringComparison.OrdinalIgnoreCase)) { badgeClass = "bg-light text-secondary"; icon = "bi-box-arrow-right"; }
+
+
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="badge @badgeClass bg-opacity-75 log-action-badge py-2 text-uppercase fw-bold">
+                                        <i class="bi @icon me-1"></i> @item.Acao
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="fw-bold text-dark small text-uppercase">
+                                        <i class="bi bi-tag-fill me-1 text-muted"></i>@item.Tabela
+                                    </span>
+                                    <div class="small text-muted">(@item.EntidadeSigla)</div>
+                                </td>
+                                
+                                <td>
+                                    <div class="fw-bold text-dark" style="font-size: 0.9rem;">@item.UsuarioNome</div>
+                                    @if(!string.IsNullOrEmpty(item.NomePessoa)) {
+                                        <div class="text-muted" style="font-size: 0.75rem;">@item.NomePessoa</div>
+                                    }
+                                </td>
+
+                                <td class="text-muted" style="max-width: 350px;">
+                                    <div class="text-truncate" title="@item.ValoresNovos">
+                                        @item.ValoresNovos
+                                    </div>
+                                </td>
+
+                                <td class="text-end pe-4">
+                                    <div class="log-time fw-bold">@item.DataHora.ToString("dd/MM/yyyy")</div>
+                                    <small class="text-muted">@item.DataHora.ToString("HH:mm:ss")</small>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (totalPaginas > 1)
+        {
+            <div class="card-footer bg-white border-0 py-3">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" 
+                               asp-route-p="@(paginaAtual - 1)" asp-route-usuarioId="@filtroUsuarioId"><i class="bi bi-chevron-left"></i></a>
+                        </li>
+                        @for (int i = 1; i <= totalPaginas; i++)
+                        {
+                            <li class="page-item @(i == paginaAtual ? "active" : "")">
+                                <a class="page-link border-0 shadow-none" asp-action="Index" 
+                                   asp-route-p="@i" asp-route-usuarioId="@filtroUsuarioId">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" 
+                               asp-route-p="@(paginaAtual + 1)" asp-route-usuarioId="@filtroUsuarioId"><i class="bi bi-chevron-right"></i></a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            // Inicializa o Select2 com AJAX
+            $('#filtroUsuario').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Buscar usuário (NameSkip ou Nome PF)...',
+                allowClear: true,
+                minimumInputLength: 2,
+                ajax: {
+                    url: '/Logs/BuscarUsuarios',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return { term: params.term };
+                    },
+                    processResults: function (data) {
+                        return {
+                            // Mapeia o resultado do controller (Id, Text)
+                            results: $.map(data.results, function (item) {
+                                return { id: item.Id, text: item.Text };
+                            })
+                        };
+                    },
+                    cache: true
+                }
+            });
+            
+            // Corrige o comportamento do Select2 com form submission
+            // Se o usuário apagar o valor (limpar), ele manda NULL para o filtro
+            $('#filtroUsuario').on('select2:clear', function (e) {
+                $(this).val(null).trigger('change');
+            });
+        });
+    </script>
+}

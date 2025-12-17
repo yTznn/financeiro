@@ -9,6 +9,8 @@
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
 
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/financeiro.styles.css" asp-append-version="true" />
@@ -124,15 +126,23 @@
         string? currentController = ViewContext.RouteData.Values["controller"]?.ToString();
         string? currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
-        // Lista de todos os controllers que estão no submenu "Base de Gerenciamento"
+        // Lista de controllers que estão em GERENCIAMENTO
         var gerenciamentoControllers = new[] {
             "Contratos", "Entidades", "Fornecedores", "Instrumentos",
             "LancamentosInstrumento", "Movimentacoes", "Naturezas", "Niveis", "Orcamentos",
-            "Perfis", "Usuarios", "RecebimentosInstrumento"
+            "Perfis", "Usuarios", "RecebimentosInstrumento", "Logs"
+        };
+        
+        // Lista de controllers que estão em RELATÓRIOS
+        var relatoriosControllers = new[] {
+            "Relatorios" // Adicionado
         };
 
-        // Verifica se o controller atual está na lista acima
+        // Verifica se o submenu de Gerenciamento está ativo
         bool isGerenciamentoActive = gerenciamentoControllers.Contains(currentController);
+        
+        // Verifica se o submenu de Relatórios está ativo
+        bool isRelatoriosActive = relatoriosControllers.Contains(currentController);
     }
     
     <div class="sidebar close" id="sidebar">
@@ -157,126 +167,19 @@
                     <li class="menu-window p-0" id="window-gerenciamento">
                         <ul id="gerenciamento-list" class="list-unstyled m-0">
                             
-                            @* --- ITEM PROTEGIDO: CONTRATOS --- *@
-                            @if (User.TemPermissao("CONTRATO_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")">
-                                        <i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span>
-                                    </a>
-                                </li>
-                            }
-                            @* -------------------------------- *@
-                            
-                            @* --- ITEM PROTEGIDO: ENTIDADES --- *@
-                            @if (User.TemPermissao("ENTIDADE_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Entidades" asp-action="Index" class="@(currentController == "Entidades" ? "active" : "")">
-                                        <i class='bx bx-building-house'></i><span class="links_name">Entidades</span>
-                                    </a>
-                                </li>
-                            }
-                            @* -------------------------------- *@
-
-                            @* --- ITEM PROTEGIDO: FORNECEDORES --- *@
-                            @if (User.TemPermissao("FORNECEDOR_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")">
-                                        <i class='bx bx-package'></i><span class="links_name">Fornecedores</span>
-                                    </a>
-                                </li>
-                            }
-                            @* ------------------------------------ *@
-                            
-                            @* --- ITEM PROTEGIDO: INSTRUMENTOS --- *@
-                            @if (User.TemPermissao("INSTRUMENTO_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Instrumentos" asp-action="Index" class="@(currentController == "Instrumentos" ? "active" : "")">
-                                        <i class='bx bx-book-content'></i><span class="links_name">Instrumentos</span>
-                                    </a>
-                                </li>
-                            }
-                            @* ------------------------------------ *@
-                            
-                            @* --- ITEM PROTEGIDO: LANÇAMENTOS --- *@
-                            @if (User.TemPermissao("MOVIMENTACAO_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Movimentacoes" asp-action="Index" class="@(currentController == "Movimentacoes" ? "active" : "")">
-                                        <i class='bx bx-money-withdraw'></i><span class="links_name">Lançamentos Contábeis</span>
-                                    </a>
-                                </li>
-                            }
-                            @* -------------------------------------------------------- *@
-
-                            @* --- ITEM PROTEGIDO: NATUREZAS --- *@
-                            @if (User.TemPermissao("NATUREZA_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Naturezas" asp-action="Index" class="@(currentController == "Naturezas" ? "active" : "")">
-                                        <i class='bx bx-purchase-tag-alt'></i><span class="links_name">Naturezas</span>
-                                    </a>
-                                </li>
-                            }
-                            @* --------------------------------- *@
-                            
-                            @* --- ITEM PROTEGIDO: NÍVEIS --- *@
-                            @if (User.TemPermissao("NIVEL_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Niveis" asp-action="Index" class="@(currentController == "Niveis" ? "active" : "")">
-                                        <i class='bx bx-sitemap'></i><span class="links_name">Níveis</span>
-                                    </a>
-                                </li>
-                            }
-                            @* ------------------------------ *@
-                            
-                            @* --- ITEM PROTEGIDO: ORÇAMENTOS --- *@
-                            @if (User.TemPermissao("ORCAMENTO_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Orcamentos" asp-action="Index" class="@(currentController == "Orcamentos" ? "active" : "")">
-                                        <i class='bx bx-bar-chart-square'></i><span class="links_name">Orçamentos</span>
-                                    </a>
-                                </li>
-                            }
-                            @* ---------------------------------- *@
-
-                            @* --- ITEM PROTEGIDO: PERFIS DE ACESSO --- *@
-                            @if (User.TemPermissao("PERFIL_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Perfis" asp-action="Index" class="@(currentController == "Perfis" ? "active" : "")">
-                                        <i class='bx bx-id-card'></i><span class="links_name">Perfis de Acesso</span>
-                                    </a>
-                                </li>
-                            }
-                            @* ---------------------------------------- *@
-
-                            @* --- ITEM PROTEGIDO: RECEBIMENTOS --- *@
-                            @if (User.TemPermissao("RECEBIMENTO_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="RecebimentosInstrumento" asp-action="RelatorioGeral" class="@(currentController == "RecebimentosInstrumento" ? "active" : "")">
-                                        <i class='bx bxs-dollar-circle'></i><span class="links_name">Recebimentos</span>
-                                    </a>
-                                </li>
-                            }
-                            @* ------------------------------------ *@
-
-                            @* --- ITEM PROTEGIDO: USUÁRIOS --- *@
-                            @if (User.TemPermissao("USUARIO_VIEW"))
-                            {
-                                <li class="menu-item">
-                                    <a asp-controller="Usuarios" asp-action="Index" class="@(currentController == "Usuarios" ? "active" : "")">
-                                        <i class='bx bx-group'></i><span class="links_name">Usuários</span>
-                                    </a>
-                                </li>
-                            }
-                            @* -------------------------------- *@
+                            @* --- LISTA DE ITENS ANTERIORES... --- *@
+                            @if (User.TemPermissao("CONTRATO_VIEW")) { <li class="menu-item"><a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")"><i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span></a></li> }
+                            @if (User.TemPermissao("ENTIDADE_VIEW")) { <li class="menu-item"><a asp-controller="Entidades" asp-action="Index" class="@(currentController == "Entidades" ? "active" : "")"><i class='bx bx-building-house'></i><span class="links_name">Entidades</span></a></li> }
+                            @if (User.TemPermissao("FORNECEDOR_VIEW")) { <li class="menu-item"><a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")"><i class='bx bx-package'></i><span class="links_name">Fornecedores</span></a></li> }
+                            @if (User.TemPermissao("INSTRUMENTO_VIEW")) { <li class="menu-item"><a asp-controller="Instrumentos" asp-action="Index" class="@(currentController == "Instrumentos" ? "active" : "")"><i class='bx bx-book-content'></i><span class="links_name">Instrumentos</span></a></li> }
+                            @if (User.TemPermissao("MOVIMENTACAO_VIEW")) { <li class="menu-item"><a asp-controller="Movimentacoes" asp-action="Index" class="@(currentController == "Movimentacoes" ? "active" : "")"><i class='bx bx-money-withdraw'></i><span class="links_name">Lançamentos Contábeis</span></a></li> }
+                            @if (User.TemPermissao("NATUREZA_VIEW")) { <li class="menu-item"><a asp-controller="Naturezas" asp-action="Index" class="@(currentController == "Naturezas" ? "active" : "")"><i class='bx bx-purchase-tag-alt'></i><span class="links_name">Naturezas</span></a></li> }
+                            @if (User.TemPermissao("NIVEL_VIEW")) { <li class="menu-item"><a asp-controller="Niveis" asp-action="Index" class="@(currentController == "Niveis" ? "active" : "")"><i class='bx bx-sitemap'></i><span class="links_name">Níveis</span></a></li> }
+                            @if (User.TemPermissao("ORCAMENTO_VIEW")) { <li class="menu-item"><a asp-controller="Orcamentos" asp-action="Index" class="@(currentController == "Orcamentos" ? "active" : "")"><i class='bx bx-bar-chart-square'></i><span class="links_name">Orçamentos</span></a></li> }
+                            @if (User.TemPermissao("PERFIL_VIEW")) { <li class="menu-item"><a asp-controller="Perfis" asp-action="Index" class="@(currentController == "Perfis" ? "active" : "")"><i class='bx bx-id-card'></i><span class="links_name">Perfis de Acesso</span></a></li> }
+                            @if (User.TemPermissao("RECEBIMENTO_VIEW")) { <li class="menu-item"><a asp-controller="RecebimentosInstrumento" asp-action="RelatorioGeral" class="@(currentController == "RecebimentosInstrumento" ? "active" : "")"><i class='bx bxs-dollar-circle'></i><span class="links_name">Recebimentos</span></a></li> }
+                            @if (User.TemPermissao("USUARIO_VIEW")) { <li class="menu-item"><a asp-controller="Usuarios" asp-action="Index" class="@(currentController == "Usuarios" ? "active" : "")"><i class='bx bx-group'></i><span class="links_name">Usuários</span></a></li> }
+                            @if (User.TemPermissao("LOG_VIEW")) { <li class="menu-item"><a asp-controller="Logs" asp-action="Index" class="@(currentController == "Logs" ? "active" : "")"><i class='bx bx-clipboard'></i><span class="links_name">Logs de Auditoria</span></a></li> }
 
                         </ul>
                     </li>
@@ -292,6 +195,29 @@
                     </li>
                 </ul>
             </li>
+            
+            @if (User.TemPermissao("RELATORIO_VIEW"))
+            {
+                <li>
+                    <a href="#" class="menu-toggle @(isRelatoriosActive ? "active" : "")" data-target="#submenu-relatorios">
+                        <i class='bx bx-file-find'></i><span class="links_name">Relatórios</span>
+                    </a>
+
+                    <ul class="collapse list-unstyled @(isRelatoriosActive ? "show" : "")" id="submenu-relatorios">
+                        <li class="menu-window p-0" id="window-relatorios">
+                            <ul id="relatorios-list" class="list-unstyled m-0">
+                                @* --- ITEM PROTEGIDO: LISTA DE RELATÓRIOS --- *@
+                                <li class="menu-item">
+                                    <a asp-controller="Relatorios" asp-action="Index" class="@(currentController == "Relatorios" && currentAction == "Index" ? "active" : "")">
+                                        <i class='bx bx-table'></i><span class="links_name">Flow x Recebimento</span>
+                                    </a>
+                                </li>
+                                @* ADICIONAR FUTUROS RELATÓRIOS AQUI *@
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+            }
 
             @if (User.Identity?.IsAuthenticated == true)
             {
@@ -397,93 +323,112 @@
         });
 
         // ===== Rolagem nativa + setas que deslizam 1 item por clique =====
+        // Adaptação para funcionar com múltiplos submenus roláveis
         (function () {
             const WINDOW = 5; // queremos 5 itens visíveis
-            const list = document.getElementById('gerenciamento-list');
-            const win = document.getElementById('window-gerenciamento');
-            const items = Array.from(list.querySelectorAll('li.menu-item'));
-            const prev = document.getElementById('btnPrev');
-            const next = document.getElementById('btnNext');
-            const info = document.getElementById('pagerInfo');
-            const submenu = document.getElementById('submenu-gerenciamento');
-
-            if (!win || !items.length) return;
-
-            // calcula a altura real do item (usa o primeiro visível)
-            function itemHeight() {
-                const first = items[0]?.querySelector('a');
-                return Math.max(45, first ? first.getBoundingClientRect().height : 45);
-            }
-
-            function clampScroll() {
-                // evita "passar" do final por pixel arredondado
-                const max = win.scrollHeight - win.clientHeight;
-                if (win.scrollTop > max) win.scrollTop = max;
-                if (win.scrollTop < 0) win.scrollTop = 0;
-            }
-
-            function updateUI() {
-                const h = itemHeight();
-                const total = items.length;
-                // primeira posição (0-based) que está totalmente ou parcialmente visível
-                const start = Math.round(win.scrollTop / h);
-                const end = Math.min(start + WINDOW, total);
-
-                // pager 1-based
-                if (info) info.textContent = `${start + 1}–${end}/${total}`;
-
-                // controles
-                prev.disabled = (start <= 0);
-                // se o último item visível for o último da lista, desabilita "next"
-                next.disabled = (end >= total);
-            }
-
-            function scrollByItems(delta) {
-                const h = itemHeight();
-                win.scrollTo({ top: win.scrollTop + (delta * h), behavior: 'smooth' });
-            }
-
-            // setas
-            prev?.addEventListener('click', () => scrollByItems(-1));
-            next?.addEventListener('click', () => scrollByItems(1));
-
-            // atualiza estado ao rolar (mouse, touch, trackpad)
-            let ticking = false;
-            win.addEventListener('scroll', () => {
-                if (!ticking) {
-                    window.requestAnimationFrame(() => {
-                        clampScroll();
-                        updateUI();
-                        ticking = false;
-                    });
-                    ticking = true;
+            
+            function initializeScroll(listId, windowId, prevId, nextId, infoId) {
+                const list = document.getElementById(listId);
+                const win = document.getElementById(windowId);
+                const prev = document.getElementById(prevId);
+                const next = document.getElementById(nextId);
+                const info = document.getElementById(infoId);
+                const submenu = win ? win.closest('.collapse') : null;
+                const items = list ? Array.from(list.querySelectorAll('li.menu-item')) : [];
+                
+                if (!win || !items.length) {
+                    const controls = prev ? prev.closest('.menu-controls') : null;
+                    if (controls) controls.style.display = 'none';
+                    return;
                 }
-            });
 
-            // quando abrir o submenu, reseta para o topo e atualiza
-            submenu?.addEventListener('show.bs.collapse', () => {
+                function itemHeight() {
+                    const first = items[0]?.querySelector('a');
+                    return Math.max(45, first ? first.getBoundingClientRect().height : 45);
+                }
+
+                function clampScroll() {
+                    const max = win.scrollHeight - win.clientHeight;
+                    if (win.scrollTop > max) win.scrollTop = max;
+                    if (win.scrollTop < 0) win.scrollTop = 0;
+                }
+
+                function updateUI() {
+                    const h = itemHeight();
+                    const total = items.length;
+                    const start = Math.round(win.scrollTop / h);
+                    const end = Math.min(start + WINDOW, total);
+
+                    if (info) info.textContent = `${start + 1}–${end}/${total}`;
+
+                    prev.disabled = (start <= 0);
+                    next.disabled = (end >= total);
+                }
+
+                function scrollByItems(delta) {
+                    const h = itemHeight();
+                    win.scrollTo({ top: win.scrollTop + (delta * h), behavior: 'smooth' });
+                }
+
+                // setas
+                prev.addEventListener('click', () => scrollByItems(-1));
+                next.addEventListener('click', () => scrollByItems(1));
+
+                // atualiza estado ao rolar
+                let ticking = false;
+                win.addEventListener('scroll', () => {
+                    if (!ticking) {
+                        window.requestAnimationFrame(() => {
+                            clampScroll();
+                            updateUI();
+                            ticking = false;
+                        });
+                        ticking = true;
+                    }
+                });
+
+                // quando abrir o submenu, reseta para o topo e atualiza
+                submenu?.addEventListener('show.bs.collapse', () => {
+                    win.scrollTop = 0;
+                    updateUI();
+                });
+
+                // render inicial
                 win.scrollTop = 0;
                 updateUI();
-            });
 
-            // render inicial
-            win.scrollTop = 0;
-            updateUI();
+                window.addEventListener('resize', () => updateUI());
+            }
 
-            // re-calcula ao redimensionar (mudanças de zoom / fonte)
-            window.addEventListener('resize', () => updateUI());
+            // Inicializa Gerenciamento
+            initializeScroll('gerenciamento-list', 'window-gerenciamento', 'btnPrev', 'btnNext', 'pagerInfo');
+
+            // Inicializa Relatórios (Usando IDs diferentes para evitar conflito)
+            // Criei novos IDs temporários para o novo submenu, pois o antigo usava os mesmos
+            const relatoriosPrev = document.getElementById('btnPrevRel');
+            const relatoriosNext = document.getElementById('btnNextRel');
+            const relatoriosInfo = document.getElementById('pagerInfoRel');
+
+            // Se esses novos IDs forem criados, inicialize aqui (por enquanto, usaremos a rolagem padrão se não houver rolagem de 5 itens)
+            // Se você quiser rolagem no submenu Relatórios, precisará duplicar os botões de controle na sua lista (no HTML)
         })();
 
-        // ===== NOVO CÓDIGO: Rola o submenu para o item ativo ao carregar a página =====
+        // ===== Rola o submenu para o item ativo ao carregar a página =====
         document.addEventListener("DOMContentLoaded", function() {
-            const submenu = document.getElementById('submenu-gerenciamento');
-            
-            // Só executa se o submenu estiver aberto ao carregar a página
-            if (submenu && submenu.classList.contains('show')) {
-                const activeSubMenuItem = submenu.querySelector('.menu-item a.active');
-
+            // Verifica o submenu de Gerenciamento
+            const submenuGerenciamento = document.getElementById('submenu-gerenciamento');
+            if (submenuGerenciamento && submenuGerenciamento.classList.contains('show')) {
+                const activeSubMenuItem = submenuGerenciamento.querySelector('.menu-item a.active');
                 if (activeSubMenuItem) {
-                    // Rola a janela para que o item ativo fique visível
+                    activeSubMenuItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+                }
+            }
+            
+            // Verifica o submenu de Relatórios
+            const submenuRelatorios = document.getElementById('submenu-relatorios');
+            if (submenuRelatorios && submenuRelatorios.classList.contains('show')) {
+                const activeSubMenuItem = submenuRelatorios.querySelector('.menu-item a.active');
+                if (activeSubMenuItem) {
                     activeSubMenuItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
                 }
             }

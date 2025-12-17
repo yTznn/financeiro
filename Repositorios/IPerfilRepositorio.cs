@@ -1,10 +1,16 @@
 using Financeiro.Models;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-public interface IPerfilRepositorio
+namespace Financeiro.Repositorios
 {
-    Task<IEnumerable<Perfil>> ListarAsync();
-    Task<Perfil?> ObterPorIdAsync(int id);
-    Task AdicionarAsync(Perfil perfil);
-    Task AtualizarAsync(Perfil perfil);
-    Task ExcluirAsync(int id);
+    public interface IPerfilRepositorio
+    {
+        Task InserirAsync(Perfil perfil);
+        Task AtualizarAsync(Perfil perfil);
+        Task InativarAsync(int id);
+        Task<Perfil?> ObterPorIdAsync(int id);
+        Task<(IEnumerable<Perfil> Itens, int Total)> ListarPaginadoAsync(int pagina, int tamanho);
+        Task<IEnumerable<Perfil>> ListarTodosAsync();
+    }
 }

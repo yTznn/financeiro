@@ -1,3 +1,5 @@
+using System;
+
 namespace Financeiro.Models.ViewModels
 {
     public class UsuarioListagemViewModel
@@ -5,14 +7,19 @@ namespace Financeiro.Models.ViewModels
         public int Id { get; set; }
 
         public string NameSkip { get; set; }
-        public string EmailDescriptografado { get; set; }
 
-        public string Email { get; set; }
+        public string Email { get; set; } // O Controller vai descriptografar e jogar aqui
 
-        public string? NomePessoaFisica { get; set; }
+        public bool Ativo { get; set; }
 
         public string? HashImagem { get; set; }
 
-        public bool Ativo { get; set; }
+        // --- Propriedades preenchidas via JOIN no Repositório ---
+        
+        public string? NomePessoaFisica { get; set; }
+
+        public string? NomePerfil { get; set; } // Essencial para a View Premium
+
+        public DateTime? UltimoAcesso { get; set; }
     }
 }

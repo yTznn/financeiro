@@ -9,9 +9,18 @@ using Financeiro.Servicos.Seguranca;
 using Financeiro.Validacoes;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Localization;
-using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Mvc.Razor;
+using Rotativa.AspNetCore; // <-- NOVO: Adicionado para a configuração da Rotativa
+using Microsoft.Extensions.Logging; // Garantindo que o ILogger seja reconhecido
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ============================================================
+// 1. CONFIGURAÇÃO DE CULTURA (PT-BR FORÇADO)
+// ============================================================
+var cultureInfo = new CultureInfo("pt-BR");
+CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
 // Configurações por ambiente
 builder.Configuration
@@ -20,31 +29,44 @@ builder.Configuration
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-// 1) Cultura padrão de threads
-var culture = new CultureInfo("pt-BR");
-CultureInfo.DefaultThreadCurrentCulture = culture;
-CultureInfo.DefaultThreadCurrentUICulture = culture;
+// ============================================================
+// 2. SERVIÇOS MVC E LOCALIZAÇÃO
+// ============================================================
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 
-// 2) MVC + BINDER CUSTOMIZADO
-// Adicionamos as options para registrar o nosso DecimalModelBinderProvider
-#if DEBUG
-builder.Services.AddControllersWithViews(options => 
+var mvcBuilder = builder.Services.AddControllersWithViews(options => 
 {
-    // Essa linha ensina o sistema a ler "25.000,00" corretamente
+    // 2.1 Binder Customizado para Decimal (R$ 1.000,00)
     options.ModelBinderProviders.Insert(0, new DecimalModelBinderProvider());
-}).AddRazorRuntimeCompilation();
-#else
-builder.Services.AddControllersWithViews(options => 
-{
-    // Essa linha ensina o sistema a ler "25.000,00" corretamente
-    options.ModelBinderProviders.Insert(0, new DecimalModelBinderProvider());
+
+    // 2.2 Tradução Manual de Erros de Sistema (ModelBinding)
+    // Isso garante que erros técnicos virem mensagens amigáveis em PT-BR
+    options.ModelBindingMessageProvider.SetValueMustNotBeNullAccessor(
+        _ => "O campo é obrigatório.");
+    options.ModelBindingMessageProvider.SetAttemptedValueIsInvalidAccessor(
+        (valor, campo) => $"O valor '{valor}' não é válido para o campo {campo}.");
+    options.ModelBindingMessageProvider.SetMissingBindRequiredValueAccessor(
+        _ => "Um valor é obrigatório para este campo.");
+    options.ModelBindingMessageProvider.SetNonPropertyAttemptedValueIsInvalidAccessor(
+        (valor) => $"O valor '{valor}' não é válido.");
+    options.ModelBindingMessageProvider.SetValueIsInvalidAccessor(
+        (valor) => $"O valor '{valor}' é inválido.");
+    options.ModelBindingMessageProvider.SetValueMustBeANumberAccessor(
+        (campo) => $"O campo {campo} deve ser um número.");
 });
-#endif
 
-// 2.1) AutoMapper
+// Ativa a localização de DataAnnotations ([Required], [StringLength]) e Views
+mvcBuilder
+    .AddDataAnnotationsLocalization() 
+    .AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix)
+    .AddRazorRuntimeCompilation(); // Mantido para facilitar desenvolvimento
+
+// 2.3 AutoMapper
 builder.Services.AddAutoMapper(typeof(EntidadeProfile).Assembly);
 
-// 3) Autenticação Cookie (com expiração e sliding)
+// ============================================================
+// 3. SEGURANÇA (COOKIES)
+// ============================================================
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(opt =>
     {
@@ -57,7 +79,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization();
 
-// 4) Connection-string
+// ============================================================
+// 4. BANCO DE DADOS
+// ============================================================
 builder.Services.AddScoped<IDbConnectionFactory>(sp =>
 {
     var conn = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -67,63 +91,72 @@ builder.Services.AddScoped<IDbConnectionFactory>(sp =>
 });
 
 // ============================================================
-// INJEÇÃO DE DEPENDÊNCIA (SCOPED)
+// 5. INJEÇÃO DE DEPENDÊNCIA (SCOPED)
 // ============================================================
 
-#region Repositórios / Serviços já existentes
+// Cadastros Gerais
 builder.Services.AddScoped<IPessoaJuridicaRepositorio, PessoaJuridicaRepositorio>();
 builder.Services.AddScoped<PessoaJuridicaValidacoes>();
-
 builder.Services.AddScoped<IPessoaFisicaRepositorio, PessoaFisicaRepositorio>();
 builder.Services.AddScoped<PessoaFisicaValidacoes>();
+builder.Services.AddScoped<IFornecedorRepositorio, FornecedorRepositorio>();
 
+// Endereços
 builder.Services.AddScoped<IEnderecoRepositorio, EnderecoRepositorio>();
-builder.Services.AddScoped<IContaBancariaRepositorio, ContaBancariaRepositorio>();
+builder.Services.AddScoped<IEnderecoService, EnderecoService>();
 
+// Financeiro e Contratos
+builder.Services.AddScoped<IContaBancariaRepositorio, ContaBancariaRepositorio>();
 builder.Services.AddScoped<INaturezaRepositorio, NaturezaRepositorio>();
 builder.Services.AddScoped<IOrcamentoRepositorio, OrcamentoRepositorio>();
+builder.Services.AddScoped<IMovimentacaoRepositorio, MovimentacaoRepositorio>();
+
+// Contratos
 builder.Services.AddScoped<IContratoRepositorio, ContratoRepositorio>();
 builder.Services.AddScoped<IContratoVersaoRepositorio, ContratoVersaoRepositorio>();
 builder.Services.AddScoped<IContratoVersaoService, ContratoVersaoService>();
 
-// [NOVO] Repositório de Movimentações (Pagamentos)
-builder.Services.AddScoped<IMovimentacaoRepositorio, MovimentacaoRepositorio>();
-#endregion
-
-#region Repositórios e Serviços que já estavam corretos (Scoped)
-builder.Services.AddScoped<INivelRepositorio, NivelRepositorio>();
-builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
-builder.Services.AddScoped<IAnexoService, AnexoService>();
-builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
-builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
-builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
-builder.Services.AddScoped<ILogRepositorio, LogRepositorio>();
-builder.Services.AddScoped<IEntidadeEnderecoRepositorio, EntidadeEnderecoRepositorio>();
-
-builder.Services.AddScoped<IEntidadeRepositorio, EntidadeRepositorio>();
-builder.Services.AddScoped<IEntidadeService, EntidadeService>();
-builder.Services.AddScoped<IUsuarioEntidadeRepositorio, UsuarioEntidadeRepositorio>();
-builder.Services.AddScoped<IUsuarioService, UsuarioService>();
-
-builder.Services.AddScoped<IEntidadeEnderecoService, EntidadeEnderecoService>();
-builder.Services.AddScoped<IEnderecoService, EnderecoService>();
-
-builder.Services.AddScoped<ILogService, LogService>();
-builder.Services.AddHttpContextAccessor(); 
-
-builder.Services.AddScoped<IJustificativaService, JustificativaService>();
-
+// Instrumentos (Repasses)
 builder.Services.AddScoped<IInstrumentoRepositorio, InstrumentoRepositorio>();
 builder.Services.AddScoped<IInstrumentoVersaoRepositorio, InstrumentoVersaoRepositorio>();
 builder.Services.AddScoped<IInstrumentoVersaoService, InstrumentoVersaoService>();
 builder.Services.AddScoped<IRecebimentoInstrumentoRepositorio, RecebimentoInstrumentoRepositorio>();
+
+// Sistema / Segurança
+builder.Services.AddScoped<IUsuarioRepositorio, UsuarioRepositorio>();
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IPermissaoRepositorio, PermissaoRepositorio>();
-builder.Services.AddScoped<IFornecedorRepositorio, FornecedorRepositorio>();
-#endregion
+builder.Services.AddScoped<ICriptografiaService, CriptografiaService>();
+builder.Services.AddScoped<IPerfilRepositorio, PerfilRepositorio>();
+
+// LOGS (Repositório e Serviço)
+builder.Services.AddScoped<ILogRepositorio, LogRepositorio>();
+builder.Services.AddScoped<ILogService, LogService>(); 
+// builder.Services.AddScoped<IPdfService, PdfService>(); // <-- REMOVIDO (Não é mais necessário com Rotativa)
+
+// Entidades (Escolas/Unidades)
+builder.Services.AddScoped<IEntidadeRepositorio, EntidadeRepositorio>();
+builder.Services.AddScoped<IEntidadeService, EntidadeService>();
+builder.Services.AddScoped<IUsuarioEntidadeRepositorio, UsuarioEntidadeRepositorio>();
+builder.Services.AddScoped<IEntidadeEnderecoRepositorio, EntidadeEnderecoRepositorio>();
+builder.Services.AddScoped<IEntidadeEnderecoService, EntidadeEnderecoService>();
+
+// Apoio
+builder.Services.AddScoped<INivelRepositorio, NivelRepositorio>();
+builder.Services.AddScoped<IArquivoRepositorio, ArquivoRepositorio>();
+builder.Services.AddScoped<IAnexoService, AnexoService>();
+builder.Services.AddScoped<IJustificativaService, JustificativaService>();
+builder.Services.AddHttpContextAccessor(); 
+
+// Repositório de Relatórios
+builder.Services.AddScoped<IRelatorioRepositorio, RelatorioRepositorio>();
 
 var app = builder.Build();
 
-// Pipeline
+// ============================================================
+// 6. PIPELINE DE EXECUÇÃO
+// ============================================================
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -133,11 +166,11 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// Localização no pipeline (garante pt-BR no model binding)
-var supportedCultures = new[] { new CultureInfo("pt-BR") };
+// [IMPORTANTE] Configuração do Middleware de Localização
+var supportedCultures = new[] { cultureInfo };
 app.UseRequestLocalization(new RequestLocalizationOptions
 {
-    DefaultRequestCulture = new RequestCulture("pt-BR"),
+    DefaultRequestCulture = new RequestCulture(cultureInfo),
     SupportedCultures = supportedCultures,
     SupportedUICultures = supportedCultures
 });
@@ -150,5 +183,9 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+// === CONFIGURAÇÃO DA ROTATIVA ===
+// Inicializa a Rotativa (wkhtmltopdf)
+RotativaConfiguration.Setup(app.Environment.WebRootPath, "Rotativa"); 
 
 app.Run();

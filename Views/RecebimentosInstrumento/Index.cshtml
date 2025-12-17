@@ -1,89 +1,158 @@
 @model IEnumerable<Financeiro.Models.ViewModels.RecebimentoViewModel>
+@using Financeiro.Extensions
 @using System.Globalization
 
 @{
     var instrumento = ViewBag.Instrumento as Financeiro.Models.Instrumento;
-    ViewData["Title"] = $"Recebimentos do Instrumento Nº {instrumento?.Numero}";
+    ViewData["Title"] = $"Recebimentos - Instrumento {instrumento?.Numero}";
     var br = new CultureInfo("pt-BR");
+
+    // Permissões
+    bool podeEditar = User.TemPermissao("RECEBIMENTO_EDIT");
+    bool podeExcluir = User.TemPermissao("RECEBIMENTO_DEL");
+    bool podeCriar = User.TemPermissao("RECEBIMENTO_ADD");
+    bool podeAcoes = podeEditar || podeExcluir;
+
+    // Paginação
+    int paginaAtual = ViewBag.PaginaAtual ?? 1;
+    int totalPaginas = ViewBag.TotalPaginas ?? 1;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h2 class="mb-0">@ViewData["Title"]</h2>
-        <a asp-controller="Instrumentos" asp-action="Editar" asp-route-id="@instrumento.Id">Voltar para o Instrumento</a>
-    </div>
-    <a asp-action="Novo" asp-route-instrumentoId="@instrumento.Id" class="btn btn-primary">+ Novo Recebimento</a>
-</div>
+<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]" data-alert="@TempData["Alerta"]"></div>
 
-<table class="table table-hover">
-    <thead class="table-light">
-        <tr>
-            <th>Período do Recebimento</th>
-            <th class="text-end">Valor</th>
-            <th>Observação</th>
-            <th style="width: 150px;"></th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (!Model.Any())
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0 fw-bold text-secondary">
+                <i class="bi bi-cash-stack me-2"></i>@ViewData["Title"]
+            </h3>
+            <a asp-controller="Instrumentos" asp-action="Editar" asp-route-id="@instrumento.Id" class="text-decoration-none small">
+                <i class="bi bi-arrow-left"></i> Voltar para o Instrumento
+            </a>
+        </div>
+        
+        @if (podeCriar)
         {
-            <tr>
-                <td colspan="4" class="text-center text-muted py-4">Nenhum recebimento lançado para este instrumento.</td>
-            </tr>
+            <a asp-action="Novo" asp-route-instrumentoId="@instrumento.Id" class="btn btn-success rounded-pill px-4 shadow-sm">
+                <i class="bi bi-plus-circle me-1"></i> Novo Lançamento
+            </a>
         }
-        else
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Competência</th>
+                        <th class="text-end">Valor</th>
+                        <th>Observação</th>
+                        <th class="text-end pe-4" style="width: 150px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+                                Nenhum recebimento lançado para este instrumento.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="fw-bold text-dark">@item.DataInicio.ToString("MMMM/yyyy", br).ToUpper()</span>
+                                    <div class="small text-muted">@item.DataInicio.ToString("dd/MM") a @item.DataFim.ToString("dd/MM")</div>
+                                </td>
+                                <td class="text-end fw-bold text-success">@item.Valor.ToString("C", br)</td>
+                                <td class="text-muted small">@item.Observacao</td>
+                                <td class="text-end pe-4">
+                                    @if (podeAcoes)
+                                    {
+                                        <div class="btn-group">
+                                            @if (podeEditar)
+                                            {
+                                                <a asp-action="Editar" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="Editar">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                            }
+                                            @if (podeExcluir)
+                                            {
+                                                <form asp-action="Excluir" method="post" class="d-inline js-delete-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@item.Id" />
+                                                    <input type="hidden" name="instrumentoId" value="@item.InstrumentoId" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted opacity-50"><i class="bi bi-lock-fill"></i></span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (totalPaginas > 1)
         {
-            foreach (var item in Model)
-            {
-                <tr>
-                    <td>@item.DataInicio.ToString("dd/MM/yyyy") a @item.DataFim.ToString("dd/MM/yyyy")</td>
-                    <td class="text-end">@item.Valor.ToString("C", br)</td>
-                    <td>@item.Observacao</td>
-                    <td class="text-end">
-                        <a asp-action="Editar" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Editar</a>
-                        <form asp-action="Excluir" method="post" class="d-inline js-delete-form">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="id" value="@item.Id" />
-                            <input type="hidden" name="instrumentoId" value="@item.InstrumentoId" />
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancelar</button>
-                        </form>
-                    </td>
-                </tr>
-            }
+            <div class="card-footer bg-white border-0 py-3">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item @(paginaAtual == 1 ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-instrumentoId="@instrumento.Id" asp-route-p="@(paginaAtual - 1)"><i class="bi bi-chevron-left"></i></a>
+                        </li>
+                        @for (int i = 1; i <= totalPaginas; i++)
+                        {
+                            <li class="page-item @(i == paginaAtual ? "active" : "")">
+                                <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-instrumentoId="@instrumento.Id" asp-route-p="@i">@i</a>
+                            </li>
+                        }
+                        <li class="page-item @(paginaAtual == totalPaginas ? "disabled" : "")">
+                            <a class="page-link border-0 shadow-none" asp-action="Index" asp-route-instrumentoId="@instrumento.Id" asp-route-p="@(paginaAtual + 1)"><i class="bi bi-chevron-right"></i></a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
         }
-    </tbody>
-</table>
+    </div>
+</div>
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Mensagens (TempData)
-        (function () {
-            const ok = '@(TempData["Sucesso"] ?? "")';
-            const err = '@(TempData["Erro"] ?? "")';
-            const alert = '@(TempData["Alerta"] ?? "")';
+        const flags = document.getElementById('pageFlags');
+        if(flags){
+            if(flags.dataset.success) Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: flags.dataset.success, showConfirmButton: false, timer: 3000 });
+            if(flags.dataset.error) Swal.fire({ icon: 'error', title: 'Atenção', text: flags.dataset.error });
+            if(flags.dataset.alert) Swal.fire({ icon: 'info', title: 'Info', text: flags.dataset.alert });
+        }
 
-            if (ok)  Swal.fire({ icon: 'success', title: 'Sucesso!', text: ok });
-            if (err) Swal.fire({ icon: 'error', title: 'Ops...', text: err });
-            if (alert) Swal.fire({ icon: 'info', title: 'Atenção', text: alert });
-        })();
-
-        // Confirmação de exclusão
         document.querySelectorAll('form.js-delete-form').forEach(form => {
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
                 Swal.fire({
-                    title: 'Confirma o cancelamento do recebimento?',
-                    text: "Esta ação não poderá ser revertida.",
+                    title: 'Cancelar Lançamento?',
+                    text: "Esta ação removerá o registro financeiro permanentemente.",
                     icon: 'warning',
                     showCancelButton: true,
-                    confirmButtonText: 'Sim, Cancelar!',
+                    confirmButtonText: 'Sim, remover',
                     cancelButtonText: 'Voltar',
                     confirmButtonColor: '#dc3545'
                 }).then((result) => {
-                    if (result.isConfirmed) {
-                        form.submit();
-                    }
+                    if (result.isConfirmed) form.submit();
                 });
             });
         });

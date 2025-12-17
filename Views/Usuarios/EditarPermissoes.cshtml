@@ -1,147 +1,287 @@
 @model Financeiro.Models.ViewModels.UsuarioPermissoesEdicaoViewModel
 
 @{
-    ViewBag.Title = "Gerenciar Permissões";
+    ViewData["Title"] = "Gerenciar Permissões";
     Layout = "_Layout";
-    int contador = 0; // Contador manual para garantir IDs únicos
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-0 text-dark">Permissões de Acesso</h2>
-        <p class="text-muted mb-0">
-            Usuário: <strong class="text-primary">@Model.NomeUsuario</strong> <span class="text-secondary small">(@Model.EmailUsuario)</span>
-        </p>
+<style>
+    /* Visual Premium dos Cards */
+    .module-card {
+        border: 1px solid #f0f0f0;
+        transition: all 0.3s ease;
+        background: #fff;
+    }
+    .module-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        border-color: #0d6efd;
+    }
+    
+    /* Scroll interno dos itens */
+    .scroll-area {
+        max-height: 200px;
+        overflow-y: auto;
+        padding-right: 5px;
+    }
+    .scroll-area::-webkit-scrollbar { width: 5px; }
+    .scroll-area::-webkit-scrollbar-track { background: #f1f1f1; }
+    .scroll-area::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+
+    /* Botões de Paginação */
+    .pag-btn {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        border: none;
+        background: #fff;
+        color: #0d6efd;
+        font-size: 1.2rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.2s;
+    }
+    .pag-btn:hover:not(:disabled) {
+        background: #0d6efd;
+        color: white;
+        transform: scale(1.1);
+    }
+    .pag-btn:disabled {
+        background: #e9ecef;
+        color: #adb5bd;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+</style>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">Permissões de Acesso</h2>
+            <p class="text-muted mb-0">Usuário: <strong class="text-primary">@Model.NomeUsuario</strong></p>
+        </div>
+        <a asp-action="Index" class="btn btn-light border rounded-pill px-4 text-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Voltar
+        </a>
     </div>
-    <a asp-action="Index" class="btn btn-outline-secondary rounded-pill px-4">
-        <i class="bi bi-arrow-left me-1"></i> Voltar
-    </a>
-</div>
 
-@if (TempData["MensagemSucesso"] != null)
-{
-    <div class="alert alert-success shadow-sm border-0 mb-4">
-        <i class="bi bi-check-circle-fill me-2"></i> @TempData["MensagemSucesso"]
-    </div>
-}
+    @if (TempData["Sucesso"] != null)
+    {
+        <div class="alert alert-success border-0 shadow-sm rounded-3 mb-4 d-flex align-items-center">
+            <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+            <div>@TempData["Sucesso"]</div>
+        </div>
+    }
 
-<form asp-action="SalvarPermissoes" method="post">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="usuarioId" value="@Model.UsuarioId" />
+    <form asp-action="SalvarPermissoes" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="usuarioId" value="@Model.UsuarioId" />
 
-    <div class="accordion shadow-sm" id="accordionPermissoes" style="border-radius: 12px; overflow: hidden;">
-        
-        @foreach (var modulo in Model.Modulos)
-        {
-            // Gera IDs únicos baseados no contador
-            var collapseId = "collapse_" + contador;
-            var headerId = "heading_" + contador;
-            
-            // Dados para o resumo
-            var total = modulo.Permissoes.Count;
-            var ativos = modulo.Permissoes.Count(p => p.Concedido);
-            var badgeClass = ativos > 0 ? "bg-primary" : "bg-secondary";
-
-            <div class="accordion-item border-0 border-bottom">
-                <h2 class="accordion-header" id="@headerId">
-                    <button class="accordion-button collapsed fw-bold text-dark bg-white" 
-                            type="button" 
-                            data-bs-toggle="collapse" 
-                            data-bs-target="#@collapseId" 
-                            aria-expanded="false" 
-                            aria-controls="@collapseId">
-                        
-                        <i class="bi bi-folder2-open me-2 text-warning fs-5"></i> 
-                        @modulo.NomeModulo
-                        
-                        <span class="badge @badgeClass ms-3 rounded-pill" style="font-size: 0.75rem; font-weight: normal;">
-                            @ativos de @total ativos
-                        </span>
-                    </button>
-                </h2>
+        <div class="card border-0 shadow-sm mb-4 bg-light rounded-4">
+            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
                 
-                <div id="@collapseId" 
-                     class="accordion-collapse collapse" 
-                     aria-labelledby="@headerId" 
-                     data-bs-parent="#accordionPermissoes">
-                    
-                    <div class="accordion-body bg-light">
-                        <div class="row g-3">
-                            @foreach (var permissao in modulo.Permissoes)
-                            {
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="card h-100 border-0 shadow-sm">
-                                        <div class="card-body d-flex align-items-start">
-                                            <div class="form-check w-100">
-                                                <input class="form-check-input" type="checkbox" 
-                                                       name="permissoesSelecionadas" 
-                                                       value="@permissao.PermissaoId" 
-                                                       id="perm_@permissao.PermissaoId"
-                                                       @(permissao.Concedido ? "checked" : "")
-                                                       @(permissao.HerdadoDoPerfil ? "disabled" : "")
-                                                       style="transform: scale(1.2); margin-top: 0.3rem;">
-                                                
-                                                <label class="form-check-label ms-2 w-100 cursor-pointer" for="perm_@permissao.PermissaoId">
-                                                    <span class="d-block fw-bold text-dark mb-1">@permissao.Nome</span>
-                                                    <span class="d-block text-muted small" style="line-height: 1.2;">
-                                                        @permissao.Descricao
-                                                    </span>
-                                                </label>
-                                            </div>
+                <div class="position-relative w-100" style="max-width: 400px;">
+                    <input type="text" id="campoBusca" class="form-control border-0 shadow-sm ps-5" 
+                           placeholder="Filtrar permissões..." style="height: 45px; border-radius: 25px;">
+                    <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                </div>
 
-                                            @if (permissao.HerdadoDoPerfil)
-                                            {
-                                                <span class="badge bg-secondary ms-2" 
-                                                      data-bs-toggle="tooltip" 
-                                                      title="Permissão herdada do Perfil">
-                                                    <i class="bi bi-person-badge"></i> Perfil
+                <div id="painelPaginacao" class="d-flex align-items-center gap-3 bg-white px-4 py-2 rounded-pill shadow-sm">
+                    <button type="button" class="pag-btn" id="btnAnterior" title="Página Anterior">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span class="fw-bold text-secondary" id="textoPagina" style="min-width: 100px; text-align: center;">
+                        Carregando...
+                    </span>
+                    <button type="button" class="pag-btn" id="btnProximo" title="Próxima Página">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4" id="gridModulos">
+            @foreach (var modulo in Model.Modulos)
+            {
+                var total = modulo.Permissoes.Count;
+                var concedidas = modulo.Permissoes.Count(p => p.Concedido);
+                var percentual = total > 0 ? (int)((double)concedidas / total * 100) : 0;
+
+                /* CLASSE IMPORTANTE: 'js-modulo-card' é o que o JS conta para paginar */
+                <div class="col-md-6 col-xl-4 js-modulo-card" data-nome="@modulo.NomeModulo.ToLower()">
+                    <div class="card h-100 module-card rounded-4">
+                        
+                        <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                            <h5 class="fw-bold text-dark mb-0 d-flex align-items-center text-truncate">
+                                <i class="bi bi-folder-fill text-warning me-2 bg-warning bg-opacity-10 p-2 rounded-3"></i>
+                                @modulo.NomeModulo
+                            </h5>
+                            <span class="badge bg-light text-secondary border">@concedidas / @total</span>
+                        </div>
+
+                        <div class="px-4 mt-3 mb-2">
+                            <div class="progress" style="height: 6px; border-radius: 10px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: @percentual%"></div>
+                            </div>
+                        </div>
+
+                        <div class="card-body pt-2 px-2">
+                            <div class="scroll-area px-2">
+                                @foreach (var p in modulo.Permissoes)
+                                {
+                                    <div class="form-check p-2 rounded-3 hover-bg-light permission-text" data-texto="@p.Nome.ToLower()">
+                                        <input class="form-check-input mt-1" type="checkbox" 
+                                               name="permissoesSelecionadas" 
+                                               value="@p.PermissaoId" 
+                                               id="p_@p.PermissaoId"
+                                               @(p.Concedido ? "checked" : "")
+                                               @(p.HerdadoDoPerfil ? "disabled" : "")
+                                               style="cursor: pointer;">
+                                        
+                                        <label class="form-check-label w-100 ms-2 cursor-pointer" for="p_@p.PermissaoId">
+                                            <span class="d-block fw-bold text-dark" style="font-size: 0.9rem;">@p.Nome</span>
+                                            <span class="d-block text-muted text-truncate" style="font-size: 0.75rem;" title="@p.Descricao">
+                                                @p.Descricao
+                                            </span>
+                                        </label>
+                                        
+                                        @if (p.HerdadoDoPerfil)
+                                        {
+                                            <div class="mt-1">
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size: 0.65rem;">
+                                                    <i class="bi bi-lock-fill"></i> Perfil
                                                 </span>
-                                            }
-                                        </div>
+                                            </div>
+                                        }
                                     </div>
-                                </div>
-                            }
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            // Incrementa contador para o próximo módulo
-            contador++;
-        }
-    </div>
+            }
+        </div>
 
-    <div class="d-flex gap-2 mt-4 pt-2">
-        <button type="submit" class="btn btn-success rounded-pill px-4 shadow-sm">
-            <i class="bi bi-check-lg me-1"></i> Salvar Permissões
-        </button>
-        <a asp-action="Index" class="btn btn-light rounded-pill px-4 text-secondary">Cancelar</a>
-    </div>
-</form>
+        <div class="fixed-bottom bg-white border-top shadow-lg py-3" style="z-index: 1000;">
+            <div class="container d-flex justify-content-end gap-2">
+                <a asp-action="Index" class="btn btn-light px-4 border rounded-pill fw-bold text-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-success px-5 fw-bold shadow-sm rounded-pill">
+                    <i class="bi bi-check-lg me-2"></i>Salvar Alterações
+                </button>
+            </div>
+        </div>
+        <div style="height: 100px;"></div>
+
+    </form>
+</div>
 
 @section Scripts {
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // === CONFIGURAÇÃO ===
+            const ITENS_POR_PAGINA = 5; // AQUI VOCÊ CONTROLA A QUANTIDADE
+            
+            // Elementos
+            const listaCards = Array.from(document.querySelectorAll('.js-modulo-card'));
+            const btnAnt = document.getElementById('btnAnterior');
+            const btnProx = document.getElementById('btnProximo');
+            const labelPagina = document.getElementById('textoPagina');
+            const inputBusca = document.getElementById('campoBusca');
+            const painelPag = document.getElementById('painelPaginacao');
+
+            // Estado
+            let paginaAtual = 1;
+            let listaFiltrada = listaCards; // Começa com todos
+
+            // --- FUNÇÃO PRINCIPAL: DESENHAR A TELA ---
+            function renderizar() {
+                const totalPaginas = Math.ceil(listaFiltrada.length / ITENS_POR_PAGINA);
+                
+                // Proteção contra pagina inválida
+                if (paginaAtual < 1) paginaAtual = 1;
+                if (paginaAtual > totalPaginas && totalPaginas > 0) paginaAtual = totalPaginas;
+
+                // 1. Ocultar TUDO primeiro
+                listaCards.forEach(card => card.classList.add('d-none'));
+
+                // 2. Calcular quais mostrar
+                const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+                const fim = inicio + ITENS_POR_PAGINA;
+                
+                // 3. Mostrar apenas o "slice" da lista filtrada
+                const cardsVisiveis = listaFiltrada.slice(inicio, fim);
+                cardsVisiveis.forEach(card => {
+                    card.classList.remove('d-none');
+                    // Efeito suave de entrada
+                    card.style.opacity = '0';
+                    setTimeout(() => card.style.opacity = '1', 50);
+                });
+
+                // 4. Atualizar textos e botões
+                labelPagina.innerText = `Página ${paginaAtual} de ${totalPaginas || 1}`;
+                
+                btnAnt.disabled = paginaAtual === 1;
+                btnProx.disabled = paginaAtual >= totalPaginas || totalPaginas === 0;
+            }
+
+            // --- EVENTOS DE CLIQUE ---
+            btnAnt.addEventListener('click', (e) => {
+                e.preventDefault(); // Não deixa recarregar a página
+                if (paginaAtual > 1) {
+                    paginaAtual--;
+                    renderizar();
+                    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sobe pro topo suave
+                }
+            });
+
+            btnProx.addEventListener('click', (e) => {
+                e.preventDefault();
+                const total = Math.ceil(listaFiltrada.length / ITENS_POR_PAGINA);
+                if (paginaAtual < total) {
+                    paginaAtual++;
+                    renderizar();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+
+            // --- LÓGICA DE BUSCA (A "MÁGICA" EXTRA) ---
+            inputBusca.addEventListener('keyup', function() {
+                const termo = this.value.toLowerCase().trim();
+
+                if (termo === "") {
+                    // Se limpou a busca, volta ao normal
+                    listaFiltrada = listaCards;
+                    painelPag.style.opacity = "1";
+                    painelPag.style.pointerEvents = "all";
+                    renderizar();
+                    return;
+                }
+
+                // Se tem busca, desativa a paginação e mostra tudo que achar
+                painelPag.style.opacity = "0.5";
+                painelPag.style.pointerEvents = "none";
+
+                listaFiltrada = []; // Reseta filtro
+
+                listaCards.forEach(card => {
+                    const nomeModulo = card.dataset.nome;
+                    // Busca também nos textos dos checkboxes internos
+                    const textosPermissoes = Array.from(card.querySelectorAll('.permission-text'))
+                                                  .map(el => el.dataset.texto).join(" ");
+                    
+                    if (nomeModulo.includes(termo) || textosPermissoes.includes(termo)) {
+                        card.classList.remove('d-none'); // Mostra se achou
+                    } else {
+                        card.classList.add('d-none'); // Esconde se não achou
+                    }
+                });
+            });
+
+            // Inicializa a tela na primeira carga
+            renderizar();
+        });
+    </script>
     
     <style>
-        /* CSS para garantir o visual correto quando fechado/aberto */
-        .accordion-button:not(.collapsed) {
-            background-color: #f8f9fa;
-            color: #0d6efd;
-            box-shadow: none; 
-        }
-        .accordion-button:focus {
-            box-shadow: none; 
-            border-color: rgba(0,0,0,.125);
-        }
-        .cursor-pointer {
-            cursor: pointer;
-        }
+        .hover-bg-light:hover { background-color: #f8f9fa; }
     </style>
-
-    <script>
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
-    </script>
 }

@@ -16,6 +16,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.IO;
 using System;
+using Financeiro.Atributos; // Necessário para [AutorizarPermissao]
 
 namespace Financeiro.Controllers
 {
@@ -29,10 +30,8 @@ namespace Financeiro.Controllers
         private readonly IPessoaFisicaRepositorio _pessoaFisicaRepositorio;
         private readonly IPerfilRepositorio       _perfilRepositorio;
         private readonly IEntidadeRepositorio     _entidadeRepositorio;    
-        private readonly IUsuarioService          _usuarioService;         
+        private readonly IUsuarioService          _usuarioService;        
         private readonly IDbConnectionFactory     _connectionFactory;
-        
-        // --- NOVAS DEPENDÊNCIAS ---
         private readonly IPermissaoRepositorio    _permissaoRepositorio;
         private readonly ILogService              _logService;
 
@@ -56,39 +55,41 @@ namespace Financeiro.Controllers
             _pessoaFisicaRepositorio = pessoaFisicaRepositorio;
             _perfilRepositorio       = perfilRepositorio;
             _entidadeRepositorio     = entidadeRepositorio;    
-            _usuarioService          = usuarioService;         
+            _usuarioService          = usuarioService;        
             _connectionFactory       = connectionFactory;
             _permissaoRepositorio    = permissaoRepositorio;
             _logService              = logService;
         }
 
-        /* =================== LISTAGEM =================== */
-        public async Task<IActionResult> Index()
+        /* =================== LISTAGEM (PAGINADA E COM FILTRO) =================== */
+        [HttpGet]
+        [AutorizarPermissao("USUARIO_VIEW")]
+        public async Task<IActionResult> Index(int p = 1, bool exibirInativos = false)
         {
-            const string sql = @"
-                SELECT u.Id, u.NameSkip, u.EmailCriptografado, u.Ativo, u.HashImagem,
-                    CONCAT(p.Nome, ' ', p.Sobrenome) AS NomePessoaFisica
-                FROM Usuarios u
-                LEFT JOIN PessoaFisica p ON p.Id = u.PessoaFisicaId
-                ORDER BY u.DataCriacao DESC";
+            const int TAMANHO_PAGINA = 10;
 
-            using var conn = _connectionFactory.CreateConnection();
-            var listaTemp = await conn.QueryAsync<UsuarioListagemTemp>(sql);
+            // Busca dados paginados do repositório (Repo já faz o filtro de inativos)
+            var (lista, total) = await _usuarioRepositorio.ListarPaginadoAsync(p, TAMANHO_PAGINA, exibirInativos);
 
-            var resultado = listaTemp.Select(u => new UsuarioListagemViewModel
+            // Descriptografa os e-mails para exibição
+            foreach (var item in lista)
             {
-                Id = u.Id,
-                NameSkip = u.NameSkip,
-                Email = _criptografiaService.DescriptografarEmail(u.EmailCriptografado),
-                NomePessoaFisica = u.NomePessoaFisica,
-                HashImagem = u.HashImagem,
-                Ativo = u.Ativo
-            }).ToList();
+                // O banco retorna o texto cifrado na propriedade Email (devido ao alias no SQL)
+                // Aqui convertemos para texto plano
+                item.Email = _criptografiaService.DescriptografarEmail(item.Email);
+            }
 
-            return View(resultado);
+            // ViewBags para controle da paginação e do checkbox na View
+            ViewBag.PaginaAtual = p;
+            ViewBag.TotalPaginas = (int)Math.Ceiling((double)total / TAMANHO_PAGINA);
+            ViewBag.ExibirInativos = exibirInativos;
+
+            return View(lista);
         }
 
         /* =================== NOVO (GET) =================== */
+        [HttpGet]
+        [AutorizarPermissao("USUARIO_ADD")]
         public async Task<IActionResult> Novo()
         {
             var model = new UsuarioViewModel();
@@ -101,6 +102,7 @@ namespace Financeiro.Controllers
         /* =================== SALVAR (POST) =================== */
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("USUARIO_ADD")]
         public async Task<IActionResult> Salvar(UsuarioViewModel model)
         {
             if (!ModelState.IsValid)
@@ -161,21 +163,26 @@ namespace Financeiro.Controllers
                 Ativo              = true
             };
 
-            // --- CORREÇÃO AQUI: CAPTURA O ID GERADO ---
+            // Salva e captura o ID
             var novoId = await _usuarioRepositorio.AdicionarAsync(usuario);
-            usuario.Id = novoId; // Atualiza o objeto na memória com o ID real (ex: 15)
+            usuario.Id = novoId;
 
-            /* -------- grava vínculos de entidades (agora com o ID correto) -------- */
+            // LOG DE CRIAÇÃO
+            await _logService.RegistrarCriacaoAsync("Usuario", usuario, novoId);
+
+            // Grava vínculos de entidades
             await _usuarioService.SalvarEntidadesAsync(
                 usuario.Id,
                 model.EntidadesSelecionadas,
                 model.EntidadeAtivaId ?? model.EntidadesSelecionadas.FirstOrDefault());
 
-            TempData["MensagemSucesso"] = "Usuário cadastrado com sucesso!";
+            TempData["Sucesso"] = "Usuário cadastrado com sucesso!";
             return RedirectToAction(nameof(Index));
         }
 
         /* =================== EDITAR (GET) =================== */
+        [HttpGet]
+        [AutorizarPermissao("USUARIO_EDIT")]
         public async Task<IActionResult> Editar(int id)
         {
             var usuario = await _usuarioRepositorio.ObterPorIdAsync(id);
@@ -200,6 +207,7 @@ namespace Financeiro.Controllers
         /* =================== ATUALIZAR (POST) =================== */
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("USUARIO_EDIT")]
         public async Task<IActionResult> Atualizar(UsuarioViewModel model)
         {
             if (!ModelState.IsValid)
@@ -213,7 +221,9 @@ namespace Financeiro.Controllers
             var usuarioExistente = await _usuarioRepositorio.ObterPorIdAsync(model.Id);
             if (usuarioExistente == null) return NotFound();
 
-            /* ------------ campos de usuário ------------ */
+            // Para log de auditoria (Antes)
+            var usuarioAntes = await _usuarioRepositorio.ObterPorIdAsync(model.Id); // Busca cópia fresca
+
             if (_criptografiaService.DescriptografarEmail(usuarioExistente.EmailCriptografado) != model.Email)
             {
                 usuarioExistente.EmailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
@@ -249,27 +259,28 @@ namespace Financeiro.Controllers
 
             await _usuarioRepositorio.AtualizarAsync(usuarioExistente);
 
-            /* -------- grava vínculos de entidades -------- */
+            // LOG DE EDIÇÃO
+            await _logService.RegistrarEdicaoAsync("Usuario", usuarioAntes, usuarioExistente, usuarioExistente.Id);
+
             await _usuarioService.SalvarEntidadesAsync(
                 model.Id,
                 model.EntidadesSelecionadas,
                 model.EntidadeAtivaId ?? model.EntidadesSelecionadas.FirstOrDefault());
 
-            TempData["MensagemSucesso"] = "Usuário atualizado com sucesso!";
+            TempData["Sucesso"] = "Usuário atualizado com sucesso!";
             return RedirectToAction("Index");
         }
 
-        /* =================== GERENCIAR PERMISSÕES (NOVO) =================== */
+        /* =================== GERENCIAR PERMISSÕES =================== */
         [HttpGet]
+        [AutorizarPermissao("USUARIO_EDIT")] // Requer permissão de editar usuário
         public async Task<IActionResult> EditarPermissoes(int id)
         {
             var usuario = await _usuarioRepositorio.ObterPorIdAsync(id);
             if (usuario == null) return NotFound();
 
-            // Busca a lista plana do banco
             var listaPlana = await _permissaoRepositorio.ObterStatusPermissoesUsuarioAsync(id);
 
-            // Transforma em hierarquia (ViewModel)
             var viewModel = new UsuarioPermissoesEdicaoViewModel
             {
                 UsuarioId = usuario.Id,
@@ -297,15 +308,14 @@ namespace Financeiro.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AutorizarPermissao("USUARIO_EDIT")]
         public async Task<IActionResult> SalvarPermissoes(int usuarioId, List<int> permissoesSelecionadas)
         {
             var usuario = await _usuarioRepositorio.ObterPorIdAsync(usuarioId);
             if (usuario == null) return NotFound();
 
-            // Salva no banco
             await _permissaoRepositorio.AtualizarPermissoesUsuarioAsync(usuarioId, permissoesSelecionadas);
 
-            // Log de Auditoria
             await _logService.RegistrarEdicaoAsync(
                 "PermissoesUsuario", 
                 "Alteração de permissões individuais", 
@@ -313,17 +323,34 @@ namespace Financeiro.Controllers
                 usuarioId
             );
 
-            TempData["MensagemSucesso"] = "Permissões atualizadas com sucesso.";
-            
-            // Retorna para a mesma tela
+            TempData["Sucesso"] = "Permissões atualizadas com sucesso.";
             return RedirectToAction("EditarPermissoes", new { id = usuarioId });
         }
 
-        /* =================== EXCLUIR =================== */
+        /* =================== INATIVAR (ANTIGO EXCLUIR) =================== */
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AutorizarPermissao("USUARIO_DEL")]
         public async Task<IActionResult> Excluir(int id)
         {
-            await _usuarioRepositorio.ExcluirAsync(id);
-            TempData["MensagemSucesso"] = "Usuário excluído com sucesso!";
+            try
+            {
+                var usuario = await _usuarioRepositorio.ObterPorIdAsync(id);
+                if (usuario == null) return NotFound();
+
+                // Chama o método renomeado no Repositório
+                await _usuarioRepositorio.InativarAsync(id);
+                
+                // LOG DE EXCLUSÃO
+                await _logService.RegistrarExclusaoAsync("Usuario", usuario, id);
+
+                TempData["Sucesso"] = "Usuário inativado com sucesso!";
+            }
+            catch(Exception ex)
+            {
+                TempData["Erro"] = "Erro ao inativar: " + ex.Message;
+            }
+            
             return RedirectToAction(nameof(Index));
         }
 
@@ -340,7 +367,8 @@ namespace Financeiro.Controllers
 
         private async Task PreencherPerfisAsync(UsuarioViewModel model)
         {
-            var perfis = await _perfilRepositorio.ListarAsync();
+            // CORREÇÃO: Usar ListarTodosAsync para dropdowns (método criado no passo de Perfil)
+            var perfis = await _perfilRepositorio.ListarTodosAsync();
             model.PerfisDisponiveis = perfis.Select(p => new SelectListItem
             {
                 Value = p.Id.ToString(),
@@ -367,14 +395,16 @@ namespace Financeiro.Controllers
 
         /* =================== IMAGEM PERFIL =================== */
         [HttpGet]
+        [AllowAnonymous] // Necessário para a tag <img> carregar sem bloquear
         public async Task<IActionResult> ImagemPerfil(string hash)
         {
+            if(string.IsNullOrEmpty(hash)) return NotFound();
             var arquivo = await _arquivoRepositorio.ObterPorHashAsync(hash);
             if (arquivo == null || arquivo.Conteudo == null) return NotFound();
             return File(arquivo.Conteudo, arquivo.ContentType);
         }
 
-        /* =================== MEUS DADOS (GET) =================== */
+        /* =================== MEUS DADOS (PERFIL PESSOAL) =================== */
         [HttpGet]
         public async Task<IActionResult> MeusDados()
         {
@@ -394,7 +424,6 @@ namespace Financeiro.Controllers
             return View("MeusDadosForm", model);
         }
 
-        /* =================== MEUS DADOS (POST) =================== */
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AtualizarMeusDados(UsuarioViewModel model)
@@ -425,8 +454,28 @@ namespace Financeiro.Controllers
             }
 
             await _usuarioRepositorio.AtualizarAsync(usuario);
-            TempData["MensagemSucesso"] = "Seus dados foram atualizados com sucesso!";
+            TempData["Sucesso"] = "Seus dados foram atualizados com sucesso!";
             return RedirectToAction("MeusDados");
+        }
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AutorizarPermissao("USUARIO_EDIT")] // Quem pode editar, pode reativar
+        public async Task<IActionResult> Reativar(int id)
+        {
+            var usuario = await _usuarioRepositorio.ObterPorIdAsync(id);
+            if (usuario == null) return NotFound();
+
+            await _usuarioRepositorio.AtivarAsync(id);
+            
+            await _logService.RegistrarEdicaoAsync(
+                "Usuario", 
+                "Reativação de Acesso", 
+                $"Usuário {usuario.NameSkip} foi reativado.", 
+                usuario.Id
+            );
+
+            TempData["Sucesso"] = "Acesso do usuário reativado com sucesso!";
+            return RedirectToAction(nameof(Index));
         }
     }
 }

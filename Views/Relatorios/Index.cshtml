@@ -1,0 +1,88 @@
+@using Financeiro.Extensions
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using System.Linq
+@{
+    ViewData["Title"] = "Relatórios Financeiros";
+    Layout = "_Layout";
+
+    var instrumentos = ViewBag.Instrumentos as SelectList ?? new SelectList(Enumerable.Empty<SelectListItem>());
+}
+
+<div class="container py-4" style="max-width: 700px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-dark">
+            <i class="bi bi-bar-chart-line-fill me-2 text-primary"></i>@ViewData["Title"]
+        </h2>
+    </div>
+
+    @if (TempData["Erro"] != null)
+    {
+        <div class="alert alert-danger shadow-sm mb-4">
+            <i class="bi bi-x-octagon-fill me-2"></i> @TempData["Erro"]
+        </div>
+    }
+
+    <div class="card shadow-lg border-0 rounded-4">
+        <div class="card-header bg-primary bg-opacity-10 border-0 pt-4 px-4">
+            <h5 class="mb-0 fw-bold text-primary">Lançamentos X Recebimentos do Instrumento</h5>
+            <small class="text-muted">Gera o demonstrativo de fluxo de caixa por Instrumento e período.</small>
+        </div>
+
+        <div class="card-body p-4">
+            
+            <form asp-action="LancamentosXRecebimentosPDF" method="get" target="_blank" class="row g-4 needs-validation" novalidate>
+                
+                <div class="col-12">
+                    <label for="instrumentoId" class="form-label fw-bold text-secondary">Selecione o Instrumento</label>
+                    <select name="instrumentoId" id="instrumentoId" class="form-select form-select-lg" required
+                            asp-items="instrumentos">
+                        <option value="" selected disabled>-- Escolha um Instrumento --</option>
+                    </select>
+                    <div class="invalid-feedback">O Instrumento é obrigatório.</div>
+                </div>
+
+                <div class="col-12">
+                    <label for="dataReferencia" class="form-label fw-bold text-secondary">Mês/Ano de Referência</label>
+                    <input name="dataReferencia" id="dataReferencia" type="month" class="form-control form-control-lg" required 
+                           value="@DateTime.Now.ToString("yyyy-MM")" />
+                    <div class="form-text">Selecione o mês que deseja analisar o fluxo.</div>
+                    <div class="invalid-feedback">O mês/ano de referência é obrigatório.</div>
+                </div>
+
+                <div class="col-12 mt-5 d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg shadow-sm fw-bold rounded-pill py-3">
+                        <i class="bi bi-file-earmark-pdf-fill me-2"></i> Gerar Relatório (Visualizar PDF)
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        // Inicializa o Select2 nos dropdowns (se necessário, como o Instrumento)
+        $(document).ready(function() {
+            $('#instrumentoId').select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Escolha um Instrumento --',
+                dropdownParent: $('#instrumentoId').parent(),
+                allowClear: true
+            });
+            
+            // Validação visual do Bootstrap
+            var form = document.querySelector('.needs-validation');
+            form.addEventListener('submit', function (event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    </script>
+}
