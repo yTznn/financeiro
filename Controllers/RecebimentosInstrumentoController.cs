@@ -75,10 +75,8 @@ namespace Financeiro.Controllers
         public async Task<IActionResult> Salvar(RecebimentoViewModel vm)
         {
             // 1. Ajuste de Datas (O usuário selecionou apenas o Mês/Ano no "DataInicio")
-            // Forçamos o dia 1 para o início
             var dataBase = new DateTime(vm.DataInicio.Year, vm.DataInicio.Month, 1);
             vm.DataInicio = dataBase;
-            // Calculamos o último dia do mês automaticamente
             vm.DataFim = dataBase.AddMonths(1).AddDays(-1);
 
             // 2. Validação Básica
@@ -92,11 +90,10 @@ namespace Financeiro.Controllers
             var instrumento = await _instrumentoRepo.ObterPorIdAsync(vm.InstrumentoId);
             if (instrumento != null)
             {
-                // Verifica se a competência está fora da vigência do contrato
                 if (vm.DataInicio < instrumento.DataInicio || vm.DataFim > instrumento.DataFim)
                 {
                     TempData["Erro"] = $"Não é possível lançar fora da vigência do instrumento ({instrumento.DataInicio:dd/MM/yyyy} a {instrumento.DataFim:dd/MM/yyyy}).";
-                    vm.InstrumentoNumero = instrumento.Numero; // Repoe dado visual
+                    vm.InstrumentoNumero = instrumento.Numero;
                     return View("RecebimentoForm", vm);
                 }
             }
@@ -137,7 +134,7 @@ namespace Financeiro.Controllers
         [AutorizarPermissao("RECEBIMENTO_EDIT")]
         public async Task<IActionResult> Atualizar(RecebimentoViewModel vm)
         {
-            // 1. Recalcula datas (caso o usuário tenha mudado o mês)
+            // 1. Recalcula datas
             var dataBase = new DateTime(vm.DataInicio.Year, vm.DataInicio.Month, 1);
             vm.DataInicio = dataBase;
             vm.DataFim = dataBase.AddMonths(1).AddDays(-1);
@@ -148,7 +145,7 @@ namespace Financeiro.Controllers
                 return View("RecebimentoForm", vm);
             }
 
-            // 2. Validação de Vigência (Mesma lógica do Salvar)
+            // 2. Validação de Vigência
             var instrumento = await _instrumentoRepo.ObterPorIdAsync(vm.InstrumentoId);
             if (instrumento != null)
             {

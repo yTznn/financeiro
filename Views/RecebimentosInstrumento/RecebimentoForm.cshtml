@@ -84,24 +84,15 @@
 
             // 1. Função para formatar moeda BRL enquanto digita
             const formatarMoeda = (valor) => {
-                // Remove tudo que não é dígito
                 valor = valor.replace(/\D/g, "");
-                
-                // Converte para número e divide por 100 para ter os centavos
                 let numero = (parseInt(valor) / 100).toFixed(2) + "";
-                
-                // Troca ponto por vírgula
                 numero = numero.replace(".", ",");
-                
-                // Adiciona separador de milhar
                 numero = numero.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
-                
                 return numero;
             };
 
             // 2. Evento de Digitação (Input)
             inputVisual.addEventListener('input', function (e) {
-                // Evita valores vazios ou NaN
                 if(e.target.value === "") {
                     e.target.value = "0,00";
                     return;
@@ -112,17 +103,15 @@
             // 3. Inicialização (Caso seja Edição)
             if (inputHidden.value) {
                 // O valor vem do C# como "1500.50" (ponto)
-                // Precisamos converter para "1.500,50" para o visual
-                let valorInicial = parseFloat(inputHidden.value).toFixed(2); // "1500.50"
-                
-                // Gambiarra simples para formatar inicial: remove ponto, formata como se fosse digitado
+                // Convertemos para "1.500,50" para o visual
+                let valorInicial = parseFloat(inputHidden.value).toFixed(2); 
                 let valorSemPonto = valorInicial.replace(".", ""); 
                 inputVisual.value = formatarMoeda(valorSemPonto);
             }
 
             // 4. Preparar para Salvar (Submit)
             form.addEventListener('submit', function (e) {
-                // Pega o valor visual (ex: "1.500,50")
+                // Pega o valor visual (ex: "6.000.000,00")
                 let valorFormatado = inputVisual.value;
                 
                 if (!valorFormatado) {
@@ -130,14 +119,15 @@
                     return;
                 }
 
-                // Limpa: Remove pontos de milhar e troca vírgula por ponto
-                // Ex: "1.500,50" -> "1500,50" -> "1500.50"
-                let valorLimpo = valorFormatado.replace(/\./g, "").replace(",", ".");
+                // CORREÇÃO AQUI:
+                // Remove apenas os pontos de milhar. Mantém a vírgula decimal.
+                // Ex: "6.000.000,00" -> "6000000,00"
+                // O ModelBinder do C# (pt-BR) espera VÍRGULA como decimal.
+                let valorLimpo = valorFormatado.replace(/\./g, ""); 
                 
                 // Joga no hidden input que o ASP.NET vai ler
                 inputHidden.value = valorLimpo;
                 
-                // Validação do Bootstrap
                 if (!form.checkValidity()) {
                     e.preventDefault();
                     e.stopPropagation();
