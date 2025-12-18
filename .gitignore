@@ -16,6 +16,7 @@ TestResults/
 BenchmarkDotNet.Artifacts/
 docker-publish/
 publish/
+Deploy/
 
 # Logs / temporários
 *.log
