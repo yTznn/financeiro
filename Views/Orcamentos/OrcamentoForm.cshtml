@@ -50,11 +50,16 @@
             <input asp-for="VigenciaFim" id="VigenciaFim" class="form-control" type="date" />
             <span asp-validation-for="VigenciaFim" class="text-danger"></span>
         </div>
+        
         <div class="col-md-4 mb-3">
             <label asp-for="ValorPrevistoTotal" class="form-label">Valor Total do Orçamento</label>
             <div class="input-group">
                 <span class="input-group-text fw-bold">R$</span>
-                <input asp-for="ValorPrevistoTotal" id="ValorPrevistoTotal" class="form-control fw-bold fs-5 text-end" readonly />
+                <input asp-for="ValorPrevistoTotal" 
+                       id="ValorPrevistoTotal" 
+                       type="text"
+                       class="form-control fw-bold fs-5 text-end money" 
+                       readonly />
             </div>
             <div class="mt-2 d-flex align-items-center bg-info bg-opacity-10 border border-info rounded p-2">
                 <i class="bi bi-calendar-check text-info fs-4 me-2"></i>
@@ -113,7 +118,6 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 
-                @* --- INÍCIO DA PROTEÇÃO POR PERMISSÃO --- *@
                 @if (User.TemPermissao("NIVEL_ADD"))
                 {
                     <div class="vr mx-2"></div>
@@ -121,7 +125,6 @@
                         <i class="bi bi-asterisk"></i> Cadastrar Novo Nível (BD)
                     </button>
                 }
-                @* --- FIM DA PROTEÇÃO --- *@
 
                 <div id="modal-nivel-placeholder"></div>
                 <button type="button" class="btn btn-success fw-bold" id="salvar-detalhamento">
@@ -136,12 +139,13 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const hasSwal = typeof window.Swal !== 'undefined';
 
-        // Select2 Logic
         if (window.jQuery && $('#InstrumentoId').length) {
             $('#InstrumentoId').select2({
                 theme: 'bootstrap-5',
@@ -155,88 +159,74 @@
         const arvoreContainer = document.getElementById('arvore-container');
         const btnAdicionarNivel = document.getElementById('btn-adicionar-nivel');
         const btnSalvarDetalhamento = document.getElementById('salvar-detalhamento');
-        const btnAbrirNovoNivel = document.getElementById('btn-abrir-modal-nivel'); // Pode ser null se não tiver permissão
+        const btnAbrirNovoNivel = document.getElementById('btn-abrir-modal-nivel');
         
         const valorTotalInput = document.getElementById('ValorPrevistoTotal');
         const detalhamentoJsonInput = document.getElementById('detalhamentoJsonInput');
         
-        // Inputs de Data e Badges
         const vigenciaInicioInput = document.getElementById('VigenciaInicio');
         const vigenciaFimInput = document.getElementById('VigenciaFim');
         const badgeTotalMensal = document.getElementById('badge-total-mensal');
         const labelQtdMeses = document.getElementById('label-qtd-meses');
 
-        // ---------- SWEETALERT ----------
-        const msgSucesso = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Sucesso"]));
-        const msgErro = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Erro"]));
-        if (hasSwal) {
-            if (msgSucesso) Swal.fire({ icon: 'success', title: 'Sucesso', text: msgSucesso });
-            if (msgErro) Swal.fire({ icon: 'error', title: 'Ops', text: msgErro });
-        }
-
-        // ---------- FUNÇÕES AUXILIARES -----------
-        const norm = s => (s ?? '').toString().trim().toLowerCase();
-
+        // ---------- FORMATAÇÃO -----------
         function toBR(n) {
-            return (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (n === null || n === undefined) return '0,00';
+            return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        function escapeHtml(s) {
-            return (s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        function parseBR(s) {
+            if (!s) return 0;
+            if (typeof s === 'number') return s;
+            let clean = s.toString().replace(/\./g, '').replace(',', '.');
+            return parseFloat(clean) || 0;
         }
 
-        // [CORRIGIDO] Função para calcular meses entre datas ignorando Timezone
+        function aplicarMascaras() {
+            if (window.jQuery && $.fn.mask) {
+                $('.money').mask('#.##0,00', { reverse: true });
+            }
+        }
+
+        // ---------- LÓGICA DE DATAS -----------
         function calcularMesesDeVigencia() {
-            const sInicio = vigenciaInicioInput.value; // ex: "2025-01-01"
-            const sFim = vigenciaFimInput.value;       // ex: "2025-12-31"
-
+            const sInicio = vigenciaInicioInput.value; 
+            const sFim = vigenciaFimInput.value;       
             if (!sInicio || !sFim) return 1;
-
-            const pInicio = sInicio.split('-').map(Number); // [2025, 1, 1]
-            const pFim = sFim.split('-').map(Number);       // [2025, 12, 31]
-
-            // Cria datas usando construtor local (Ano, Mes-1, Dia)
+            const pInicio = sInicio.split('-').map(Number); 
+            const pFim = sFim.split('-').map(Number);       
             const d1 = new Date(pInicio[0], pInicio[1] - 1, pInicio[2]);
             const d2 = new Date(pFim[0], pFim[1] - 1, pFim[2]);
-
-            // Se data fim for menor que inicio, retorna 1 para evitar erro
             if (d2 < d1) return 1;
-
-            // Diferença em meses (Ano * 12 + Mes)
             let meses = (d2.getFullYear() - d1.getFullYear()) * 12;
             meses -= d1.getMonth();
             meses += d2.getMonth();
-
-            // Adiciona 1 para incluir o mês de início
             const total = meses + 1;
             return total > 0 ? total : 1;
         }
 
-        // [ATUALIZADO] Atualiza os badges visuais de mensal na árvore e no global
         function atualizarVisuaisMensais() {
             const meses = calcularMesesDeVigencia();
-            const valorTotal = parseFloat(valorTotalInput.value) || 0;
+            const valorTotal = parseBR(valorTotalInput.value);
             const mensalTotal = valorTotal / meses;
 
-            // Atualiza Global
             if(badgeTotalMensal) {
                 badgeTotalMensal.innerText = `Mensal Aprox: R$ ${toBR(mensalTotal)}`;
                 labelQtdMeses.innerText = `(Vigência: ${meses} ${meses === 1 ? 'mês' : 'meses'})`;
             }
 
-            // Atualiza cada linha da árvore
             document.querySelectorAll('.orcamento-node').forEach(node => {
                 const inputVal = node.querySelector('input[data-prop="ValorPrevisto"]');
                 const badge = node.querySelector('.badge-mensal-valor');
-                
                 if (inputVal && badge) {
-                    const val = parseFloat(inputVal.value) || 0;
+                    const val = parseBR(inputVal.value);
                     const mensalNode = val / meses;
                     badge.innerText = `Mensal: R$ ${toBR(mensalNode)}`;
                 }
             });
         }
 
+        // ---------- CÁLCULOS E ÁRVORE -----------
         function calcularTotaisNosDados() {
             function subtotal(node) {
                 if (!node.Filhos || node.Filhos.length === 0)
@@ -247,11 +237,9 @@
                 return soma;
             }
             const total = detalhamento.reduce((a, n) => a + subtotal(n), 0);
-            valorTotalInput.value = total.toFixed(2);
-            
-            // Sempre que recalcula totais, atualiza os visuais mensais
+            valorTotalInput.value = toBR(total);
+            $(valorTotalInput).trigger('input'); 
             atualizarVisuaisMensais();
-            
             return total;
         }
 
@@ -274,7 +262,6 @@
                 initialOption = `<option value="${escapeHtml(node.Nome)}" selected>${escapeHtml(node.Nome)}</option>`;
             }
 
-            // [ATUALIZADO] Estrutura visual da linha (Input Total + Badge Mensal destacado)
             div.innerHTML = `
                 <div class="card shadow-sm border-0">
                     <div class="card-body p-2 d-flex align-items-center">
@@ -287,19 +274,16 @@
                                     ${initialOption}
                                 </select>
                             </div>
-                            
                             <div class="d-flex gap-2">
                                 <div class="input-group input-group-sm" style="flex: 1;">
                                     <span class="input-group-text fw-bold">Total</span>
-                                    <input type="number"
-                                           class="form-control fw-bold"
+                                    <input type="text" 
+                                           class="form-control fw-bold money"
                                            data-prop="ValorPrevisto"
-                                           value="${parseFloat(node.ValorPrevisto || 0).toFixed(2)}"
-                                           step="0.01"
+                                           value="${toBR(node.ValorPrevisto)}" 
                                            placeholder="0,00"
                                            ${isParent ? 'readonly style="background-color:#e9ecef;"' : ''}>
                                 </div>
-                                
                                 <div class="input-group input-group-sm" style="flex: 1;">
                                     <span class="input-group-text bg-warning bg-opacity-10 text-dark fw-bold" title="Previsão de gasto mensal">
                                         <i class="bi bi-calendar3 me-1"></i>
@@ -310,7 +294,6 @@
                                 </div>
                             </div>
                         </div>
-                        
                         <div class="ms-3 d-flex flex-column gap-2">
                             ${!isL3 ? `<button type="button" class="btn btn-sm btn-outline-success" data-action="add-child" title="Adicionar Subnível"><i class="bi bi-plus-lg"></i></button>` : ''}
                             <button type="button" class="btn btn-sm btn-outline-danger" data-action="remove" title="Remover"><i class="bi bi-trash"></i></button>
@@ -328,7 +311,7 @@
             return div;
         }
 
-        // ... (Select2 e renderização da árvore) ...
+        // ---------- FUNÇÕES DA ÁRVORE (Inicialização e Sincronia) -----------
         function inicializarSelect2ParaElemento($select) {
             const nivel = $select.data('nivel');
             $select.select2({
@@ -346,18 +329,16 @@
                 }
             });
         }
-        function inicializarSelect2() {
-             $('.select2-niveis').each(function () { inicializarSelect2ParaElemento($(this)); });
-        }
+
         function renderizarArvore() {
             arvoreContainer.innerHTML = '';
             detalhamento.forEach((n, i) =>
                 arvoreContainer.appendChild(criarNodeElemento(n, [i])));
-            inicializarSelect2();
+            $('.select2-niveis').each(function () { inicializarSelect2ParaElemento($(this)); });
+            aplicarMascaras();
             atualizarVisuaisMensais(); 
         }
 
-        // Auxiliares de Dados
         function getNode(pathArr) {
             let n = { Filhos: detalhamento };
             for (const i of pathArr) {
@@ -372,22 +353,15 @@
             .forEach(inp => {
                 const path = inp.closest('.orcamento-node').dataset.path.split('-').map(Number);
                 const n = getNode(path);
-                if (n) inp.value = parseFloat(n.ValorPrevisto || 0).toFixed(2);
+                if (n) {
+                    inp.value = toBR(n.ValorPrevisto);
+                    $(inp).trigger('input');
+                }
             });
             atualizarVisuaisMensais();
         }
 
-        // Validações (SameLevelKey, etc)
-        function sameLevelKey(n) {
-            const idStr = (n?.NivelId ?? '').toString().trim();
-            if (idStr) return `id:${idStr.toLowerCase()}`;
-            const nm = norm(n?.Nome);
-            return nm ? `nm:${nm}` : '';
-        }
-        function keyFromSelect(id, text) {
-            const idStr = (id ?? '').toString().trim();
-            return idStr ? `id:${idStr.toLowerCase()}` : `nm:${norm(text)}`;
-        }
+        // --- CORREÇÃO IMPORTANTE: Função para salvar o estado visual no array ---
         function syncSelectionsIntoData() {
             document.querySelectorAll('.orcamento-node select[data-prop="Nome"]').forEach(sel => {
                 const path = sel.closest('.orcamento-node').dataset.path.split('-').map(Number);
@@ -400,6 +374,19 @@
                 }
             });
         }
+
+        // ---------- EVENTOS E VALIDAÇÃO -----------
+        function escapeHtml(s) {
+            return (s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+        const norm = s => (s ?? '').toString().trim().toLowerCase();
+        function sameLevelKey(n) {
+            const idStr = (n?.NivelId ?? '').toString().trim();
+            if (idStr) return `id:${idStr.toLowerCase()}`;
+            const nm = norm(n?.Nome);
+            return nm ? `nm:${nm}` : '';
+        }
+
         function validateAllSelected() {
             const faltantes = [];
             function walk(arr, prefix) {
@@ -419,8 +406,8 @@
             }
             return true;
         }
+        
         function validateGlobalDuplicates() {
-            // ... (Lógica de duplicidade igual ao anterior) ...
             const mapDepth = new Map();
             const dups = [];
             function walk(arr, depth, prefix) {
@@ -445,20 +432,14 @@
             return true;
         }
 
-        // ---------- EVENTOS -----------
-
-        // Recalcular ao mudar datas
         vigenciaInicioInput.addEventListener('change', atualizarVisuaisMensais);
         vigenciaFimInput.addEventListener('change', atualizarVisuaisMensais);
 
         btnAdicionarNivel.addEventListener('click', () => {
+            syncSelectionsIntoData(); // <<< SALVA O ESTADO ATUAL ANTES DE ADICIONAR
             const novoNodeData = { NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] };
             detalhamento.push(novoNodeData);
-            const novoNodePath = [detalhamento.length - 1];
-            const novoElemento = criarNodeElemento(novoNodeData, novoNodePath);
-            arvoreContainer.appendChild(novoElemento);
-            inicializarSelect2ParaElemento($(novoElemento).find('.select2-niveis'));
-            atualizarVisuaisMensais();
+            renderizarArvore();
         });
 
         arvoreContainer.addEventListener('click', e => {
@@ -468,42 +449,15 @@
             const path = elem.dataset.path.split('-').map(Number);
             const act = btn.dataset.action;
 
+            syncSelectionsIntoData(); // <<< SALVA O ESTADO ATUAL ANTES DE MEXER
+
             if (act === 'add-child') {
                 const pNode = getNode(path);
                 if (!pNode) return;
                 pNode.Filhos = pNode.Filhos || [];
-                const novoFilhoData = { NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] };
-                pNode.Filhos.push(novoFilhoData);
-                const novoFilhoPath = [...path, pNode.Filhos.length - 1];
-                const novoElemento = criarNodeElemento(novoFilhoData, novoFilhoPath);
-                
-                let childrenContainer = elem.querySelector('.orcamento-node-children');
-                if (!childrenContainer) {
-                    childrenContainer = document.createElement('div');
-                    childrenContainer.className = 'orcamento-node-children border-start border-3 border-secondary ps-3 ms-4 mt-2';
-                    elem.querySelector('.card-body').parentElement.after(childrenContainer); // Insere após o card
-                    // Pequeno ajuste: a estrutura do HTML mudou para Card, então o append deve ser cuidadoso
-                    // Na função criarNodeElemento eu ajustei para div.appendChild(filhosDiv), então aqui vamos simplificar:
-                    // Recarregar a árvore é mais seguro visualmente ou inserir no local exato.
-                    // Vamos tentar inserir no container existente:
-                }
-                
-                // Se não achou container no DOM (porque é o primeiro filho), insere no div pai
-                if(!elem.querySelector('.orcamento-node-children')) {
-                      childrenContainer = document.createElement('div');
-                      childrenContainer.className = 'orcamento-node-children border-start border-3 border-secondary ps-3 ms-4 mt-2';
-                      elem.appendChild(childrenContainer);
-                } else {
-                      childrenContainer = elem.querySelector('.orcamento-node-children');
-                }
-                
-                childrenContainer.appendChild(novoElemento);
-                inicializarSelect2ParaElemento($(novoElemento).find('.select2-niveis'));
-                
-                // Readonly no pai
-                const parentInput = elem.querySelector('input[data-prop="ValorPrevisto"]');
-                parentInput.readOnly = true;
-                parentInput.style.backgroundColor = '#e9ecef';
+                pNode.Filhos.push({ NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] });
+                pNode.ValorPrevisto = 0; 
+                renderizarArvore();
                 
             } else if (act === 'remove') {
                 const parentPath = path.slice(0, -1);
@@ -514,26 +468,14 @@
                     const p = getNode(parentPath);
                     if (p) p.Filhos.splice(idx, 1);
                 }
-                elem.remove();
+                renderizarArvore();
             }
-            syncSelectionsIntoData();
             calcularTotaisNosDados();
-            atualizarReadonlyValores();
         });
 
-        // Eventos Change/Input na árvore
         arvoreContainer.addEventListener('change', e => {
             const select = e.target.closest('select[data-prop="Nome"]');
             if (!select) return;
-            // ... validação duplicidade simples ...
-            const data = $(select).select2('data');
-            const currentPath = select.closest('.orcamento-node').dataset.path.split('-').map(Number);
-            const currentNode = getNode(currentPath);
-            if(currentNode && data.length) {
-                currentNode.NivelId = data[0].id;
-                currentNode.Nome = data[0].text;
-            }
-            // Recalcula para garantir
             syncSelectionsIntoData();
         });
 
@@ -542,80 +484,53 @@
             if (!inputValor) return;
             const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
             const node = getNode(path);
-            if (node) node.ValorPrevisto = parseFloat(inputValor.value) || 0;
+            
+            if (node) node.ValorPrevisto = parseBR(inputValor.value);
+            
             calcularTotaisNosDados();
             atualizarReadonlyValores();
         });
 
-        // Captura o último nível focado para o modal "Novo Nível"
         let ultimoNivelFocado = 1;
         arvoreContainer.addEventListener('focusin', e => {
             const select = e.target.closest('.select2-niveis');
             if (select) ultimoNivelFocado = parseInt(select.dataset.nivel) || 1;
         });
 
-        // [RESTAURADO] Lógica do Botão "Cadastrar Novo Nível" que havia sumido
-        if(btnAbrirNovoNivel) { // Verifica se o botão existe antes de adicionar evento
+        if(btnAbrirNovoNivel) {
             btnAbrirNovoNivel.addEventListener('click', () => {
                 const nivel = ultimoNivelFocado || 1;
                 const $placeholder = $('#modal-nivel-placeholder');
-                
-                // 1. Busca o HTML do modal via AJAX
                 $.get('/Niveis/NovoNivelPartial', { nivel })
                     .done(html => {
                         $placeholder.html(html);
                         const $modal = $placeholder.find('.modal');
                         const $form = $placeholder.find('form');
+                        if ($.validator && $.validator.unobtrusive) $.validator.unobtrusive.parse($form);
+                        
+                        const modal = new bootstrap.Modal($modal[0]);
+                        modal.show();
 
-                        // 2. Reativa validação do jQuery (Unobtrusive) no form carregado dinamicamente
-                        if ($.validator && $.validator.unobtrusive) {
-                            $.validator.unobtrusive.parse($form);
-                        }
-
-                        // 3. Intercepta o Submit para enviar via AJAX
                         $form.on('submit', function (e) {
                             e.preventDefault();
                             if (!$form.valid()) return;
-
                             $.ajax({
                                 url: $form.attr('action'),
                                 type: $form.attr('method'),
                                 data: $form.serialize(),
                                 success: function (response) {
-                                    // Fecha modal e avisa sucesso
                                     const modalInstance = bootstrap.Modal.getInstance($modal[0]);
                                     modalInstance.hide();
                                     Swal.fire({ icon: 'success', title: 'Sucesso!', text: response.message, timer: 1500 });
-                                    
-                                    // Opcional: Se quiser recarregar os selects para mostrar o novo nível,
-                                    // não precisa fazer nada pois o Select2 Ajax busca na hora.
                                 },
                                 error: function (xhr) {
-                                    let mensagemErro = "Falha ao salvar.";
-                                    if (xhr.status === 409) { // Conflict (Duplicado)
-                                        mensagemErro = xhr.responseText; // Texto enviado pelo controller
-                                        Swal.fire({ icon: 'warning', title: 'Atenção', text: mensagemErro });
-                                    } else if (xhr.status === 400 && xhr.responseJSON) {
-                                        // Erros de validação do ModelState
-                                        const errors = xhr.responseJSON;
-                                        // ... lógica simples de mostrar erro ...
-                                        Swal.fire({ icon: 'error', title: 'Erro de Validação', text: 'Verifique os campos.' });
-                                    } else {
-                                        Swal.fire({ icon: 'error', title: 'Erro', text: mensagemErro });
-                                    }
+                                    let msg = "Falha ao salvar.";
+                                    if(xhr.responseText) msg = xhr.responseText;
+                                    Swal.fire({ icon: 'error', title: 'Erro', text: msg });
                                 }
                             });
                         });
-
-                        $modal.on('hidden.bs.modal', function () {
-                            $(this).remove(); // Limpa o DOM
-                        });
-
-                        const modal = new bootstrap.Modal($modal[0]);
-                        modal.show();
-                    })
-                    .fail(() => {
-                        Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível carregar o formulário.' });
+                        $modal.on('hidden.bs.modal', function () { $(this).remove(); });
                     });
             });
         }
@@ -633,12 +548,20 @@
         });
 
         // ---------- INICIALIZAÇÃO ----------
+        const valorInicial = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValorPrevistoTotal));
+        valorTotalInput.value = toBR(valorInicial);
+        
+        aplicarMascaras();
         calcularTotaisNosDados();
         detalhamentoJsonInput.value = JSON.stringify(detalhamento);
         renderizarArvore();
         syncSelectionsIntoData();
-        atualizarReadonlyValores();
         atualizarVisuaisMensais();
+        
+        if (hasSwal) {
+            if ("@TempData["Sucesso"]") Swal.fire({ icon: 'success', title: 'Sucesso', text: "@TempData["Sucesso"]" });
+            if ("@TempData["Erro"]") Swal.fire({ icon: 'error', title: 'Ops', text: "@TempData["Erro"]" });
+        }
     });
     </script>
 }

@@ -40,8 +40,10 @@ namespace Financeiro.Controllers
             _justificativaService = justificativaService;
         }
 
-        /* -------------------- HELPERS -------------------- */
+        // ... (Helpers e Index mantidos iguais) ...
+        // Vou omitir para economizar espaço, mas eles continuam lá
 
+        /* -------------------- HELPERS -------------------- */
         private async Task CarregarInstrumentos(int? selecionado = null)
         {
             int entidadeId = User.ObterEntidadeId();
@@ -85,7 +87,6 @@ namespace Financeiro.Controllers
             return itens.Sum(SomaNode);
         }
 
-        /* -------------------- LISTAR -------------------- */
         [HttpGet]
         [AutorizarPermissao("ORCAMENTO_VIEW")]
         public async Task<IActionResult> Index(int p = 1)
@@ -103,7 +104,6 @@ namespace Financeiro.Controllers
             return View(itens);
         }
 
-        /* -------------------- NOVO -------------------- */
         [HttpGet]
         [AutorizarPermissao("ORCAMENTO_ADD")]
         public async Task<IActionResult> Novo()
@@ -117,12 +117,18 @@ namespace Financeiro.Controllers
             });
         }
 
-        /* -------------------- SALVAR -------------------- */
+        /* -------------------- SALVAR (AJUSTADO) -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
         [AutorizarPermissao("ORCAMENTO_ADD")]
         public async Task<IActionResult> Salvar(OrcamentoViewModel vm, string detalhamentoJson, string justificativa = null)
         {
+            // --- LIMPEZA DE DATAS (O SEGREDO) ---
+            // Forçamos remover o horário antes de qualquer validação ou salvamento
+            vm.VigenciaInicio = vm.VigenciaInicio.Date;
+            vm.VigenciaFim = vm.VigenciaFim.Date;
+            // ------------------------------------
+
             if (!string.IsNullOrEmpty(detalhamentoJson))
                 vm.Detalhamento = JsonSerializer.Deserialize<List<OrcamentoDetalheViewModel>>(detalhamentoJson);
 
@@ -194,7 +200,6 @@ namespace Financeiro.Controllers
             return View("OrcamentoForm", vm);
         }
 
-        /* -------------------- EDITAR -------------------- */
         [HttpGet]
         [AutorizarPermissao("ORCAMENTO_EDIT")]
         public async Task<IActionResult> Editar(int id)
@@ -228,12 +233,17 @@ namespace Financeiro.Controllers
             return View("OrcamentoForm", vm);
         }
 
-        /* -------------------- ATUALIZAR -------------------- */
+        /* -------------------- ATUALIZAR (AJUSTADO) -------------------- */
         [HttpPost]
         [ValidateAntiForgeryToken]
         [AutorizarPermissao("ORCAMENTO_EDIT")]
         public async Task<IActionResult> Atualizar(OrcamentoViewModel vm, string detalhamentoJson, string justificativa = null)
         {
+            // --- LIMPEZA DE DATAS ---
+            vm.VigenciaInicio = vm.VigenciaInicio.Date;
+            vm.VigenciaFim = vm.VigenciaFim.Date;
+            // ------------------------
+
             if (!string.IsNullOrEmpty(detalhamentoJson))
                 vm.Detalhamento = JsonSerializer.Deserialize<List<OrcamentoDetalheViewModel>>(detalhamentoJson);
 
@@ -302,7 +312,6 @@ namespace Financeiro.Controllers
             }
             catch (Exception ex)
             {
-                // Aqui capturamos a mensagem amigável ("Não é possível remover itens...") que lançamos no Repo
                 TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
             }
 
@@ -310,7 +319,7 @@ namespace Financeiro.Controllers
             return View("OrcamentoForm", vm);
         }
 
-        /* -------------------- EXCLUIR -------------------- */
+        // ... (Excluir e Helpers mantidos) ...
         [HttpPost]
         [ValidateAntiForgeryToken]
         [AutorizarPermissao("ORCAMENTO_DEL")]

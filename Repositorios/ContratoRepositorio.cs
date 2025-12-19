@@ -20,36 +20,187 @@ namespace Financeiro.Repositorios
             _factory = factory;
         }
 
-        // --- NOVO MÉTODO: Validação granular por Item ---
+        // ==============================================================================
+        // MÉTODOS DE LEITURA E VALIDAÇÃO DE SALDO
+        // ==============================================================================
+        
         public async Task<decimal> ObterTotalComprometidoPorDetalheAsync(int orcamentoDetalheId, int? ignorarContratoId = null)
         {
             using var conn = _factory.CreateConnection();
+            // Soma quanto já foi usado deste item específico em contratos ativos
             const string sql = @"
-                SELECT SUM(ValorContrato) 
-                FROM Contrato 
-                WHERE OrcamentoDetalheId = @orcamentoDetalheId 
-                  AND Ativo = 1
-                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
+                SELECT SUM(ci.Valor) 
+                FROM ContratoItem ci
+                INNER JOIN Contrato c ON ci.ContratoId = c.Id
+                WHERE ci.OrcamentoDetalheId = @orcamentoDetalheId 
+                  AND c.Ativo = 1
+                  AND (@ignorarId IS NULL OR c.Id <> @ignorarId)";
 
             var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { orcamentoDetalheId, ignorarId = ignorarContratoId });
             return total ?? 0m;
         }
 
-        // Mantive este método caso você ainda o use em relatórios gerais, 
-        // mas a validação de criação usará o método acima.
-        public async Task<decimal> ObterTotalComprometidoPorOrcamentoAsync(int orcamentoId, int? ignorarContratoId = null)
+        public async Task<int> SugerirProximoNumeroAsync(int ano, int entidadeId)
         {
-            using var conn = _factory.CreateConnection();
+            // CORRIGIDO: Join via ContratoItem para chegar no Instrumento e validar a Entidade
             const string sql = @"
-                SELECT SUM(ValorContrato) 
-                FROM Contrato 
-                WHERE OrcamentoId = @orcamentoId 
-                  AND Ativo = 1
-                  AND (@ignorarId IS NULL OR Id <> @ignorarId)";
-
-            var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { orcamentoId, ignorarId = ignorarContratoId });
-            return total ?? 0m;
+                SELECT ISNULL(MAX(c.NumeroContrato), 0) 
+                FROM Contrato c
+                WHERE c.AnoContrato = @ano
+                  AND EXISTS (
+                      SELECT 1 
+                      FROM ContratoItem ci
+                      INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                      INNER JOIN Orcamento o ON od.OrcamentoId = o.Id
+                      INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                      WHERE ci.ContratoId = c.Id AND i.EntidadeId = @entidadeId
+                  );";
+                  
+            using var conn = _factory.CreateConnection();
+            var ultimoNumero = await conn.ExecuteScalarAsync<int>(sql, new { ano, entidadeId });
+            return ultimoNumero + 1;
         }
+
+        public async Task<bool> VerificarUnicidadeAsync(int numero, int ano, int entidadeId, int idAtual = 0)
+        {
+            // CORRIGIDO: Join via ContratoItem
+            const string sql = @"
+                SELECT COUNT(1) 
+                FROM Contrato c
+                WHERE c.NumeroContrato = @numero 
+                  AND c.AnoContrato = @ano 
+                  AND c.Id != @idAtual
+                  AND EXISTS (
+                      SELECT 1 
+                      FROM ContratoItem ci
+                      INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                      INNER JOIN Orcamento o ON od.OrcamentoId = o.Id
+                      INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                      WHERE ci.ContratoId = c.Id AND i.EntidadeId = @entidadeId
+                  );";
+                  
+            using var conn = _factory.CreateConnection();
+            return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, entidadeId, idAtual });
+        }
+
+        public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina = 10)
+        {
+            // CORRIGIDO: Não usamos mais c.OrcamentoId. 
+            // Usamos EXISTS para filtrar contratos que tenham itens pertencentes à Entidade logada.
+            const string sql = @"
+                SELECT 
+                    c.*, 
+                    COALESCE(pj.RazaoSocial, pf.Nome + ' ' + pf.Sobrenome) AS FornecedorNome
+                FROM 
+                    Contrato c
+                LEFT JOIN 
+                    PessoaJuridica pj ON c.PessoaJuridicaId = pj.Id
+                LEFT JOIN 
+                    PessoaFisica pf ON c.PessoaFisicaId = pf.Id
+                WHERE 
+                    EXISTS (
+                        SELECT 1 
+                        FROM ContratoItem ci
+                        INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                        INNER JOIN Orcamento o ON od.OrcamentoId = o.Id
+                        INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                        WHERE ci.ContratoId = c.Id AND i.EntidadeId = @entidadeId
+                    )
+                ORDER BY 
+                    c.AnoContrato DESC, c.NumeroContrato DESC
+                OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
+
+                SELECT COUNT(c.Id) 
+                FROM Contrato c
+                WHERE EXISTS (
+                        SELECT 1 
+                        FROM ContratoItem ci
+                        INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                        INNER JOIN Orcamento o ON od.OrcamentoId = o.Id
+                        INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
+                        WHERE ci.ContratoId = c.Id AND i.EntidadeId = @entidadeId
+                    );";
+            
+            using var conn = _factory.CreateConnection();
+            using var multi = await conn.QueryMultipleAsync(sql, new { entidadeId, Offset = (pagina - 1) * tamanhoPagina, TamanhoPagina = tamanhoPagina });
+
+            var itens = multi.Read<Contrato, string, ContratoListaViewModel>(
+                (contrato, fornecedorNome) => new ContratoListaViewModel { Contrato = contrato, FornecedorNome = fornecedorNome },
+                splitOn: "FornecedorNome"
+            ).ToList();
+            
+            var totalItens = await multi.ReadSingleAsync<int>();
+            var totalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
+
+            return (itens, totalPaginas);
+        }
+
+        public async Task<ContratoViewModel?> ObterParaEdicaoAsync(int id)
+        {
+            const string sqlContrato = "SELECT * FROM Contrato WHERE Id = @id;";
+            using var conn = _factory.CreateConnection();
+            
+            var contrato = await conn.QuerySingleOrDefaultAsync<Contrato>(sqlContrato, new { id });
+            if (contrato == null) return null;
+
+            // RECUPERA OS ITENS (NOVA ESTRUTURA)
+            const string sqlItens = @"
+                SELECT ci.OrcamentoDetalheId AS Id, od.Nome AS NomeItem, ci.Valor
+                FROM ContratoItem ci
+                INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                WHERE ci.ContratoId = @id;";
+                
+            var itens = await conn.QueryAsync<ContratoItemViewModel>(sqlItens, new { id });
+
+            int mesesEdicao = 1;
+            if (contrato.DataFim >= contrato.DataInicio)
+            {
+                mesesEdicao = ((contrato.DataFim.Year - contrato.DataInicio.Year) * 12) + contrato.DataFim.Month - contrato.DataInicio.Month + 1;
+                if (mesesEdicao < 1) mesesEdicao = 1;
+            }
+
+            var listaItens = itens.ToList();
+            foreach (var n in listaItens)
+            {
+                n.Valor = n.Valor / mesesEdicao; // Divide para mostrar mensal
+            }
+
+            // Tenta descobrir o OrcamentoId Pai através do primeiro item (para preencher o dropdown)
+            int? orcamentoId = null;
+            if (listaItens.Any())
+            {
+                orcamentoId = await conn.ExecuteScalarAsync<int?>("SELECT OrcamentoId FROM OrcamentoDetalhe WHERE Id = @Id", new { Id = listaItens.First().Id });
+            }
+
+            var vm = new ContratoViewModel
+            {
+                Id = contrato.Id,
+                FornecedorIdCompleto = contrato.PessoaFisicaId.HasValue ? $"PF-{contrato.PessoaFisicaId}" : $"PJ-{contrato.PessoaJuridicaId}",
+                NumeroContrato = contrato.NumeroContrato,
+                AnoContrato = contrato.AnoContrato,
+                ObjetoContrato = contrato.ObjetoContrato,
+                DataAssinatura = contrato.DataAssinatura,
+                DataInicio = contrato.DataInicio,
+                DataFim = contrato.DataFim,
+                ValorContrato = contrato.ValorContrato,
+                Observacao = contrato.Observacao,
+                Ativo = contrato.Ativo,
+                OrcamentoId = orcamentoId,
+                Itens = listaItens
+            };
+
+            if (vm.ValorContrato > 0)
+            {
+                decimal valorMensalCalc = vm.ValorContrato / mesesEdicao;
+                vm.ValorMensal = valorMensalCalc.ToString("N2", new CultureInfo("pt-BR"));
+            }
+
+            return vm;
+        }
+
+        // ==============================================================================
+        // MÉTODOS DE ESCRITA (INSERT / UPDATE / DELETE)
+        // ==============================================================================
 
         public async Task InserirAsync(ContratoViewModel vm)
         {
@@ -60,6 +211,7 @@ namespace Financeiro.Repositorios
             try
             {
                 var (pessoaFisicaId, pessoaJuridicaId) = ParseFornecedorId(vm.FornecedorIdCompleto);
+                
                 var contrato = new Contrato
                 {
                     PessoaFisicaId = pessoaFisicaId,
@@ -72,22 +224,27 @@ namespace Financeiro.Repositorios
                     DataFim = vm.DataFim,
                     ValorContrato = vm.ValorContrato,
                     Observacao = vm.Observacao,
-                    Ativo = vm.Ativo,
-                    OrcamentoId = vm.OrcamentoId,
-                    OrcamentoDetalheId = vm.OrcamentoDetalheId // <--- NOVO
+                    Ativo = vm.Ativo
                 };
 
                 const string sqlInsertContrato = @"
                     INSERT INTO Contrato 
-                        (PessoaJuridicaId, PessoaFisicaId, NumeroContrato, AnoContrato, ObjetoContrato, DataAssinatura, DataInicio, DataFim, ValorContrato, Observacao, Ativo, OrcamentoId, OrcamentoDetalheId)
+                        (PessoaJuridicaId, PessoaFisicaId, NumeroContrato, AnoContrato, ObjetoContrato, DataAssinatura, DataInicio, DataFim, ValorContrato, Observacao, Ativo)
                     VALUES 
-                        (@PessoaJuridicaId, @PessoaFisicaId, @NumeroContrato, @AnoContrato, @ObjetoContrato, @DataAssinatura, @DataInicio, @DataFim, @ValorContrato, @Observacao, @Ativo, @OrcamentoId, @OrcamentoDetalheId);
+                        (@PessoaJuridicaId, @PessoaFisicaId, @NumeroContrato, @AnoContrato, @ObjetoContrato, @DataAssinatura, @DataInicio, @DataFim, @ValorContrato, @Observacao, @Ativo);
                     SELECT CAST(SCOPE_IDENTITY() as int);";
                 
                 var contratoId = await conn.QuerySingleAsync<int>(sqlInsertContrato, contrato, transaction);
                 vm.Id = contratoId;
 
-                await InserirContratoNaturezasAsync(conn, transaction, contratoId, vm.Naturezas);
+                if (vm.Itens != null && vm.Itens.Any())
+                {
+                    const string sqlItem = "INSERT INTO ContratoItem (ContratoId, OrcamentoDetalheId, Valor) VALUES (@ContratoId, @OrcamentoDetalheId, @Valor)";
+                    foreach (var item in vm.Itens)
+                    {
+                        await conn.ExecuteAsync(sqlItem, new { ContratoId = contratoId, OrcamentoDetalheId = item.Id, Valor = item.Valor }, transaction);
+                    }
+                }
                 
                 transaction.Commit();
             }
@@ -107,6 +264,7 @@ namespace Financeiro.Repositorios
             try
             {
                 var (pessoaFisicaId, pessoaJuridicaId) = ParseFornecedorId(vm.FornecedorIdCompleto);
+                
                 var contrato = new Contrato
                 {
                     Id = vm.Id,
@@ -120,9 +278,7 @@ namespace Financeiro.Repositorios
                     DataFim = vm.DataFim,
                     ValorContrato = vm.ValorContrato,
                     Observacao = vm.Observacao,
-                    Ativo = vm.Ativo,
-                    OrcamentoId = vm.OrcamentoId,
-                    OrcamentoDetalheId = vm.OrcamentoDetalheId // <--- NOVO
+                    Ativo = vm.Ativo
                 };
 
                 const string sqlUpdateContrato = @"
@@ -137,17 +293,22 @@ namespace Financeiro.Repositorios
                         DataFim = @DataFim, 
                         ValorContrato = @ValorContrato, 
                         Observacao = @Observacao, 
-                        Ativo = @Ativo,
-                        OrcamentoId = @OrcamentoId,
-                        OrcamentoDetalheId = @OrcamentoDetalheId
+                        Ativo = @Ativo
                     WHERE Id = @Id;";
                 
                 await conn.ExecuteAsync(sqlUpdateContrato, contrato, transaction);
                 
-                const string sqlDeleteNaturezas = "DELETE FROM ContratoNatureza WHERE ContratoId = @ContratoId;";
-                await conn.ExecuteAsync(sqlDeleteNaturezas, new { ContratoId = vm.Id }, transaction);
+                // Limpa e Recria os Itens
+                await conn.ExecuteAsync("DELETE FROM ContratoItem WHERE ContratoId = @ContratoId;", new { ContratoId = vm.Id }, transaction);
                 
-                await InserirContratoNaturezasAsync(conn, transaction, vm.Id, vm.Naturezas);
+                if (vm.Itens != null && vm.Itens.Any())
+                {
+                    const string sqlItem = "INSERT INTO ContratoItem (ContratoId, OrcamentoDetalheId, Valor) VALUES (@ContratoId, @OrcamentoDetalheId, @Valor)";
+                    foreach (var item in vm.Itens)
+                    {
+                        await conn.ExecuteAsync(sqlItem, new { ContratoId = vm.Id, OrcamentoDetalheId = item.Id, Valor = item.Valor }, transaction);
+                    }
+                }
                 
                 transaction.Commit();
             }
@@ -158,99 +319,18 @@ namespace Financeiro.Repositorios
             }
         }
 
-        public async Task<ContratoViewModel?> ObterParaEdicaoAsync(int id)
-        {
-            const string sqlContrato = "SELECT * FROM Contrato WHERE Id = @id;";
-            using var conn = _factory.CreateConnection();
-            
-            var contrato = await conn.QuerySingleOrDefaultAsync<Contrato>(sqlContrato, new { id });
-            if (contrato == null) return null;
-
-            // ... (Lógica de obter naturezas mantida igual) ...
-            const string sqlNaturezas = @"
-                SELECT cn.NaturezaId, n.Nome AS NomeNatureza, cn.Valor
-                FROM ContratoNatureza cn
-                INNER JOIN Natureza n ON cn.NaturezaId = n.Id
-                WHERE cn.ContratoId = @id;";
-                
-            var naturezas = await conn.QueryAsync<ContratoNaturezaViewModel>(sqlNaturezas, new { id });
-
-            int mesesEdicao = 1;
-            if (contrato.DataFim >= contrato.DataInicio)
-            {
-                mesesEdicao = ((contrato.DataFim.Year - contrato.DataInicio.Year) * 12) + contrato.DataFim.Month - contrato.DataInicio.Month + 1;
-                if (mesesEdicao < 1) mesesEdicao = 1;
-            }
-
-            var listaNaturezas = naturezas.ToList();
-            foreach (var n in listaNaturezas)
-            {
-                n.Valor = n.Valor / mesesEdicao;
-            }
-
-            var vm = new ContratoViewModel
-            {
-                Id = contrato.Id,
-                FornecedorIdCompleto = contrato.PessoaFisicaId.HasValue ? $"PF-{contrato.PessoaFisicaId}" : $"PJ-{contrato.PessoaJuridicaId}",
-                NumeroContrato = contrato.NumeroContrato,
-                AnoContrato = contrato.AnoContrato,
-                ObjetoContrato = contrato.ObjetoContrato,
-                DataAssinatura = contrato.DataAssinatura,
-                DataInicio = contrato.DataInicio,
-                DataFim = contrato.DataFim,
-                ValorContrato = contrato.ValorContrato,
-                Observacao = contrato.Observacao,
-                Ativo = contrato.Ativo,
-                OrcamentoId = contrato.OrcamentoId,
-                OrcamentoDetalheId = contrato.OrcamentoDetalheId, // <--- NOVO
-                Naturezas = listaNaturezas
-            };
-
-            if (vm.ValorContrato > 0)
-            {
-                decimal valorMensalCalc = vm.ValorContrato / mesesEdicao;
-                vm.ValorMensal = valorMensalCalc.ToString("N2", new CultureInfo("pt-BR"));
-            }
-
-            return vm;
-        }
-
-        // ... (Os métodos ExcluirAsync, ListarPaginadoAsync, SugerirProximoNumeroAsync, etc. permanecem inalterados pois usam OrcamentoId para filtragem geral) ...
-        
-        // Métodos auxiliares permanecem iguais
-        private async Task InserirContratoNaturezasAsync(IDbConnection conn, IDbTransaction transaction, int contratoId, List<ContratoNaturezaViewModel> naturezas)
-        {
-             // ... (código existente) ...
-             if (naturezas == null || !naturezas.Any()) return;
-             const string sql = "INSERT INTO ContratoNatureza (ContratoId, NaturezaId, Valor) VALUES (@ContratoId, @NaturezaId, @Valor);";
-             foreach (var item in naturezas)
-             {
-                 if (item.Valor >= 0) 
-                 {
-                     await conn.ExecuteAsync(sql, new { ContratoId = contratoId, item.NaturezaId, item.Valor }, transaction);
-                 }
-             }
-        }
-        
-        // ... (resto da classe mantido igual) ...
         public async Task ExcluirAsync(int id)
         {
-            // 1. Desvincula do Financeiro (para não quebrar histórico financeiro)
+            // Ordem de Exclusão: 1. Movimentações -> 2. Itens Versão -> 3. Versões -> 4. Itens Contrato -> 5. Contrato
+            
             const string sqlDesvincularFinanceiro = "UPDATE MovimentacaoRateio SET ContratoId = NULL WHERE ContratoId = @id;";
+            const string sqlDeleteItens = "DELETE FROM ContratoItem WHERE ContratoId = @id;";
             
-            // 2. Apaga as Naturezas do Contrato ATUAL (Vigente)
-            const string sqlNatureza = "DELETE FROM ContratoNatureza WHERE ContratoId = @id;";
-            
-            // 3. [NOVO] Apaga as Naturezas das VERSÕES ANTIGAS (Os "netos" que estavam travando)
-            // Deletamos tudo da tabela ContratoVersaoNatureza onde a Versão pertence ao Contrato que estamos excluindo
-            const string sqlVersaoNatureza = @"
-                DELETE FROM ContratoVersaoNatureza 
+            const string sqlVersaoItens = @"
+                DELETE FROM ContratoVersaoItem 
                 WHERE ContratoVersaoId IN (SELECT Id FROM ContratoVersao WHERE ContratoId = @id);";
 
-            // 4. Agora sim, podemos apagar as Versões (Histórico)
             const string sqlVersao = "DELETE FROM ContratoVersao WHERE ContratoId = @id;";
-            
-            // 5. Por fim, apaga o Contrato (Cabeçalho)
             const string sqlContrato = "DELETE FROM Contrato WHERE Id = @id;";
             
             using var conn = _factory.CreateConnection();
@@ -259,12 +339,9 @@ namespace Financeiro.Repositorios
             try
             {
                 await conn.ExecuteAsync(sqlDesvincularFinanceiro, new { id }, tx);
-                await conn.ExecuteAsync(sqlNatureza, new { id }, tx);
-                
-                // Executa a limpeza dos netos
-                await conn.ExecuteAsync(sqlVersaoNatureza, new { id }, tx);
-                
+                await conn.ExecuteAsync(sqlVersaoItens, new { id }, tx); 
                 await conn.ExecuteAsync(sqlVersao, new { id }, tx);
+                await conn.ExecuteAsync(sqlDeleteItens, new { id }, tx);
                 await conn.ExecuteAsync(sqlContrato, new { id }, tx);
                 
                 tx.Commit();
@@ -275,88 +352,26 @@ namespace Financeiro.Repositorios
                 throw;
             }
         }
-
-        // ... (manter AtualizarVigenciaEValorAsync, ListarPaginadoAsync, SugerirProximoNumeroAsync, VerificarUnicidadeAsync, BuscarFornecedoresPaginadoAsync, etc)
         
-        public async Task<int> SugerirProximoNumeroAsync(int ano, int entidadeId)
+        public async Task AtualizarVigenciaEValorAsync(int contratoId, DateTime inicio, DateTime fim, decimal valorTotal)
         {
-             // ... (manter igual)
-             const string sql = @"
-                SELECT ISNULL(MAX(c.NumeroContrato), 0) 
-                FROM Contrato c
-                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
-                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
-                WHERE c.AnoContrato = @ano
-                  AND i.EntidadeId = @entidadeId;";
-                  
-            using var conn = _factory.CreateConnection();
-            var ultimoNumero = await conn.QuerySingleAsync<int>(sql, new { ano, entidadeId });
-            return ultimoNumero + 1;
-        }
-
-        public async Task<bool> VerificarUnicidadeAsync(int numero, int ano, int entidadeId, int idAtual = 0)
-        {
-             // ... (manter igual)
             const string sql = @"
-                SELECT COUNT(1) 
-                FROM Contrato c
-                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
-                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
-                WHERE c.NumeroContrato = @numero 
-                  AND c.AnoContrato = @ano 
-                  AND i.EntidadeId = @entidadeId
-                  AND c.Id != @idAtual;";
-                  
+                UPDATE Contrato 
+                SET DataInicio = @inicio, 
+                    DataFim = @fim, 
+                    ValorContrato = @valorTotal
+                WHERE Id = @contratoId";
+
             using var conn = _factory.CreateConnection();
-            return await conn.ExecuteScalarAsync<bool>(sql, new { numero, ano, entidadeId, idAtual });
+            await conn.ExecuteAsync(sql, new { contratoId, inicio, fim, valorTotal });
         }
-        
-        public async Task<(IEnumerable<ContratoListaViewModel> Itens, int TotalPaginas)> ListarPaginadoAsync(int entidadeId, int pagina, int tamanhoPagina = 10)
-        {
-            // ... (manter igual)
-            const string sql = @"
-                SELECT 
-                    c.*, 
-                    COALESCE(pj.RazaoSocial, pf.Nome + ' ' + pf.Sobrenome) AS FornecedorNome
-                FROM 
-                    Contrato c
-                LEFT JOIN 
-                    PessoaJuridica pj ON c.PessoaJuridicaId = pj.Id
-                LEFT JOIN 
-                    PessoaFisica pf ON c.PessoaFisicaId = pf.Id
-                INNER JOIN
-                    Orcamento o ON c.OrcamentoId = o.Id
-                INNER JOIN
-                    Instrumento i ON o.InstrumentoId = i.Id
-                WHERE 
-                    i.EntidadeId = @entidadeId
-                ORDER BY 
-                    c.AnoContrato DESC, c.NumeroContrato DESC
-                OFFSET @Offset ROWS FETCH NEXT @TamanhoPagina ROWS ONLY;
 
-                SELECT COUNT(c.Id) 
-                FROM Contrato c
-                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id
-                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
-                WHERE i.EntidadeId = @entidadeId;";
-            
-            using var conn = _factory.CreateConnection();
-            using var multi = await conn.QueryMultipleAsync(sql, new { entidadeId, Offset = (pagina - 1) * tamanhoPagina, TamanhoPagina = tamanhoPagina });
-
-            var itens = multi.Read<Contrato, string, ContratoListaViewModel>(
-                (contrato, fornecedorNome) => new ContratoListaViewModel { Contrato = contrato, FornecedorNome = fornecedorNome },
-                splitOn: "FornecedorNome"
-            ).ToList();
-            
-            var totalItens = await multi.ReadSingleAsync<int>();
-            var totalPaginas = (int)Math.Ceiling(totalItens / (double)tamanhoPagina);
-
-            return (itens, totalPaginas);
-        }
+        // ==============================================================================
+        // MÉTODOS AUXILIARES
+        // ==============================================================================
 
         public async Task<(IEnumerable<VwFornecedor> Itens, int TotalItens)> BuscarFornecedoresPaginadoAsync(string termoBusca, int pagina, int tamanhoPagina)
         {
-            // ... (manter igual)
              const string sql = @"
                 SELECT * FROM Vw_Fornecedores
                 WHERE Nome LIKE @TermoBusca OR Documento LIKE @TermoBusca
@@ -367,7 +382,6 @@ namespace Financeiro.Repositorios
                 WHERE Nome LIKE @TermoBusca OR Documento LIKE @TermoBusca;";
             
             using var conn = _factory.CreateConnection();
-            
             using var multi = await conn.QueryMultipleAsync(sql, new 
             { 
                 TermoBusca = $"%{termoBusca}%",
@@ -380,14 +394,6 @@ namespace Financeiro.Repositorios
 
             return (itens, totalItens);
         }
-        
-        // ... (Outros métodos auxiliares mantidos: ListarTodasNaturezasAsync, ObterFornecedorPorIdCompletoAsync, ParseFornecedorId, ListarNaturezasPorContratoAsync)
-         public async Task<IEnumerable<Natureza>> ListarTodasNaturezasAsync()
-        {
-            const string sql = "SELECT * FROM Natureza WHERE Ativo = 1 ORDER BY Nome;";
-            using var conn = _factory.CreateConnection();
-            return await conn.QueryAsync<Natureza>(sql);
-        }
 
         public async Task<VwFornecedor?> ObterFornecedorPorIdCompletoAsync(string idCompleto)
         {
@@ -395,96 +401,80 @@ namespace Financeiro.Repositorios
             if (pfId == null && pjId == null) return null;
 
             const string sql = "SELECT * FROM Vw_Fornecedores WHERE FornecedorId = @Id AND Tipo = @Tipo;";
-            
             using var conn = _factory.CreateConnection();
-            
-            return await conn.QuerySingleOrDefaultAsync<VwFornecedor>(sql, new 
-            { 
-                Id = pfId ?? pjId, 
-                Tipo = pfId.HasValue ? "PF" : "PJ"
-            });
+            return await conn.QuerySingleOrDefaultAsync<VwFornecedor>(sql, new { Id = pfId ?? pjId, Tipo = pfId.HasValue ? "PF" : "PJ" });
         }
 
         private (int? pfId, int? pjId) ParseFornecedorId(string fornecedorIdCompleto)
         {
             if (string.IsNullOrEmpty(fornecedorIdCompleto)) return (null, null);
-
             var partes = fornecedorIdCompleto.Split('-');
-            if (partes.Length != 2) throw new ArgumentException("FornecedorId inválido.");
-
+            if (partes.Length != 2) return (null, null);
             var tipo = partes[0].ToUpper();
             var id = int.Parse(partes[1]);
-
             if (tipo == "PF") return (id, null);
             if (tipo == "PJ") return (null, id);
-            
             return (null, null);
         }
-        
-        public async Task<IEnumerable<ContratoNatureza>> ListarNaturezasPorContratoAsync(int contratoId)
-        {
-            const string sql = "SELECT * FROM ContratoNatureza WHERE ContratoId = @contratoId;";
-            
-            using var conn = _factory.CreateConnection();
-            return await conn.QueryAsync<ContratoNatureza>(sql, new { contratoId });
-        }
-        
-        // ... (AtualizarVigenciaEValorAsync mantido) ...
-         public async Task AtualizarVigenciaEValorAsync(int contratoId, DateTime inicio, DateTime fim, decimal valorTotal)
-        {
-            const string sql = @"
-                UPDATE Contrato 
-                SET DataInicio = @inicio, 
-                    DataFim = @fim, 
-                    ValorContrato = @valorTotal
-                WHERE Id = @contratoId";
 
-            using var conn = _factory.CreateConnection();
-            await conn.ExecuteAsync(sql, new { contratoId, inicio, fim, valorTotal });
-        }
+        // Este método recupera contratos para o Rateio (Lançamento)
         public async Task<IEnumerable<dynamic>> ListarAtivosPorFornecedorAsync(int entidadeId, int fornecedorId, string tipoPessoa)
         {
             using var conn = _factory.CreateConnection();
-            
-            // CORREÇÃO: O Join agora segue o caminho: Contrato -> Orçamento -> Instrumento -> Entidade
+            // CORRIGIDO: Join via ContratoItem para chegar na Entidade
             const string sql = @"
-                SELECT 
+                SELECT DISTINCT
                     c.Id, 
                     c.NumeroContrato, 
                     c.ObjetoContrato 
                 FROM Contrato c
-                INNER JOIN Orcamento o ON c.OrcamentoId = o.Id        -- Liga Contrato ao Orçamento
-                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id    -- Liga Orçamento ao Instrumento
+                INNER JOIN ContratoItem ci ON c.Id = ci.ContratoId
+                INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                INNER JOIN Orcamento o ON od.OrcamentoId = o.Id
+                INNER JOIN Instrumento i ON o.InstrumentoId = i.Id
                 WHERE c.Ativo = 1 
-                AND i.EntidadeId = @entidadeId -- Filtra pela entidade do Instrumento (pai do orçamento)
+                AND i.EntidadeId = @entidadeId
                 AND (
                     (@tipoPessoa = 'PJ' AND c.PessoaJuridicaId = @fornecedorId)
                     OR
                     (@tipoPessoa = 'PF' AND c.PessoaFisicaId = @fornecedorId)
                 )
-                ORDER BY c.DataInicio DESC";
+                ORDER BY c.NumeroContrato DESC";
 
-            return await conn.QueryAsync(sql, new { 
-                entidadeId, 
-                fornecedorId, 
-                tipoPessoa 
-            });
+            return await conn.QueryAsync(sql, new { entidadeId, fornecedorId, tipoPessoa });
         }
-        public async Task<IEnumerable<dynamic>> ListarNaturezasDetalhadasPorContratoAsync(int contratoId)
+
+        // Método auxiliar para buscar os itens (detalhes) de um contrato específico para exibir na tela de Rateio
+        public async Task<IEnumerable<dynamic>> ListarItensPorContratoAsync(int contratoId)
         {
             using var conn = _factory.CreateConnection();
-            // Fazemos o JOIN para pegar o Nome da Natureza
             const string sql = @"
                 SELECT 
-                    n.Id, 
-                    n.Nome 
-                FROM ContratoNatureza cn
-                INNER JOIN Natureza n ON cn.NaturezaId = n.Id
-                WHERE cn.ContratoId = @contratoId 
-                AND n.Ativo = 1
-                ORDER BY n.Nome";
+                    ci.OrcamentoDetalheId AS Id, 
+                    od.Nome AS Nome,
+                    ci.Valor AS ValorTotalItemNoContrato
+                FROM ContratoItem ci
+                INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                WHERE ci.ContratoId = @contratoId 
+                ORDER BY od.Nome";
 
             return await conn.QueryAsync(sql, new { contratoId });
+        }
+        public async Task<decimal> ObterTotalComprometidoPorOrcamentoAsync(int orcamentoId, int? ignorarContratoId = null)
+        {
+            using var conn = _factory.CreateConnection();
+            // Soma todos os itens de contratos que pertencem, direta ou indiretamente, a este Orçamento
+            const string sql = @"
+                SELECT SUM(ci.Valor) 
+                FROM ContratoItem ci
+                INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                INNER JOIN Contrato c ON ci.ContratoId = c.Id
+                WHERE od.OrcamentoId = @orcamentoId 
+                    AND c.Ativo = 1
+                    AND (@ignorarId IS NULL OR c.Id <> @ignorarId)";
+
+            var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { orcamentoId, ignorarId = ignorarContratoId });
+            return total ?? 0m;
         }
     }
 }

@@ -2,7 +2,7 @@ using Dapper;
 using Financeiro.Infraestrutura;
 using Financeiro.Models;
 using Financeiro.Models.ViewModels;
-using Microsoft.Data.SqlClient; // <--- AQUI ESTAVA O SEGREDO
+using Microsoft.Data.SqlClient; 
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -24,6 +24,7 @@ namespace Financeiro.Repositorios
         {
             using var conn = _factory.CreateConnection();
 
+            // [CORREÇÃO AQUI]: O subselect agora soma pela tabela ContratoItem + OrcamentoDetalhe
             const string sqlHeader = @"
                 SELECT 
                     o.Id, 
@@ -34,7 +35,15 @@ namespace Financeiro.Repositorios
                     o.ValorPrevistoTotal, 
                     o.Ativo,
                     i.Numero + ' - ' + i.Objeto AS InstrumentoNome,
-                    ISNULL((SELECT SUM(ValorContrato) FROM Contrato WHERE OrcamentoId = o.Id AND Ativo = 1), 0) AS ValorComprometido
+                    
+                    ISNULL((
+                        SELECT SUM(ci.Valor) 
+                        FROM ContratoItem ci
+                        INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                        INNER JOIN Contrato c ON ci.ContratoId = c.Id
+                        WHERE od.OrcamentoId = o.Id AND c.Ativo = 1
+                    ), 0) AS ValorComprometido
+
                 FROM [dbo].[Orcamento] o
                 INNER JOIN [dbo].[Instrumento] i ON o.InstrumentoId = i.Id
                 WHERE i.EntidadeId = @entidadeId
@@ -58,18 +67,21 @@ namespace Financeiro.Repositorios
 
             if (!orcamentos.Any()) return (orcamentos, totalItens);
 
+            // --- LÓGICA DE BI (DETALHAMENTO) ---
+            // Também precisa ser ajustada para não usar c.OrcamentoId
             var idsOrcamentos = orcamentos.Select(o => o.Id).ToList();
 
             const string sqlBI = @"
                 SELECT 
-                    c.OrcamentoId,
-                    d.Nome as NomeItem,
-                    SUM(c.ValorContrato) as ValorConsumido
-                FROM Contrato c
-                INNER JOIN OrcamentoDetalhe d ON c.OrcamentoDetalheId = d.Id
-                WHERE c.OrcamentoId IN @Ids 
+                    od.OrcamentoId,
+                    od.Nome as NomeItem,
+                    SUM(ci.Valor) as ValorConsumido
+                FROM ContratoItem ci
+                INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                INNER JOIN Contrato c ON ci.ContratoId = c.Id
+                WHERE od.OrcamentoId IN @Ids 
                   AND c.Ativo = 1
-                GROUP BY c.OrcamentoId, d.Nome
+                GROUP BY od.OrcamentoId, od.Nome
                 ORDER BY ValorConsumido DESC";
 
             var detalhesRaw = await conn.QueryAsync<dynamic>(sqlBI, new { Ids = idsOrcamentos });
@@ -170,7 +182,7 @@ namespace Financeiro.Repositorios
 
                 transaction.Commit();
             }
-            catch (SqlException ex) // <--- CORRIGIDO AQUI
+            catch (SqlException ex)
             {
                 transaction.Rollback();
                 if (ex.Number == 547) 

@@ -22,6 +22,6 @@ namespace Financeiro.Models
         public string? Observacao { get; set; }
         public DateTime DataRegistro { get; set; } = DateTime.Now;
         public DateTime? DataInicioAditivo { get; set; }
-
+        public bool Ativo { get; set; }
     }
 }

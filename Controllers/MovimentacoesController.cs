@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 using System.Linq;
 using System;
 using System.Globalization; 
-using Financeiro.Servicos;        
+using Financeiro.Servicos; 
 using Financeiro.Servicos.Anexos; 
 using Microsoft.AspNetCore.Authorization;
-using Financeiro.Atributos;       
-using Financeiro.Extensions;      
+using Financeiro.Atributos; 
+using Financeiro.Extensions; 
 using System.Collections.Generic; 
 
 namespace Financeiro.Controllers
@@ -20,7 +20,8 @@ namespace Financeiro.Controllers
     {
         private readonly IMovimentacaoRepositorio _movRepo;
         private readonly IInstrumentoRepositorio _instRepo;
-        private readonly INaturezaRepositorio _natRepo;
+        // REMOVIDO: INaturezaRepositorio (Não existe mais lógica de natureza solta)
+        private readonly IOrcamentoRepositorio _orcamentoRepo; // ADICIONADO: Para buscar itens de orçamento
         private readonly IContratoRepositorio _contratoRepo;
         private readonly IFornecedorRepositorio _fornecedorRepo;
         private readonly ILogService _logService;
@@ -30,7 +31,7 @@ namespace Financeiro.Controllers
         public MovimentacoesController(
             IMovimentacaoRepositorio movRepo,
             IInstrumentoRepositorio instRepo,
-            INaturezaRepositorio natRepo,
+            IOrcamentoRepositorio orcamentoRepo,
             IContratoRepositorio contratoRepo,
             IFornecedorRepositorio fornecedorRepo,
             ILogService logService,
@@ -39,7 +40,7 @@ namespace Financeiro.Controllers
         {
             _movRepo = movRepo;
             _instRepo = instRepo;
-            _natRepo = natRepo;
+            _orcamentoRepo = orcamentoRepo;
             _contratoRepo = contratoRepo;
             _fornecedorRepo = fornecedorRepo;
             _logService = logService;
@@ -104,10 +105,9 @@ namespace Financeiro.Controllers
                     ModelState.AddModelError("", "Adicione pelo menos um item no rateio.");
                 }
 
-                // 2. [NOVO] Processar Datas de Referência e Validar Vigência
+                // 2. Processar Datas de Referência e Validar Vigência
                 if (!string.IsNullOrEmpty(vm.ReferenciaMesAno))
                 {
-                    // Converte string "yyyy-MM" para Datas
                     var partes = vm.ReferenciaMesAno.Split('-'); // [0]=Ano, [1]=Mês
                     if (partes.Length == 2 && int.TryParse(partes[0], out int ano) && int.TryParse(partes[1], out int mes))
                     {
@@ -117,23 +117,35 @@ namespace Financeiro.Controllers
                         // --- VALIDAÇÃO DE VIGÊNCIA DE CONTRATO ---
                         if (vm.Rateios != null)
                         {
+                            // Cache simples para não buscar o mesmo contrato várias vezes no loop
+                            var contratosValidados = new Dictionary<int, Financeiro.Models.ViewModels.ContratoViewModel>();
+
                             foreach (var item in vm.Rateios)
                             {
                                 if (item.ContratoId.HasValue && item.ContratoId.Value > 0)
                                 {
-                                    // Busca dados do contrato para checar vigência
-                                    // Precisamos de um método que retorne o contrato completo ou suas datas
-                                    var contrato = await _contratoRepo.ObterParaEdicaoAsync(item.ContratoId.Value);
-                                    
-                                    if (contrato != null)
+                                    if (!contratosValidados.ContainsKey(item.ContratoId.Value))
+                                    {
+                                        var contrato = await _contratoRepo.ObterParaEdicaoAsync(item.ContratoId.Value);
+                                        if (contrato != null) contratosValidados.Add(item.ContratoId.Value, contrato);
+                                    }
+
+                                    if (contratosValidados.TryGetValue(item.ContratoId.Value, out var contratoExistente))
                                     {
                                         // Regra: O mês de referência deve estar DENTRO da vigência do contrato
-                                        // DataInicioRef >= ContratoInicio AND DataFimRef <= ContratoFim
-                                        if (vm.DataReferenciaInicio < contrato.DataInicio || vm.DataReferenciaFim > contrato.DataFim)
+                                        // A data de referência (mês cheio) deve ter intersecção com a vigência
+                                        if (vm.DataReferenciaFim < contratoExistente.DataInicio || vm.DataReferenciaInicio > contratoExistente.DataFim)
                                         {
                                             ModelState.AddModelError("", 
-                                                $"O contrato {contrato.NumeroContrato} tem vigência de {contrato.DataInicio:MM/yyyy} a {contrato.DataFim:MM/yyyy}. " +
+                                                $"O contrato {contratoExistente.NumeroContrato} tem vigência de {contratoExistente.DataInicio:MM/yyyy} a {contratoExistente.DataFim:MM/yyyy}. " +
                                                 $"Não é possível lançar referência de {mes}/{ano} para ele.");
+                                        }
+                                        
+                                        // Validação extra: O item selecionado pertence a este contrato?
+                                        // item.NaturezaId na verdade guarda o OrcamentoDetalheId
+                                        if (!contratoExistente.Itens.Any(x => x.Id == item.NaturezaId))
+                                        {
+                                             ModelState.AddModelError("", $"O item de orçamento selecionado não pertence ao Contrato {contratoExistente.NumeroContrato}.");
                                         }
                                     }
                                 }
@@ -155,7 +167,7 @@ namespace Financeiro.Controllers
                     return View("Novo", vm);
                 }
 
-                // 3. Persistência (Passando a VM com as datas já preenchidas)
+                // 3. Persistência
                 int novoId = await _movRepo.InserirAsync(vm);
 
                 // 4. Salvar Anexo
@@ -194,14 +206,12 @@ namespace Financeiro.Controllers
 
                 var ptBR = new CultureInfo("pt-BR");
 
-                // Invert values for reversal
                 var estorno = new MovimentacaoViewModel
                 {
                     DataMovimentacao = DateTime.Today,
                     FornecedorIdCompleto = original.FornecedorIdCompleto,
                     ValorTotal = (original.ValorTotalDecimal * -1).ToString("N2", ptBR),
                     Historico = $"[ESTORNO REF #{original.Id}] {justificativa}",
-                    // Mantém a referência do original para o estorno também? Geralmente sim.
                     DataReferenciaInicio = original.DataReferenciaInicio, 
                     DataReferenciaFim = original.DataReferenciaFim,
                     
@@ -209,7 +219,7 @@ namespace Financeiro.Controllers
                     {
                         InstrumentoId = r.InstrumentoId,
                         ContratoId = r.ContratoId,
-                        NaturezaId = r.NaturezaId,
+                        NaturezaId = r.NaturezaId, // Na verdade é o OrcamentoDetalheId
                         Valor = (r.ValorDecimal * -1).ToString("N2", ptBR)
                     }).ToList()
                 };
@@ -288,13 +298,22 @@ namespace Financeiro.Controllers
             return Json(resultado);
         }
 
+        // [CORRIGIDO] Renomeado e ajustado para buscar Itens do Contrato
         [HttpGet]
         [AutorizarPermissao("MOVIMENTACAO_ADD")] 
-        public async Task<IActionResult> ObterNaturezasPorContrato(int contratoId)
+        public async Task<IActionResult> ObterItensPorContrato(int contratoId)
         {
             if (contratoId <= 0) return Json(new List<object>());
-            var naturezas = await _contratoRepo.ListarNaturezasDetalhadasPorContratoAsync(contratoId);
-            var resultado = naturezas.Select(n => new { id = n.Id, text = n.Nome });
+            
+            // Busca itens da nova estrutura ContratoItem
+            var itens = await _contratoRepo.ListarItensPorContratoAsync(contratoId);
+            
+            // Mapeia para o formato que o Select2 espera
+            var resultado = itens.Select(i => new { 
+                id = i.Id, // Id do OrcamentoDetalhe
+                text = i.Nome // Nome da especialidade/item
+            });
+            
             return Json(resultado);
         }
 
@@ -308,12 +327,11 @@ namespace Financeiro.Controllers
 
             ViewBag.Instrumentos = new SelectList(instrumentosFiltrados, "Id", "Numero");
 
-            var naturezas = await _natRepo.ListarTodasAsync();
-            ViewBag.Naturezas = new SelectList(naturezas.Where(n => n.Ativo), "Id", "Nome");
+            // REMOVIDO: Carregar Naturezas soltas (não usamos mais)
+            // Se precisar de itens avulsos (sem contrato), deve-se carregar do OrçamentoRepo.
+            // Por enquanto deixo vazio ou carrego itens genéricos se houver essa regra.
+            // ViewBag.Naturezas = ...; 
             
-            var contratosData = await _contratoRepo.ListarPaginadoAsync(1, 2000);
-            ViewBag.Contratos = new SelectList(contratosData.Itens, "Contrato.Id", "Contrato.NumeroContrato");
-
             var fornecedores = await _fornecedorRepo.ListarTodosParaComboAsync();
             var listaFornecedores = fornecedores.Select(f => new 
             { 

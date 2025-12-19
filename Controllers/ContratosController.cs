@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering; // Adicionado para SelectListItem
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Financeiro.Repositorios;
 using System.Threading.Tasks;
 using Financeiro.Models.ViewModels;
@@ -9,6 +9,7 @@ using System;
 using Microsoft.AspNetCore.Authorization;
 using Financeiro.Extensions; 
 using Financeiro.Atributos;
+using System.Collections.Generic;
 
 namespace Financeiro.Controllers
 {
@@ -80,18 +81,18 @@ namespace Financeiro.Controllers
         [AutorizarPermissao("CONTRATO_ADD")]
         public async Task<IActionResult> Salvar(ContratoViewModel vm, string justificativa = null)
         {
-            // Lógica de cálculo
+            // 1. Calcula a vigência em meses
             int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
             if (meses < 1) meses = 1;
 
-            if (vm.ValorMensalDecimal > 0)
+            // 2. CÁLCULO DE VALORES
+            if (vm.Itens != null && vm.Itens.Any())
             {
-                vm.ValorContrato = vm.ValorMensalDecimal * meses;
+                decimal somaTotalItens = vm.Itens.Sum(x => x.Valor);
+                vm.ValorContrato = somaTotalItens;
                 
-                if (vm.Naturezas != null)
-                {
-                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor * meses;
-                }
+                decimal valorMensalCalculado = somaTotalItens / meses;
+                vm.ValorMensal = valorMensalCalculado.ToString("N2");
             }
 
             int entidadeId = User.ObterEntidadeId();
@@ -100,35 +101,68 @@ namespace Financeiro.Controllers
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número/ano nesta unidade.");
             }
 
-            // --- NOVA LÓGICA DE VALIDAÇÃO DE SALDO POR ITEM (GRANULAR) ---
-            if (vm.OrcamentoDetalheId.HasValue)
+            // --- CORREÇÃO BLINDADA DE VIGÊNCIA ---
+            if (vm.OrcamentoId.HasValue)
             {
-                // 1. Busca o Item específico para saber quanto foi previsto nele
-                var detalheItem = await _orcamentoRepo.ObterDetalhePorIdAsync(vm.OrcamentoDetalheId.Value);
+                var orcamentoPai = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
                 
-                if (detalheItem != null)
+                if (orcamentoPai != null)
                 {
-                    // 2. Busca quanto já foi gasto ESPECIFICAMENTE neste item
-                    var jaGastoNoItem = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(vm.OrcamentoDetalheId.Value);
-                    
-                    var saldoDisponivelItem = detalheItem.ValorPrevisto - jaGastoNoItem;
+                    // Extraímos apenas a DATA (dia/mês/ano), ignorando qualquer horário (00:00 vs 14:00)
+                    DateTime inicioContrato = vm.DataInicio.Date;
+                    DateTime fimContrato    = vm.DataFim.Date;
+                    DateTime inicioOrcamento = orcamentoPai.VigenciaInicio.Date;
+                    DateTime fimOrcamento    = orcamentoPai.VigenciaFim.Date;
 
-                    if (vm.ValorContrato > (saldoDisponivelItem + 0.01m))
+                    // Valida Início: Contrato não pode começar ANTES do Orçamento
+                    if (inicioContrato < inicioOrcamento)
                     {
-                        ModelState.AddModelError("ValorMensal", 
-                            $"Saldo insuficiente no item '{detalheItem.Nome}'. Disponível: {saldoDisponivelItem:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                        ModelState.AddModelError("DataInicio", 
+                            $"A data de início do contrato ({inicioContrato:dd/MM/yyyy}) não pode ser anterior à do Orçamento ({inicioOrcamento:dd/MM/yyyy}).");
+                    }
+
+                    // Valida Fim: Contrato não pode terminar DEPOIS do Orçamento
+                    if (fimContrato > fimOrcamento)
+                    {
+                        ModelState.AddModelError("DataFim", 
+                            $"A data fim do contrato ({fimContrato:dd/MM/yyyy}) ultrapassa a vigência do Orçamento ({fimOrcamento:dd/MM/yyyy}).");
                     }
                 }
                 else
                 {
-                    ModelState.AddModelError("OrcamentoDetalheId", "O item de orçamento selecionado é inválido.");
+                    ModelState.AddModelError("OrcamentoId", "O Orçamento selecionado não foi encontrado ou não está ativo.");
                 }
             }
-            // -------------------------------------------------------------
+            // ---------------------------------------------
+
+            // Validação de Saldo
+            if (vm.Itens != null)
+            {
+                foreach (var item in vm.Itens)
+                {
+                    var detalheItem = await _orcamentoRepo.ObterDetalhePorIdAsync(item.Id);
+                    if (detalheItem != null)
+                    {
+                        var jaGastoNoItem = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(item.Id);
+                        var saldoDisponivelItem = detalheItem.ValorPrevisto - jaGastoNoItem;
+                        decimal valorTotalDesteItemNoContrato = item.Valor; 
+
+                        // Adicionei uma margem de segurança de 0.05 para evitar erros de arredondamento
+                        if (valorTotalDesteItemNoContrato > (saldoDisponivelItem + 0.05m))
+                        {
+                            ModelState.AddModelError("SomaItens", 
+                                $"Saldo insuficiente no item '{detalheItem.Nome}'. Disponível: {saldoDisponivelItem:C2}. Necessário: {valorTotalDesteItemNoContrato:C2}.");
+                        }
+                    }
+                    else
+                    {
+                        ModelState.AddModelError("SomaItens", $"Item ID {item.Id} não encontrado.");
+                    }
+                }
+            }
 
             if (!ModelState.IsValid)
             {
-                ReverterCalculoParaView(vm, meses);
                 var erros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
                 TempData["Erro"] = "Erros de validação:<br>" + string.Join("<br>", erros);
                 await PrepararViewBagParaFormulario(vm);
@@ -138,12 +172,12 @@ namespace Financeiro.Controllers
             try 
             {
                 await _contratoRepo.InserirAsync(vm);
-                await _versaoService.CriarVersaoInicialAsync(vm); // Cria V1
+                await _versaoService.CriarVersaoInicialAsync(vm);
                 await _logService.RegistrarCriacaoAsync("Contrato", vm, vm.Id);
 
                 if (!string.IsNullOrWhiteSpace(justificativa))
                 {
-                    await _justificativaService.RegistrarAsync("Contrato", "Inserção com naturezas", vm.Id, justificativa);
+                    await _justificativaService.RegistrarAsync("Contrato", "Inserção com itens detalhados", vm.Id, justificativa);
                 }
 
                 TempData["Sucesso"] = "Contrato salvo com sucesso!";
@@ -151,13 +185,11 @@ namespace Financeiro.Controllers
             }
             catch (Exception ex)
             {
-                ReverterCalculoParaView(vm, meses);
                 TempData["Erro"] = $"Erro ao salvar: {ex.Message}";
                 await PrepararViewBagParaFormulario(vm);
                 return View("ContratoForm", vm);
             }
         }
-
         [HttpGet]
         [AutorizarPermissao("CONTRATO_EDIT")]
         public async Task<IActionResult> Editar(int id)
@@ -185,14 +217,12 @@ namespace Financeiro.Controllers
             int meses = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
             if (meses < 1) meses = 1;
 
-            if (vm.ValorMensalDecimal > 0)
+            if (vm.Itens != null && vm.Itens.Any())
             {
-                vm.ValorContrato = vm.ValorMensalDecimal * meses;
-                
-                if (vm.Naturezas != null)
-                {
-                    foreach (var natureza in vm.Naturezas) natureza.Valor = natureza.Valor * meses;
-                }
+                decimal somaTotalItens = vm.Itens.Sum(x => x.Valor);
+                vm.ValorContrato = somaTotalItens;
+                decimal valorMensalCalculado = somaTotalItens / meses;
+                vm.ValorMensal = valorMensalCalculado.ToString("N2");
             }
 
             int entidadeId = User.ObterEntidadeId();
@@ -201,30 +231,60 @@ namespace Financeiro.Controllers
                 ModelState.AddModelError("NumeroContrato", "Já existe um contrato ativo com este número/ano nesta unidade.");
             }
 
-            // --- NOVA LÓGICA DE VALIDAÇÃO DE SALDO POR ITEM (GRANULAR) ---
-            if (vm.OrcamentoDetalheId.HasValue)
+            // --- CORREÇÃO BLINDADA DE VIGÊNCIA ---
+            if (vm.OrcamentoId.HasValue)
             {
-                var detalheItem = await _orcamentoRepo.ObterDetalhePorIdAsync(vm.OrcamentoDetalheId.Value);
-
-                if (detalheItem != null)
+                var orcamentoPai = await _orcamentoRepo.ObterHeaderPorIdAsync(vm.OrcamentoId.Value);
+                
+                if (orcamentoPai != null)
                 {
-                    // Ignora o contrato atual na soma, pois estamos editando ele
-                    var jaGastoNoItem = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(vm.OrcamentoDetalheId.Value, ignorarContratoId: vm.Id);
-                    
-                    var saldoDisponivelItem = detalheItem.ValorPrevisto - jaGastoNoItem;
+                    // Extração explícita da Data (sem hora)
+                    DateTime inicioContrato = vm.DataInicio.Date;
+                    DateTime fimContrato    = vm.DataFim.Date;
+                    DateTime inicioOrcamento = orcamentoPai.VigenciaInicio.Date;
+                    DateTime fimOrcamento    = orcamentoPai.VigenciaFim.Date;
 
-                    if (vm.ValorContrato > (saldoDisponivelItem + 0.01m))
+                    if (inicioContrato < inicioOrcamento)
                     {
-                        ModelState.AddModelError("ValorMensal", 
-                            $"Saldo insuficiente no item '{detalheItem.Nome}'. Disponível: {saldoDisponivelItem:C2}. Total do Contrato: {vm.ValorContrato:C2}.");
+                        ModelState.AddModelError("DataInicio", 
+                            $"A data de início do contrato ({inicioContrato:dd/MM/yyyy}) não pode ser anterior à do Orçamento ({inicioOrcamento:dd/MM/yyyy}).");
+                    }
+
+                    if (fimContrato > fimOrcamento)
+                    {
+                        ModelState.AddModelError("DataFim", 
+                            $"A data fim do contrato ({fimContrato:dd/MM/yyyy}) ultrapassa a vigência do Orçamento ({fimOrcamento:dd/MM/yyyy}).");
+                    }
+                }
+                else
+                {
+                    ModelState.AddModelError("OrcamentoId", "O Orçamento selecionado não foi encontrado.");
+                }
+            }
+            // ---------------------------------------------
+
+            if (vm.Itens != null)
+            {
+                foreach (var item in vm.Itens)
+                {
+                    var detalheItem = await _orcamentoRepo.ObterDetalhePorIdAsync(item.Id);
+                    if (detalheItem != null)
+                    {
+                        var jaGastoNoItem = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(item.Id, ignorarContratoId: vm.Id);
+                        var saldoDisponivelItem = detalheItem.ValorPrevisto - jaGastoNoItem;
+                        decimal valorTotalDesteItemNoContrato = item.Valor;
+
+                        if (valorTotalDesteItemNoContrato > (saldoDisponivelItem + 0.05m))
+                        {
+                                ModelState.AddModelError("SomaItens", 
+                                $"Saldo insuficiente no item '{detalheItem.Nome}'. Disponível: {saldoDisponivelItem:C2}. Necessário: {valorTotalDesteItemNoContrato:C2}.");
+                        }
                     }
                 }
             }
-            // -------------------------------------------------------------
 
             if (!ModelState.IsValid)
             {
-                ReverterCalculoParaView(vm, meses);
                 var erros = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
                 TempData["Erro"] = "Erros de validação:<br>" + string.Join("<br>", erros);
                 await PrepararViewBagParaFormulario(vm);
@@ -233,32 +293,24 @@ namespace Financeiro.Controllers
             
             try
             {
-                // 1. Atualiza o registro oficial (Vigente)
                 await _contratoRepo.AtualizarAsync(vm);
-                
-                // 2. Sincroniza o histórico da versão atual para refletir esse novo rateio
                 await _versaoService.AtualizarSnapshotUltimaVersaoAsync(vm.Id);
-                
                 await _logService.RegistrarEdicaoAsync("Contrato", null, vm, vm.Id);
 
                 if (!string.IsNullOrWhiteSpace(justificativa))
-                {
-                    await _justificativaService.RegistrarAsync("Contrato", "Atualização Cadastral/Rateio", vm.Id, justificativa);
-                }
+                    await _justificativaService.RegistrarAsync("Contrato", "Atualização Cadastral/Itens", vm.Id, justificativa);
 
                 TempData["Sucesso"] = "Dados do contrato atualizados com sucesso!";
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
-                ReverterCalculoParaView(vm, meses);
                 TempData["Erro"] = $"Erro ao atualizar: {ex.Message}";
                 await PrepararViewBagParaFormulario(vm);
                 return View("ContratoForm", vm);
             }
         }
 
-        // Cancelar Aditivo
         [HttpPost]
         [AutorizarPermissao("ADITIVO_DEL")]
         public async Task<IActionResult> CancelarUltimoAditivo(int contratoId, int versao, string justificativa)
@@ -311,7 +363,6 @@ namespace Financeiro.Controllers
             return Json(new { results = itens.Select(f => new { id = $"{f.Tipo}-{f.FornecedorId}", text = $"{f.Nome} ({f.Documento})" }), pagination = new { more = (page * 10) < total } });
         }
 
-        // --- NOVO ENDPOINT AJAX: Lista os itens do orçamento para o dropdown ---
         [HttpGet]
         public async Task<IActionResult> ListarItensOrcamento(int orcamentoId)
         {
@@ -319,7 +370,6 @@ namespace Financeiro.Controllers
             var itens = await _orcamentoRepo.ListarDetalhesParaLancamentoAsync(orcamentoId);
             return Json(itens.Select(x => new { id = x.Id, nome = x.Nome }));
         }
-        // -----------------------------------------------------------------------
         
         [HttpGet]
         public async Task<IActionResult> Historico(int id, int pag = 1)
@@ -333,29 +383,18 @@ namespace Financeiro.Controllers
 
         private async Task PrepararViewBagParaFormulario(ContratoViewModel vm)
         {
-            ViewBag.Naturezas = await _contratoRepo.ListarTodasNaturezasAsync();
             int entidadeId = User.ObterEntidadeId();
             ViewBag.Orcamentos = await _orcamentoRepo.ListarAtivosPorEntidadeAsync(entidadeId); 
             
-            // --- NOVO: Se estiver editando ou houve erro, carrega os itens do orçamento selecionado ---
+            if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto)) 
+                ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
+                
+            // Se já tiver um Orçamento Pai selecionado, carrega os filhos possíveis para o dropdown da grid
             if (vm.OrcamentoId.HasValue)
             {
-                var listaItens = await _orcamentoRepo.ListarDetalhesParaLancamentoAsync(vm.OrcamentoId.Value);
-                ViewBag.ItensOrcamento = listaItens.Select(x => new SelectListItem(x.Nome, x.Id.ToString(), x.Id == vm.OrcamentoDetalheId)).ToList();
-            }
-            // ------------------------------------------------------------------------------------------
-
-            if (!string.IsNullOrEmpty(vm.FornecedorIdCompleto)) ViewBag.FornecedorAtual = await _contratoRepo.ObterFornecedorPorIdCompletoAsync(vm.FornecedorIdCompleto);
-        }
-
-        private void ReverterCalculoParaView(ContratoViewModel vm, int meses)
-        {
-            if (meses > 0 && vm.Naturezas != null && vm.Naturezas.Any())
-            {
-                foreach (var natureza in vm.Naturezas)
-                {
-                    if(natureza.Valor != 0) natureza.Valor = natureza.Valor / meses;
-                }
+                 var listaItens = await _orcamentoRepo.ListarDetalhesParaLancamentoAsync(vm.OrcamentoId.Value);
+                 // Serializa para usar no JS da grid
+                 ViewBag.ListaItensOrcamentoJson = System.Text.Json.JsonSerializer.Serialize(listaItens.Select(x => new { x.Id, x.Nome }));
             }
         }
     }

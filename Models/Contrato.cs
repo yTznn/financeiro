@@ -1,10 +1,8 @@
 using System;
+using System.Collections.Generic;
 
 namespace Financeiro.Models
 {
-    /// <summary>
-    /// Representa a tabela Contrato no banco de dados.
-    /// </summary>
     public class Contrato
     {
         public int Id { get; set; }
@@ -19,11 +17,11 @@ namespace Financeiro.Models
         public decimal ValorContrato { get; set; }
         public string? Observacao { get; set; }
         public bool Ativo { get; set; }
-        
-        // Mantemos o OrcamentoId para consultas rápidas/macro
-        public int? OrcamentoId { get; set; }
 
-        // --- NOVO CAMPO: Mapeia a coluna que criamos no SQL ---
-        public int? OrcamentoDetalheId { get; set; } 
+        // REMOVIDOS: OrcamentoId e OrcamentoDetalheId (não existem mais na tabela Contrato)
+        // O vínculo agora é via tabela filha.
+
+        // Propriedade de Navegação (Para preencher via Dapper Multi-Map se necessário)
+        public List<ContratoItem> Itens { get; set; } = new List<ContratoItem>();
     }
 }

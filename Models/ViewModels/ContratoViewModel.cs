@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Linq;
 
 namespace Financeiro.Models.ViewModels
 {
+    // 2. O ViewModel Principal
     public class ContratoViewModel : IValidatableObject
     {
         public int Id { get; set; }
@@ -36,7 +38,8 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Fim da Vigência")]
         public DateTime DataFim { get; set; } = DateTime.Today.AddYears(1);
 
-        [Required(ErrorMessage = "O valor mensal é obrigatório.")]
+        // O Valor Mensal agora é calculado e apenas informativo (ou usado para parcelas),
+        // mas a fonte da verdade para a soma dos itens é o ValorContrato.
         [Display(Name = "Valor Mensal")]
         public string ValorMensal { get; set; } 
 
@@ -52,44 +55,41 @@ namespace Financeiro.Models.ViewModels
             }
         }
 
+        // Este campo (ValorContrato) deve bater com a soma dos itens
         public decimal ValorContrato { get; set; } 
+        
         public string? Observacao { get; set; }
         public bool Ativo { get; set; } = true;
 
-        // --- ATUALIZADO: Nome de exibição alterado para diferenciar ---
-        [Display(Name = "Orçamento (Macro)")]
+        [Display(Name = "Orçamento Base")]
         [Required(ErrorMessage = "O orçamento principal é obrigatório.")]
         public int? OrcamentoId { get; set; }
 
-        // --- NOVO CAMPO: Vínculo específico com o nó da árvore ---
-        [Display(Name = "Item do Orçamento (Nível de Lançamento)")]
-        [Required(ErrorMessage = "É obrigatório selecionar o item específico para lançamento.")]
-        public int? OrcamentoDetalheId { get; set; }
-        // ---------------------------------------------------------
-
-        [Display(Name = "Naturezas do Contrato")]
-        public List<ContratoNaturezaViewModel> Naturezas { get; set; } = new List<ContratoNaturezaViewModel>();
+        [Display(Name = "Itens do Contrato")]
+        public List<ContratoItemViewModel> Itens { get; set; } = new List<ContratoItemViewModel>();
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             if (DataFim < DataInicio)
                 yield return new ValidationResult("Data final deve ser maior que inicial.", new[] { nameof(DataFim) });
 
-            if (ValorMensalDecimal <= 0)
-                yield return new ValidationResult("O valor mensal deve ser maior que zero.", new[] { nameof(ValorMensal) });
-
-            if (Naturezas == null || !Naturezas.Any())
+            // Validação da Lista de Itens
+            if (Itens == null || !Itens.Any())
             {
-                yield return new ValidationResult("Adicione ao menos uma natureza.", new[] { nameof(Naturezas) });
+                yield return new ValidationResult("Adicione ao menos um item de orçamento ao contrato.", new[] { nameof(Itens) });
             }
             else
             {
-                var somaNaturezas = Naturezas.Where(n => n.NaturezaId > 0).Sum(n => n.Valor);
-                if (Math.Abs(ValorMensalDecimal - somaNaturezas) > 0.05m)
+                // A soma dos itens agora representa o TOTAL GLOBAL
+                var somaItens = Itens.Sum(i => i.Valor);
+                
+                // CORREÇÃO AQUI:
+                // Compara a soma dos itens com o ValorContrato (Total Global) e não com o Mensal.
+                if (Math.Abs(ValorContrato - somaItens) > 0.05m)
                 {
                     yield return new ValidationResult(
-                        $"A soma das naturezas ({somaNaturezas:C}) difere do Valor Mensal ({ValorMensalDecimal:C}).",
-                        new[] { "SomaNaturezas" });
+                        $"A soma dos itens ({somaItens:C2}) não fecha com o Valor Total Global ({ValorContrato:C2}). Diferença: {(ValorContrato - somaItens):C2}",
+                        new[] { "SomaItens" });
                 }
             }
         }
