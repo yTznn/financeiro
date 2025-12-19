@@ -3,6 +3,7 @@ using Financeiro.Repositorios;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using System;
+using System.Linq; // Adicionado para LINQ
 using Financeiro.Servicos;
 using Microsoft.AspNetCore.Authorization;
 using Financeiro.Atributos;
@@ -62,7 +63,7 @@ namespace Financeiro.Controllers
             {
                 InstrumentoId = instrumentoId,
                 InstrumentoNumero = instrumento.Numero,
-                DataInicio = DateTime.Today // Sugere o mês atual
+                DataInicio = DateTime.Today 
             };
 
             return View("RecebimentoForm", viewModel);
@@ -74,25 +75,31 @@ namespace Financeiro.Controllers
         [AutorizarPermissao("RECEBIMENTO_ADD")]
         public async Task<IActionResult> Salvar(RecebimentoViewModel vm)
         {
-            // 1. Ajuste de Datas (O usuário selecionou apenas o Mês/Ano no "DataInicio")
+            // 1. Ajuste de Datas
             var dataBase = new DateTime(vm.DataInicio.Year, vm.DataInicio.Month, 1);
             vm.DataInicio = dataBase;
             vm.DataFim = dataBase.AddMonths(1).AddDays(-1);
 
-            // 2. Validação Básica
+            // 2. Validação Básica (Anti-Erro Silencioso)
             if (!ModelState.IsValid)
             {
+                // Captura os erros para mostrar na tela caso o Summary esteja escondido
+                var erros = string.Join("<br>", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                TempData["Erro"] = $"Verifique os dados: {erros}";
+                
                 await PreencherDadosView(vm);
                 return View("RecebimentoForm", vm);
             }
 
-            // 3. Validação de Regra de Negócio (Vigência)
+            // 3. Validação de VIGÊNCIA (COM A CORREÇÃO DE HORÁRIO .Date)
             var instrumento = await _instrumentoRepo.ObterPorIdAsync(vm.InstrumentoId);
             if (instrumento != null)
             {
-                if (vm.DataInicio < instrumento.DataInicio || vm.DataFim > instrumento.DataFim)
+                // Usa .Date para ignorar horas/minutos e evitar o bug do "Primeiro Dia"
+                if (vm.DataInicio.Date < instrumento.DataInicio.Date || vm.DataFim.Date > instrumento.DataFim.Date)
                 {
-                    TempData["Erro"] = $"Não é possível lançar fora da vigência do instrumento ({instrumento.DataInicio:dd/MM/yyyy} a {instrumento.DataFim:dd/MM/yyyy}).";
+                    TempData["Erro"] = $"A competência informada ({vm.DataInicio:MM/yyyy}) está fora da vigência do instrumento ({instrumento.DataInicio:dd/MM/yyyy} a {instrumento.DataFim:dd/MM/yyyy}).";
+                    
                     vm.InstrumentoNumero = instrumento.Numero;
                     return View("RecebimentoForm", vm);
                 }
@@ -134,24 +141,26 @@ namespace Financeiro.Controllers
         [AutorizarPermissao("RECEBIMENTO_EDIT")]
         public async Task<IActionResult> Atualizar(RecebimentoViewModel vm)
         {
-            // 1. Recalcula datas
             var dataBase = new DateTime(vm.DataInicio.Year, vm.DataInicio.Month, 1);
             vm.DataInicio = dataBase;
             vm.DataFim = dataBase.AddMonths(1).AddDays(-1);
 
             if (!ModelState.IsValid)
             {
+                var erros = string.Join("<br>", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                TempData["Erro"] = $"Verifique os dados: {erros}";
+
                 await PreencherDadosView(vm);
                 return View("RecebimentoForm", vm);
             }
 
-            // 2. Validação de Vigência
+            // Validação de Vigência (Correção .Date)
             var instrumento = await _instrumentoRepo.ObterPorIdAsync(vm.InstrumentoId);
             if (instrumento != null)
             {
-                if (vm.DataInicio < instrumento.DataInicio || vm.DataFim > instrumento.DataFim)
+                if (vm.DataInicio.Date < instrumento.DataInicio.Date || vm.DataFim.Date > instrumento.DataFim.Date)
                 {
-                    TempData["Erro"] = $"A data informada está fora da vigência do instrumento ({instrumento.DataInicio:dd/MM/yyyy} a {instrumento.DataFim:dd/MM/yyyy}).";
+                    TempData["Erro"] = $"A competência informada ({vm.DataInicio:MM/yyyy}) está fora da vigência do instrumento ({instrumento.DataInicio:dd/MM/yyyy} a {instrumento.DataFim:dd/MM/yyyy}).";
                     vm.InstrumentoNumero = instrumento.Numero;
                     return View("RecebimentoForm", vm);
                 }

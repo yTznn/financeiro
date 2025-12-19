@@ -15,8 +15,9 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Data do Pagamento")]
         public DateTime DataMovimentacao { get; set; } = DateTime.Today;
 
-        [Display(Name = "Fornecedor (Opcional)")]
-        public string? FornecedorIdCompleto { get; set; }
+        [Display(Name = "Fornecedor / Beneficiário")]
+        [Required(ErrorMessage = "Selecione o fornecedor.")]
+        public string FornecedorIdCompleto { get; set; }
 
         [Required(ErrorMessage = "O histórico/descrição é obrigatório.")]
         [Display(Name = "Histórico / Descrição")]
@@ -26,21 +27,24 @@ namespace Financeiro.Models.ViewModels
         [Display(Name = "Valor Total Pago")]
         public string ValorTotal { get; set; }
 
-        // --- [NOVOS CAMPOS DE REFERÊNCIA] ---
-        
-        // 1. Campo Visual (para o input type="month" da View)
-        // O navegador envia string no formato "yyyy-MM" (ex: "2025-02")
-        [Display(Name = "Mês de Referência")]
-        public string? ReferenciaMesAno { get; set; }
+        // --- REFERÊNCIA (COMPETÊNCIA) ---
+        [Required(ErrorMessage = "O mês de referência é obrigatório.")]
+        [Display(Name = "Período de Referência")]
+        public string ReferenciaMesAno { get; set; } // Formato "yyyy-MM" para input type="month"
 
-        // 2. Campos de Banco (Calculados no Controller a partir do campo acima)
         public DateTime? DataReferenciaInicio { get; set; }
         public DateTime? DataReferenciaFim { get; set; }
 
-        // ------------------------------------
-
+        // --- ANEXO ---
         [Display(Name = "Comprovante / Documento (PDF)")]
         public IFormFile? ArquivoAnexo { get; set; }
+        
+        // Propriedade apenas para exibir se já existe anexo na edição
+        public bool TemAnexoSalvo { get; set; }
+
+        // --- DADOS BANCÁRIOS (Visualização Apenas) ---
+        public string? ContaOrigemDescricao { get; set; } // Da Entidade
+        public string? ContaDestinoDescricao { get; set; } // Do Fornecedor
 
         public decimal ValorTotalDecimal
         {
@@ -59,7 +63,10 @@ namespace Financeiro.Models.ViewModels
     public class MovimentacaoRateioViewModel
     {
         public int InstrumentoId { get; set; }
-        public int NaturezaId { get; set; }
+        
+        // [CORREÇÃO] Substituímos NaturezaId por OrcamentoDetalheId (Item do Orçamento)
+        public int OrcamentoDetalheId { get; set; } 
+        
         public int? ContratoId { get; set; }
 
         public string Valor { get; set; }
@@ -70,12 +77,12 @@ namespace Financeiro.Models.ViewModels
             {
                 if (string.IsNullOrWhiteSpace(Valor)) return 0;
                 if (decimal.TryParse(Valor, NumberStyles.Currency, new CultureInfo("pt-BR"), out decimal v)) return v;
-                if (decimal.TryParse(Valor, NumberStyles.Currency, CultureInfo.InvariantCulture, out decimal vInv)) return vInv;
                 return 0;
             }
         }
         
+        // Auxiliares para exibição
         public string? NomeInstrumento { get; set; }
-        public string? NomeNatureza { get; set; }
+        public string? NomeItemOrcamento { get; set; } // Antigo NomeNatureza
     }
 }

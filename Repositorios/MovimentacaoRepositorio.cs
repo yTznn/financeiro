@@ -2,11 +2,11 @@ using Dapper;
 using Financeiro.Infraestrutura;
 using Financeiro.Models;
 using Financeiro.Models.ViewModels;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
 using System;
-using System.Globalization;
 
 namespace Financeiro.Repositorios
 {
@@ -34,12 +34,11 @@ namespace Financeiro.Repositorios
 
             try
             {
-                // [ALTERADO] Adicionadas as colunas de DataReferenciaInicio e Fim
                 const string sqlHeader = @"
                     INSERT INTO MovimentacaoFinanceira 
-                        (DataMovimentacao, FornecedorIdCompleto, ValorTotal, Historico, Ativo, DataReferenciaInicio, DataReferenciaFim)
+                        (DataMovimentacao, FornecedorIdCompleto, ValorTotal, Historico, Ativo, DataReferenciaInicio, DataReferenciaFim, EhLancamentoAvulso, JustificativaAvulso)
                     VALUES 
-                        (@DataMovimentacao, @FornecedorIdCompleto, @ValorTotal, @Historico, 1, @DataReferenciaInicio, @DataReferenciaFim);
+                        (@DataMovimentacao, @FornecedorIdCompleto, @ValorTotal, @Historico, 1, @DataReferenciaInicio, @DataReferenciaFim, 0, NULL);
                     SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
                 int movId = await conn.QuerySingleAsync<int>(sqlHeader, new
@@ -48,29 +47,11 @@ namespace Financeiro.Repositorios
                     vm.FornecedorIdCompleto,
                     ValorTotal = vm.ValorTotalDecimal, 
                     vm.Historico,
-                    // [NOVO] Passando as datas calculadas no Controller (ou null)
                     vm.DataReferenciaInicio,
                     vm.DataReferenciaFim
                 }, tx);
 
-                const string sqlItem = @"
-                    INSERT INTO MovimentacaoRateio (MovimentacaoId, InstrumentoId, ContratoId, NaturezaId, Valor)
-                    VALUES (@MovimentacaoId, @InstrumentoId, @ContratoId, @NaturezaId, @Valor);";
-
-                if (vm.Rateios != null)
-                {
-                    foreach (var item in vm.Rateios)
-                    {
-                        await conn.ExecuteAsync(sqlItem, new
-                        {
-                            MovimentacaoId = movId,
-                            item.InstrumentoId,
-                            item.ContratoId,
-                            item.NaturezaId,
-                            Valor = item.ValorDecimal
-                        }, tx);
-                    }
-                }
+                await SalvarRateiosAsync(conn, tx, movId, vm.Rateios);
 
                 tx.Commit();
                 return movId;
@@ -82,54 +63,112 @@ namespace Financeiro.Repositorios
             }
         }
 
+        // --- NOVO: MÉTODO DE ATUALIZAÇÃO PARA EDIÇÃO ---
+        public async Task AtualizarAsync(MovimentacaoViewModel vm)
+        {
+            using var conn = _factory.CreateConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            try
+            {
+                const string sqlHeader = @"
+                    UPDATE MovimentacaoFinanceira 
+                    SET DataMovimentacao = @DataMovimentacao,
+                        FornecedorIdCompleto = @FornecedorIdCompleto,
+                        ValorTotal = @ValorTotal,
+                        Historico = @Historico,
+                        DataReferenciaInicio = @DataReferenciaInicio,
+                        DataReferenciaFim = @DataReferenciaFim
+                    WHERE Id = @Id";
+
+                await conn.ExecuteAsync(sqlHeader, new
+                {
+                    vm.Id,
+                    vm.DataMovimentacao,
+                    vm.FornecedorIdCompleto,
+                    ValorTotal = vm.ValorTotalDecimal,
+                    vm.Historico,
+                    vm.DataReferenciaInicio,
+                    vm.DataReferenciaFim
+                }, tx);
+
+                // Remove rateios antigos e insere novos (mais seguro para integridade)
+                await conn.ExecuteAsync("DELETE FROM MovimentacaoRateio WHERE MovimentacaoId = @Id", new { vm.Id }, tx);
+                
+                await SalvarRateiosAsync(conn, tx, vm.Id, vm.Rateios);
+
+                tx.Commit();
+            }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+        }
+
+        private async Task SalvarRateiosAsync(System.Data.IDbConnection conn, System.Data.IDbTransaction tx, int movId, List<MovimentacaoRateioViewModel> rateios)
+        {
+            const string sqlItem = @"
+                INSERT INTO MovimentacaoRateio (MovimentacaoId, InstrumentoId, ContratoId, OrcamentoDetalheId, Valor)
+                VALUES (@MovimentacaoId, @InstrumentoId, @ContratoId, @OrcamentoDetalheId, @Valor);";
+
+            if (rateios != null)
+            {
+                foreach (var item in rateios)
+                {
+                    await conn.ExecuteAsync(sqlItem, new
+                    {
+                        MovimentacaoId = movId,
+                        item.InstrumentoId,
+                        item.ContratoId,
+                        item.OrcamentoDetalheId, // Novo campo correto
+                        Valor = item.ValorDecimal
+                    }, tx);
+                }
+            }
+        }
+
         public async Task<MovimentacaoViewModel?> ObterCompletoPorIdAsync(int id)
         {
             using var conn = _factory.CreateConnection();
             
-            // 1. Busca Cabeçalho
             const string sqlHeader = "SELECT * FROM MovimentacaoFinanceira WHERE Id = @id";
             var mov = await conn.QuerySingleOrDefaultAsync<MovimentacaoFinanceira>(sqlHeader, new { id });
 
             if (mov == null) return null;
 
-            // 2. Busca Rateios
+            // Traz o nome do Item do Orçamento (OrcamentoDetalhe) no JOIN
             const string sqlRateios = @"
-                SELECT * FROM MovimentacaoRateio 
-                WHERE MovimentacaoId = @id";
+                SELECT r.*, od.Nome as NomeItemOrcamento 
+                FROM MovimentacaoRateio r
+                LEFT JOIN OrcamentoDetalhe od ON r.OrcamentoDetalheId = od.Id
+                WHERE r.MovimentacaoId = @id";
             
-            var rateios = await conn.QueryAsync<MovimentacaoRateioViewModel>(sqlRateios, new { id });
+            var rateios = await conn.QueryAsync<dynamic>(sqlRateios, new { id });
 
             var ptBR = new CultureInfo("pt-BR");
-
-            // 3. Monta o ViewModel
-            decimal vTotal = Convert.ToDecimal(mov.ValorTotal);
-
-            // [NOTA] Se quiser exibir a referência na edição/visualização futura,
-            // precisará mapear mov.DataReferenciaInicio e Fim aqui também.
-            // Por enquanto, mantive o foco no Insert e Listagem básica.
 
             return new MovimentacaoViewModel
             {
                 Id = mov.Id,
                 DataMovimentacao = mov.DataMovimentacao,
                 FornecedorIdCompleto = mov.FornecedorIdCompleto,
-                ValorTotal = vTotal.ToString("N2", ptBR), 
+                ValorTotal = mov.ValorTotal.ToString("N2", ptBR),
                 Historico = mov.Historico,
                 
-                // Mapeia datas de volta para a ViewModel (opcional, mas bom ter)
+                // Mapeia data DB -> Visual (Mês/Ano)
+                ReferenciaMesAno = mov.DataReferenciaInicio?.ToString("yyyy-MM"),
                 DataReferenciaInicio = mov.DataReferenciaInicio,
                 DataReferenciaFim = mov.DataReferenciaFim,
 
-                Rateios = rateios.Select(r => 
+                Rateios = rateios.Select(r => new MovimentacaoRateioViewModel
                 {
-                      decimal vRateio = Convert.ToDecimal(r.Valor);
-                      return new MovimentacaoRateioViewModel
-                      {
-                        InstrumentoId = r.InstrumentoId,
-                        ContratoId = r.ContratoId,
-                        NaturezaId = r.NaturezaId,
-                        Valor = vRateio.ToString("N2", ptBR)
-                      };
+                    InstrumentoId = r.InstrumentoId,
+                    ContratoId = r.ContratoId,
+                    OrcamentoDetalheId = r.OrcamentoDetalheId,
+                    NomeItemOrcamento = r.NomeItemOrcamento,
+                    Valor = ((decimal)r.Valor).ToString("N2", ptBR)
                 }).ToList()
             };
         }
@@ -139,24 +178,13 @@ namespace Financeiro.Repositorios
             using var conn = _factory.CreateConnection();
             conn.Open();
             using var tx = conn.BeginTransaction();
-
             try
             {
-                // 1. Apaga os Rateios (Filhos)
-                const string sqlRateio = "DELETE FROM MovimentacaoRateio WHERE MovimentacaoId = @id";
-                await conn.ExecuteAsync(sqlRateio, new { id }, tx);
-
-                // 2. Apaga a Movimentação (Pai)
-                const string sqlMov = "DELETE FROM MovimentacaoFinanceira WHERE Id = @id";
-                await conn.ExecuteAsync(sqlMov, new { id }, tx);
-
+                await conn.ExecuteAsync("DELETE FROM MovimentacaoRateio WHERE MovimentacaoId = @id", new { id }, tx);
+                await conn.ExecuteAsync("DELETE FROM MovimentacaoFinanceira WHERE Id = @id", new { id }, tx);
                 tx.Commit();
             }
-            catch
-            {
-                tx.Rollback();
-                throw;
-            }
+            catch { tx.Rollback(); throw; }
         }
     }
 }

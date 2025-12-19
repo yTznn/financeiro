@@ -335,15 +335,45 @@ namespace Financeiro.Controllers
         [AutorizarPermissao("CONTRATO_DEL")]
         public async Task<IActionResult> Excluir(int id, string justificativa)
         {
-            if (string.IsNullOrWhiteSpace(justificativa)) { TempData["Erro"] = "Justificativa obrigatória."; return RedirectToAction(nameof(Index)); }
-            var c = await _contratoRepo.ObterParaEdicaoAsync(id);
-            if(c == null) return NotFound();
-            
-            await _justificativaService.RegistrarAsync("Contrato", "Exclusão", id, justificativa);
-            await _contratoRepo.ExcluirAsync(id);
-            await _logService.RegistrarExclusaoAsync("Contrato", c, id);
-            
-            TempData["Sucesso"] = "Excluído com sucesso!";
+            try
+            {
+                // 1. Validação Básica: Justificativa
+                if (string.IsNullOrWhiteSpace(justificativa)) 
+                { 
+                    TempData["Erro"] = "Justificativa obrigatória."; 
+                    return RedirectToAction(nameof(Index)); 
+                }
+
+                // 2. Busca o contrato (para log e para pegar o número no aviso de erro)
+                var c = await _contratoRepo.ObterParaEdicaoAsync(id);
+                if(c == null) return NotFound();
+
+                // ==============================================================================
+                // 3. O GUARDA DE TRÂNSITO (A CORREÇÃO) 👮‍♂️🛑
+                // ==============================================================================
+                bool temLancamentos = await _contratoRepo.PossuiLancamentosFinanceirosAsync(id);
+                
+                if (temLancamentos)
+                {
+                    // Bloqueia e avisa com o número do contrato para facilitar
+                    TempData["Erro"] = $"Não é possível excluir o Contrato nº {c.NumeroContrato}: Existem lançamentos financeiros vinculados a ele.";
+                    return RedirectToAction(nameof(Index));
+                }
+                // ==============================================================================
+
+                // 4. Se passou pelo guarda, executa a exclusão
+                await _justificativaService.RegistrarAsync("Contrato", "Exclusão", id, justificativa);
+                await _contratoRepo.ExcluirAsync(id); // Ou InativarAsync, dependendo do seu padrão
+                await _logService.RegistrarExclusaoAsync("Contrato", c, id);
+                
+                TempData["Sucesso"] = "Excluído com sucesso!";
+            }
+            catch (Exception ex)
+            {
+                // Captura erros de banco (como FKs não tratadas)
+                TempData["Erro"] = $"Erro crítico ao excluir: {ex.Message}";
+            }
+
             return RedirectToAction(nameof(Index));
         }
 

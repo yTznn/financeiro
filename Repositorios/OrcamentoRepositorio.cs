@@ -368,5 +368,61 @@ namespace Financeiro.Repositorios
             using var conn = _factory.CreateConnection();
             return await conn.QueryAsync<OrcamentoDetalhe>(sql, new { orcamentoId });
         }
+        public async Task<IEnumerable<dynamic>> ListarItensAnaliticosParaComboAsync(int instrumentoId)
+        {
+            using var conn = _factory.CreateConnection(); // <--- CORRIGIDO PARA _factory
+
+            // Busca itens que PERMITEM LANÇAMENTO (Analíticos) e pertencem ao instrumento
+            const string sql = @"
+                SELECT 
+                    od.Id, 
+                    od.Nome,
+                    (od.ValorPrevisto - COALESCE((
+                        SELECT SUM(mr.Valor) 
+                        FROM MovimentacaoRateio mr 
+                        INNER JOIN MovimentacaoFinanceira mf ON mr.MovimentacaoId = mf.Id
+                        WHERE mr.OrcamentoDetalheId = od.Id AND mf.Ativo = 1
+                    ), 0)) as Saldo
+                FROM OrcamentoDetalhe od
+                INNER JOIN Orcamento o ON od.OrcamentoId = o.Id
+                WHERE o.InstrumentoId = @instrumentoId
+                AND od.PermiteLancamento = 1
+                AND o.Ativo = 1
+                ORDER BY od.Nome";
+
+            return await conn.QueryAsync(sql, new { instrumentoId });
+        }
+        public async Task<decimal> ObterSaldoDisponivelAsync(int orcamentoDetalheId, int? ignorarMovimentacaoId = null)
+        {
+            using var conn = _factory.CreateConnection();
+            
+            // 1. Busca o Valor Previsto (Orçamento)
+            const string sqlPrevisto = "SELECT ValorPrevisto FROM OrcamentoDetalhe WHERE Id = @Id";
+            var previsto = await conn.ExecuteScalarAsync<decimal>(sqlPrevisto, new { Id = orcamentoDetalheId });
+
+            // 2. Busca o Total Gasto (Soma dos Rateios)
+            // Se passarmos um ID para ignorar (na edição), excluímos ele da soma
+            string sqlGasto = @"
+                SELECT COALESCE(SUM(mr.Valor), 0) 
+                FROM MovimentacaoRateio mr
+                INNER JOIN MovimentacaoFinanceira mf ON mr.MovimentacaoId = mf.Id
+                WHERE mr.OrcamentoDetalheId = @Id 
+                AND mf.Ativo = 1";
+
+            if (ignorarMovimentacaoId.HasValue)
+            {
+                sqlGasto += " AND mf.Id <> @IgnorarId";
+            }
+
+            var gasto = await conn.ExecuteScalarAsync<decimal>(sqlGasto, new { Id = orcamentoDetalheId, IgnorarId = ignorarMovimentacaoId });
+
+            return previsto - gasto;
+        }
+
+        public async Task<string> ObterNomeItemAsync(int orcamentoDetalheId)
+        {
+            using var conn = _factory.CreateConnection();
+            return await conn.ExecuteScalarAsync<string>("SELECT Nome FROM OrcamentoDetalhe WHERE Id = @Id", new { Id = orcamentoDetalheId });
+        }
     }
 }

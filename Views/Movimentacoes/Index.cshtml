@@ -8,6 +8,7 @@
 
     // Permissões
     bool podeAdicionar = User.TemPermissao("MOVIMENTACAO_ADD");
+    bool podeEditar = User.TemPermissao("MOVIMENTACAO_EDIT");
     bool podeEstornar = User.TemPermissao("MOVIMENTACAO_ESTORNAR");
     bool podeExcluir = User.TemPermissao("MOVIMENTACAO_DEL");
 
@@ -19,55 +20,25 @@
 
 <style>
     /* Estilos para o Menu Modal */
-    .swal-menu-container {
-        text-align: left;
-        font-family: var(--bs-body-font-family);
-    }
-    .swal-menu-header {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        border-left: 4px solid #0d6efd;
-    }
-    .swal-action-btn {
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        width: 100%;
-        margin-bottom: 10px;
-        padding: 12px 20px;
-        border: 1px solid #e9ecef;
-        background: white;
-        border-radius: 8px;
-        color: #495057;
-        font-weight: 500;
-        transition: all 0.2s;
-        text-decoration: none;
-    }
-    .swal-action-btn:hover {
-        background-color: #f1f3f5;
-        transform: translateX(5px);
-        border-color: #dee2e6;
-        color: #0d6efd;
-    }
+    .swal-menu-container { text-align: left; font-family: var(--bs-body-font-family); }
+    .swal-menu-header { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #0d6efd; }
+    .swal-action-btn { display: flex; align-items: center; justify-content: flex-start; width: 100%; margin-bottom: 10px; padding: 12px 20px; border: 1px solid #e9ecef; background: white; border-radius: 8px; color: #495057; font-weight: 500; transition: all 0.2s; text-decoration: none; cursor: pointer; }
+    .swal-action-btn:hover { background-color: #f1f3f5; transform: translateX(5px); border-color: #dee2e6; color: #0d6efd; }
     .swal-action-btn i { font-size: 1.2rem; margin-right: 12px; }
-    
-    /* Cores específicas para ações */
+    .btn-action-edit:hover { color: #0d6efd; background-color: #e7f1ff; border-color: #b6d4fe; } 
     .btn-action-delete:hover { color: #dc3545; background-color: #fff5f5; border-color: #ffc9c9; }
     .btn-action-estorno:hover { color: #ffc107; background-color: #fff9db; border-color: #ffe066; }
-
-    /* Ajuste fino na tabela */
-    .avatar-fornecedor {
-        width: 35px; height: 35px; background-color: #e9ecef; color: #495057;
-        border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        font-weight: bold; font-size: 0.8rem;
-    }
+    .avatar-fornecedor { width: 35px; height: 35px; background-color: #e9ecef; color: #495057; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem; }
     .row-estorno { background-color: #fff5f5; }
     .badge-estorno { background-color: #ffebe9; color: #cf222e; border: 1px solid #ffc1bc; }
 </style>
 
-<div id="pageFlags" data-success="@TempData["Sucesso"]" data-error="@TempData["Erro"]"></div>
+@* --- FLAGS DE FEEDBACK DO BACKEND --- *@
+<div id="pageFlags" 
+     data-success="@TempData["Sucesso"]" 
+     data-error="@TempData["Erro"]"
+     data-warning="@TempData["Alerta"]"> @* <--- AQUI ESTÁ A NOVIDADE *@
+</div>
 
 <div class="container-fluid px-0 py-3">
     
@@ -83,6 +54,7 @@
         }
     </div>
 
+    @* --- CARDS DE TOTAIS --- *@
     <div class="row g-4 mb-4">
         <div class="col-md-4">
             <div class="card border-0 shadow-sm h-100">
@@ -110,6 +82,7 @@
         </div>
     </div>
 
+    @* --- TABELA DE LANÇAMENTOS --- *@
     <div class="card shadow-sm border-0 rounded-3">
         <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
             <h5 class="mb-0 fw-bold text-secondary"><i class='bx bx-list-ul me-2'></i>Lançamentos</h5>
@@ -172,6 +145,8 @@
                                             data-data="@item.DataMovimentacao.ToString("dd/MM/yyyy")"
                                             data-estorno="@ehEstorno.ToString().ToLower()"
                                             data-url-anexo="@Url.Action("BaixarAnexo", new { id = item.Id })"
+                                            data-url-editar="@Url.Action("Editar", new { id = item.Id })" 
+                                            data-pode-editar="@podeEditar.ToString().ToLower()"
                                             data-pode-estornar="@podeEstornar.ToString().ToLower()"
                                             data-pode-excluir="@podeExcluir.ToString().ToLower()">
                                         <i class='bx bx-dots-vertical-rounded fs-5'></i>
@@ -190,19 +165,34 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         $(document).ready(function() {
-            // 1. Processar Alertas do Backend
+            // 1. Processar Alertas do Backend (Sucesso, Erro e AVISO)
             const pageFlags = document.getElementById('pageFlags');
             if (pageFlags) {
-                if (pageFlags.dataset.success) Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: pageFlags.dataset.success, showConfirmButton: false, timer: 3000 });
-                if (pageFlags.dataset.error) Swal.fire({ icon: 'error', title: 'Atenção', html: pageFlags.dataset.error });
+                // Sucesso
+                if (pageFlags.dataset.success) {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: pageFlags.dataset.success, showConfirmButton: false, timer: 3000 });
+                }
+                // Erro
+                if (pageFlags.dataset.error) {
+                    Swal.fire({ icon: 'error', title: 'Atenção', html: pageFlags.dataset.error });
+                }
+                // [NOVO] Alerta Amarelo (Contrato existente ou Orçamento estourado)
+                if (pageFlags.dataset.warning) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Atenção!',
+                        html: pageFlags.dataset.warning, // Permite HTML para quebra de linha
+                        confirmButtonText: 'Entendi',
+                        confirmButtonColor: '#f0ad4e'
+                    });
+                }
             }
 
-            // 2. ABRIR MENU "MODAL" (Simula a Partial View)
+            // 2. ABRIR MENU "MODAL"
             $('.js-open-menu').click(function() {
                 const btn = $(this);
-                const d = btn.data(); // Pega todos os dados do botão
+                const d = btn.data();
 
-                // Monta o HTML do menu dinamicamente
                 let htmlContent = `
                     <div class="swal-menu-container">
                         <div class="swal-menu-header">
@@ -219,7 +209,13 @@
                                 <i class='bx bx-file text-primary'></i> Ver Comprovante
                             </a>`;
 
-                // Só mostra estornar se não for estorno e tiver permissão
+                if (d.estorno === false && d.podeEditar === true) {
+                    htmlContent += `
+                        <a href="${d.urlEditar}" class="swal-action-btn btn-action-edit">
+                            <i class='bx bx-edit text-primary'></i> Editar Lançamento
+                        </a>`;
+                }
+
                 if (d.estorno === false && d.podeEstornar === true) {
                     htmlContent += `
                         <button onclick="swalEstornar(${d.id})" class="swal-action-btn btn-action-estorno">
@@ -227,7 +223,6 @@
                         </button>`;
                 }
 
-                // Só mostra excluir se não for estorno e tiver permissão (Regra do Superintendente)
                 if (d.estorno === false && d.podeExcluir === true) {
                     htmlContent += `
                         <button onclick="swalExcluir(${d.id})" class="swal-action-btn btn-action-delete">
@@ -247,7 +242,7 @@
                 });
             });
 
-            // 3. FUNÇÕES GLOBAIS PARA OS BOTÕES DENTRO DO SWAL
+            // 3. FUNÇÕES GLOBAIS
             window.swalEstornar = function(id) {
                 Swal.fire({
                     title: 'Estornar Lançamento?',
@@ -265,9 +260,7 @@
                         return just;
                     }
                 }).then((res) => {
-                    if (res.isConfirmed) {
-                        executarAcao('Estornar', id, res.value);
-                    }
+                    if (res.isConfirmed) executarAcao('Estornar', id, res.value);
                 });
             };
 
@@ -288,9 +281,7 @@
                         return just;
                     }
                 }).then((res) => {
-                    if (res.isConfirmed) {
-                        executarAcao('Excluir', id, res.value);
-                    }
+                    if (res.isConfirmed) executarAcao('Excluir', id, res.value);
                 });
             };
 
@@ -299,8 +290,6 @@
                 const fd = new FormData();
                 fd.append('id', id);
                 fd.append('justificativa', justificativa);
-
-                // Define a URL baseada na ação
                 const url = '@Url.Action("ACTION", "Movimentacoes")'.replace("ACTION", actionName);
 
                 fetch(url, { method: 'POST', body: fd })
@@ -311,9 +300,7 @@
                                     .then(() => location.reload());
                             });
                         } else {
-                            return r.text().then(err => {
-                                Swal.fire('Erro', err, 'error');
-                            });
+                            return r.text().then(err => { Swal.fire('Erro', err, 'error'); });
                         }
                     })
                     .catch(() => Swal.fire('Erro', 'Falha na conexão.', 'error'));

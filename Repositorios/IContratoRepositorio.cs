@@ -32,7 +32,16 @@ namespace Financeiro.Repositorios
         
         // [NOVO] Substitui as listagens de natureza antigas
         Task<IEnumerable<dynamic>> ListarItensPorContratoAsync(int contratoId);
-        // Adicione isto de volta na Interface
+        
         Task<decimal> ObterTotalComprometidoPorOrcamentoAsync(int orcamentoId, int? ignorarContratoId = null);
+
+        // --- MÉTODOS ADICIONADOS PARA CORRIGIR ERROS DE COMPILAÇÃO ---
+        
+        // 1. Traz itens com sugestão de valor mensal (Vinculado)
+        Task<IEnumerable<dynamic>> ListarItensDoContratoComValoresAsync(int contratoId);
+
+        // 2. Verifica se existe contrato ("Dedo Duro" para Avulso)
+        Task<Contrato?> ObterContratoAtivoPorItemAsync(int fornecedorId, string tipoPessoa, int orcamentoDetalheId, DateTime dataReferencia);
+        Task<bool> PossuiLancamentosFinanceirosAsync(int contratoId);
     }
 }

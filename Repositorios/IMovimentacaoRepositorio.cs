@@ -12,12 +12,18 @@ namespace Financeiro.Repositorios
         /// </summary>
         Task<int> InserirAsync(MovimentacaoViewModel vm);
 
+        /// <summary>
+        /// Atualiza os dados principais e refaz os rateios de uma movimentação existente.
+        /// </summary>
+        Task AtualizarAsync(MovimentacaoViewModel vm);
+
         Task<IEnumerable<MovimentacaoFinanceira>> ListarAsync();
 
         /// <summary>
-        /// Busca a movimentação completa (com rateios) para realizar estorno.
+        /// Busca a movimentação completa (com rateios) para edição ou estorno.
         /// </summary>
         Task<MovimentacaoViewModel?> ObterCompletoPorIdAsync(int id);
+        
         Task ExcluirAsync(int id);
     }
 }

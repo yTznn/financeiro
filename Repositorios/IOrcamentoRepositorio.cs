@@ -27,5 +27,10 @@ namespace Financeiro.Repositorios
         Task<OrcamentoDetalhe?> ObterDetalhePorIdAsync(int id);
         
         Task<IEnumerable<OrcamentoDetalhe>> ListarDetalhesParaLancamentoAsync(int orcamentoId);
+        
+        Task<IEnumerable<dynamic>> ListarItensAnaliticosParaComboAsync(int instrumentoId);
+        // Método para validar se tem saldo, ignorando a movimentação atual (no caso de edição)
+        Task<decimal> ObterSaldoDisponivelAsync(int orcamentoDetalheId, int? ignorarMovimentacaoId = null);
+        Task<string> ObterNomeItemAsync(int orcamentoDetalheId);
     }
 }

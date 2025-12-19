@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Financeiro</title>
 
-    @* --- NOVO: ÍCONE DA PÁGINA (FAVICON) --- *@
+    @* --- ÍCONE DA PÁGINA --- *@
     <link rel="icon" type="image/png" href="~/img/logo.png" />
-    @* --------------------------------------- *@
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -15,7 +14,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
-
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/financeiro.styles.css" asp-append-version="true" />
 
@@ -42,17 +40,31 @@
             transition: all 0.3s ease;
             overflow-y: auto;
             overflow-x: hidden;
+            z-index: 100;
         }
         .sidebar.close { width: 78px; }
+        
+        /* --- LOGO --- */
         .sidebar .logo-details {
             height: 60px;
             display: flex;
             align-items: center;
             padding-left: 20px;
+            /* Evita quebra de linha feia na animação */
+            overflow: hidden; 
         }
-        .sidebar .logo-details i { font-size: 30px; color: var(--white); }
-        .sidebar .logo-details .logo_name { color: var(--white); font-size: 20px; margin-left: 10px; font-weight: bold; }
-        .sidebar.close .logo_name { display: none; }
+        .sidebar .logo-details i { font-size: 30px; color: var(--white); min-width: 40px; }
+        .sidebar .logo-details .logo_name { 
+            color: var(--white); 
+            font-size: 20px; 
+            margin-left: 10px; 
+            font-weight: bold; 
+            white-space: nowrap;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar.close .logo_name { opacity: 0; pointer-events: none; }
+
+        /* --- MENU --- */
         .sidebar ul { margin-top: 20px; padding: 0; }
         .sidebar ul li { position: relative; list-style: none; padding-left: 20px; }
         .sidebar ul li a {
@@ -60,59 +72,69 @@
             text-decoration: none; color: var(--white); transition: all 0.2s ease;
         }
         .sidebar ul li a:hover { background: var(--light-dark); border-radius: 6px; }
-
-        /* Nova regra: Estilo para o link ativo */
-        .sidebar ul li a.active {
-            background: var(--blue);
-            border-radius: 6px;
-        }
-
+        .sidebar ul li a.active { background: var(--blue); border-radius: 6px; }
         .sidebar ul li i { min-width: 40px; text-align: center; font-size: 20px; }
+        
+        .sidebar ul li .links_name {
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+        .sidebar.close ul li .links_name { opacity: 0; pointer-events: none; }
+
+        /* --- SUBMENU --- */
         .sidebar ul li ul {
             background-color: var(--light-dark);
             border-radius: 6px; margin: 5px 0; padding-left: 10px;
         }
-        /* removemos altura fixa nos <li> internos para não quebrar a janela */
         .sidebar ul li ul li { padding-left: 10px; }
         .sidebar ul li ul li a { font-size: 14px; color: var(--white); }
 
+        /* --- PERFIL --- */
         .sidebar .profile {
-            position: absolute; bottom: 0; width: 100%;
+            position: fixed; bottom: 0; width: 250px; /* fixo no tamanho aberto */
             padding: 10px; text-align: center; background: var(--light-dark);
+            transition: all 0.3s ease;
+            overflow: hidden;
         }
+        .sidebar.close .profile { width: 78px; }
         .sidebar .profile img {
             width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-bottom: 5px;
         }
+        .sidebar.close .profile .text-white { display: none; }
 
+        /* --- CONTEÚDO PRINCIPAL --- */
         .home-section {
             position: relative; left: 250px; width: calc(100% - 250px);
             transition: all 0.3s ease; padding: 20px;
         }
         .sidebar.close ~ .home-section { left: 78px; width: calc(100% - 78px); }
-        .toggle-btn { position: absolute; left: 20px; top: 20px; font-size: 24px; color: var(--blue); cursor: pointer; }
-        .sidebar.close .links_name { display: none; }
-        .sidebar .links_name { transition: opacity 0.3s ease; }
-        .sidebar .nav-list li a { white-space: nowrap; }
-        .sidebar.close .nav-list li a { justify-content: center; }
+        
+        /* --- BOTÃO DE TOGGLE (FIXAR) --- */
+        .toggle-btn { 
+            position: absolute; left: 20px; top: 20px; 
+            font-size: 24px; color: var(--blue); cursor: pointer; 
+            transition: transform 0.3s ease;
+        }
+        /* Efeito visual quando travado */
+        .toggle-btn.pinned { 
+            color: var(--dark); 
+            transform: rotate(45deg); /* Dá um charminho no alfinete */
+        }
+
         .select2-container--open { z-index: 9999999 !important; }
 
-        /* ===== Janela rolável (5 itens de altura) ===== */
+        /* --- MENUS ROLÁVEIS --- */
         .menu-window {
-            max-height: 225px; /* 5 * 45px (altura mínima do <a>) */
-            overflow-y: auto;  /* scroll nativo: mouse/touch */
-            overflow-x: hidden;
-            scroll-behavior: smooth; /* rolagem suave */
+            max-height: 225px; 
+            overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;
             position: relative;
             mask-image: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.9) 10px, rgba(0,0,0,1) calc(100% - 10px), transparent 100%);
             -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.9) 10px, rgba(0,0,0,1) calc(100% - 10px), transparent 100%);
         }
-        /* Altura confortável nos itens (sem travar o <li>) */
-        #gerenciamento-list > li.menu-item > a {
-            min-height: 45px; display: flex; align-items: center;
-        }
+        #gerenciamento-list > li.menu-item > a { min-height: 45px; display: flex; align-items: center; }
         .menu-controls button[disabled] { opacity: 0.35; pointer-events: none; }
 
-        /* ===== Scrollbar discreta ===== */
+        /* Scrollbar */
         .menu-window { scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; }
         .menu-window::-webkit-scrollbar { width: 6px; }
         .menu-window::-webkit-scrollbar-track { background: transparent; }
@@ -121,31 +143,17 @@
     </style>
 </head>
 
-@* --- IMPORTANTE: Necessário para usar User.TemPermissao() --- *@
 @using Financeiro.Extensions 
 
 <body>
     @{
-        // Pega o nome do controller da rota atual
         string? currentController = ViewContext.RouteData.Values["controller"]?.ToString();
         string? currentAction = ViewContext.RouteData.Values["action"]?.ToString();
 
-        // Lista de controllers que estão em GERENCIAMENTO
-        var gerenciamentoControllers = new[] {
-            "Contratos", "Entidades", "Fornecedores", "Instrumentos",
-            "LancamentosInstrumento", "Movimentacoes", "Niveis", "Orcamentos",
-            "Perfis", "Usuarios", "RecebimentosInstrumento", "Logs"
-        };
-        
-        // Lista de controllers que estão em RELATÓRIOS
-        var relatoriosControllers = new[] {
-            "Relatorios" // Adicionado
-        };
+        var gerenciamentoControllers = new[] { "Contratos", "Entidades", "Fornecedores", "Instrumentos", "LancamentosInstrumento", "Movimentacoes", "Niveis", "Orcamentos", "Perfis", "Usuarios", "RecebimentosInstrumento", "Logs" };
+        var relatoriosControllers = new[] { "Relatorios" };
 
-        // Verifica se o submenu de Gerenciamento está ativo
         bool isGerenciamentoActive = gerenciamentoControllers.Contains(currentController);
-        
-        // Verifica se o submenu de Relatórios está ativo
         bool isRelatoriosActive = relatoriosControllers.Contains(currentController);
     }
     
@@ -170,8 +178,6 @@
                 <ul class="collapse list-unstyled @(isGerenciamentoActive ? "show" : "")" id="submenu-gerenciamento">
                     <li class="menu-window p-0" id="window-gerenciamento">
                         <ul id="gerenciamento-list" class="list-unstyled m-0">
-                            
-                            @* --- LISTA DE ITENS ANTERIORES... --- *@
                             @if (User.TemPermissao("CONTRATO_VIEW")) { <li class="menu-item"><a asp-controller="Contratos" asp-action="Index" class="@(currentController == "Contratos" ? "active" : "")"><i class='bx bxs-file-doc'></i><span class="links_name">Contratos</span></a></li> }
                             @if (User.TemPermissao("ENTIDADE_VIEW")) { <li class="menu-item"><a asp-controller="Entidades" asp-action="Index" class="@(currentController == "Entidades" ? "active" : "")"><i class='bx bx-building-house'></i><span class="links_name">Entidades</span></a></li> }
                             @if (User.TemPermissao("FORNECEDOR_VIEW")) { <li class="menu-item"><a asp-controller="Fornecedores" asp-action="Index" class="@(currentController == "Fornecedores" ? "active" : "")"><i class='bx bx-package'></i><span class="links_name">Fornecedores</span></a></li> }
@@ -183,18 +189,13 @@
                             @if (User.TemPermissao("RECEBIMENTO_VIEW")) { <li class="menu-item"><a asp-controller="RecebimentosInstrumento" asp-action="RelatorioGeral" class="@(currentController == "RecebimentosInstrumento" ? "active" : "")"><i class='bx bxs-dollar-circle'></i><span class="links_name">Recebimentos</span></a></li> }
                             @if (User.TemPermissao("USUARIO_VIEW")) { <li class="menu-item"><a asp-controller="Usuarios" asp-action="Index" class="@(currentController == "Usuarios" ? "active" : "")"><i class='bx bx-group'></i><span class="links_name">Usuários</span></a></li> }
                             @if (User.TemPermissao("LOG_VIEW")) { <li class="menu-item"><a asp-controller="Logs" asp-action="Index" class="@(currentController == "Logs" ? "active" : "")"><i class='bx bx-clipboard'></i><span class="links_name">Logs de Auditoria</span></a></li> }
-
                         </ul>
                     </li>
 
                     <li class="menu-controls d-flex align-items-center justify-content-between px-2 py-1">
-                        <button type="button" class="btn btn-sm btn-link text-white p-0" id="btnPrev" title="Itens anteriores">
-                            <i class='bx bx-chevron-up' style="font-size:20px;"></i>
-                        </button>
+                        <button type="button" class="btn btn-sm btn-link text-white p-0" id="btnPrev" title="Itens anteriores"><i class='bx bx-chevron-up' style="font-size:20px;"></i></button>
                         <span class="small text-white-50" id="pagerInfo"></span>
-                        <button type="button" class="btn btn-sm btn-link text-white p-0" id="btnNext" title="Próximos itens">
-                            <i class='bx bx-chevron-down' style="font-size:20px;"></i>
-                        </button>
+                        <button type="button" class="btn btn-sm btn-link text-white p-0" id="btnNext" title="Próximos itens"><i class='bx bx-chevron-down' style="font-size:20px;"></i></button>
                     </li>
                 </ul>
             </li>
@@ -205,17 +206,14 @@
                     <a href="#" class="menu-toggle @(isRelatoriosActive ? "active" : "")" data-target="#submenu-relatorios">
                         <i class='bx bx-file-find'></i><span class="links_name">Relatórios</span>
                     </a>
-
                     <ul class="collapse list-unstyled @(isRelatoriosActive ? "show" : "")" id="submenu-relatorios">
                         <li class="menu-window p-0" id="window-relatorios">
                             <ul id="relatorios-list" class="list-unstyled m-0">
-                                @* --- ITEM PROTEGIDO: LISTA DE RELATÓRIOS --- *@
                                 <li class="menu-item">
                                     <a asp-controller="Relatorios" asp-action="Index" class="@(currentController == "Relatorios" && currentAction == "Index" ? "active" : "")">
                                         <i class='bx bx-table'></i><span class="links_name">Flow x Recebimento</span>
                                     </a>
                                 </li>
-                                @* ADICIONAR FUTUROS RELATÓRIOS AQUI *@
                             </ul>
                         </li>
                     </ul>
@@ -226,11 +224,9 @@
             {
                 <li>
                     <a asp-controller="Usuarios" asp-action="MeusDados" class="@(currentController == "Usuarios" && currentAction == "MeusDados" ? "active" : "")">
-                        <i class='bx bxs-user-detail'></i>
-                        <span class="links_name">Meus Dados</span>
+                        <i class='bx bxs-user-detail'></i><span class="links_name">Meus Dados</span>
                     </a>
                 </li>
-
                 <li>
                     <form asp-controller="Conta" asp-action="Logout" method="post" class="d-inline">
                         @Html.AntiForgeryToken()
@@ -252,16 +248,16 @@
                 }
                 <div class="text-white small">
                     @User.Identity?.Name
-                    <div class="fw-bold text-white">
-                        @User.FindFirst("SiglaEntidade")?.Value
-                    </div>
+                    <div class="fw-bold text-white">@User.FindFirst("SiglaEntidade")?.Value</div>
                 </div>
             }
         </div>
     </div>
 
     <section class="home-section">
-        <i class='bx bx-menu toggle-btn' id="btn-toggle"></i>
+        @* --- AQUI ESTÁ O BOTÃO MÁGICO: Agora é um PIN/MENU --- *@
+        <i class='bx bx-menu toggle-btn' id="btn-toggle" title="Travar/Destravar Menu"></i>
+        
         <div class="container-fluid mt-4">
             @RenderBody()
         </div>
@@ -276,59 +272,91 @@
     <script src="~/js/alertas.js"></script>
 
     <script>
+        // --- LÓGICA DE BARRA LATERAL COM TRAVA (PIN) ---
         const sidebar = document.getElementById("sidebar");
         const toggleBtn = document.getElementById("btn-toggle");
-        const menuToggles = document.querySelectorAll(".menu-toggle");
+        
+        // Recupera o estado salvo no navegador (Memória)
+        let isLocked = localStorage.getItem("sidebarLocked") === "true";
 
-        let manuallyToggled = false;
+        // Função para aplicar o visual correto (Aberto ou Fechado)
+        function aplicarEstadoVisual() {
+            if (isLocked) {
+                sidebar.classList.remove("close"); // Força aberto
+                toggleBtn.classList.remove("bx-menu");
+                toggleBtn.classList.add("bx-pin", "pinned"); // Ícone de Alfinete
+            } else {
+                sidebar.classList.add("close"); // Força fechado (padrão)
+                toggleBtn.classList.remove("bx-pin", "pinned");
+                toggleBtn.classList.add("bx-menu"); // Ícone de Menu
+            }
+        }
 
+        // 1. Inicializa ao carregar a página
+        aplicarEstadoVisual();
+
+        // 2. Clique no Botão (Alterna entre Travado e Destravado)
         toggleBtn.addEventListener("click", () => {
-            sidebar.classList.toggle("close");
-            manuallyToggled = sidebar.classList.contains("close");
+            isLocked = !isLocked; // Inverte o estado
+            localStorage.setItem("sidebarLocked", isLocked); // Salva na memória
+            aplicarEstadoVisual();
         });
 
+        // 3. Mouse Entra (Hover) - Só funciona se NÃO estiver travado
         sidebar.addEventListener("mouseenter", () => {
-            if (sidebar.classList.contains("close") && !manuallyToggled) {
+            if (!isLocked) {
                 sidebar.classList.remove("close");
-                sidebar.classList.add("hover-open");
             }
         });
 
+        // 4. Mouse Sai (Leave) - Só funciona se NÃO estiver travado
         sidebar.addEventListener("mouseleave", () => {
-            if (sidebar.classList.contains("hover-open")) {
+            if (!isLocked) {
                 sidebar.classList.add("close");
-                sidebar.classList.remove("hover-open");
+                
+                // Fecha submenus abertos automaticamente ao tirar o mouse (opcional, para limpar visual)
+                document.querySelectorAll(".nav-list .collapse.show").forEach(open => {
+                    // new bootstrap.Collapse(open).hide(); // Descomente se quiser fechar submenus ao sair
+                });
             }
         });
 
-        window.addEventListener("pageshow", () => {
-            manuallyToggled = false;
-        });
-
+        // --- LÓGICA DOS SUBMENUS (ACORDEÃO) ---
+        const menuToggles = document.querySelectorAll(".menu-toggle");
         menuToggles.forEach(toggle => {
             toggle.addEventListener("click", function (e) {
                 e.preventDefault();
+                // Se a sidebar estiver fechada e clicar no ícone, força abrir (mas não trava)
+                if (sidebar.classList.contains("close")) {
+                    sidebar.classList.remove("close");
+                }
+
                 const targetSelector = this.getAttribute("data-target");
                 const target = document.querySelector(targetSelector);
 
+                // Fecha outros abertos (comportamento de acordeão)
                 document.querySelectorAll(".nav-list .collapse.show").forEach(open => {
                     if (open !== target) {
                         new bootstrap.Collapse(open).hide();
+                        // Remove classe active do link pai
+                        const parentLink = document.querySelector(`a[data-target="#${open.id}"]`);
+                        if(parentLink) parentLink.classList.remove("active");
                     }
                 });
 
                 if (target.classList.contains("show")) {
                     new bootstrap.Collapse(target).hide();
+                    this.classList.remove("active");
                 } else {
                     new bootstrap.Collapse(target).show();
+                    this.classList.add("active");
                 }
             });
         });
 
-        // ===== Rolagem nativa + setas que deslizam 1 item por clique =====
-        // Adaptação para funcionar com múltiplos submenus roláveis
+        // --- LÓGICA DE ROLAGEM DOS ITENS DO MENU ---
         (function () {
-            const WINDOW = 5; // queremos 5 itens visíveis
+            const WINDOW = 5; 
             
             function initializeScroll(listId, windowId, prevId, nextId, infoId) {
                 const list = document.getElementById(listId);
@@ -361,9 +389,7 @@
                     const total = items.length;
                     const start = Math.round(win.scrollTop / h);
                     const end = Math.min(start + WINDOW, total);
-
                     if (info) info.textContent = `${start + 1}–${end}/${total}`;
-
                     prev.disabled = (start <= 0);
                     next.disabled = (end >= total);
                 }
@@ -373,11 +399,9 @@
                     win.scrollTo({ top: win.scrollTop + (delta * h), behavior: 'smooth' });
                 }
 
-                // setas
                 prev.addEventListener('click', () => scrollByItems(-1));
                 next.addEventListener('click', () => scrollByItems(1));
 
-                // atualiza estado ao rolar
                 let ticking = false;
                 win.addEventListener('scroll', () => {
                     if (!ticking) {
@@ -390,47 +414,25 @@
                     }
                 });
 
-                // quando abrir o submenu, reseta para o topo e atualiza
                 submenu?.addEventListener('show.bs.collapse', () => {
                     win.scrollTop = 0;
                     updateUI();
                 });
 
-                // render inicial
                 win.scrollTop = 0;
                 updateUI();
-
                 window.addEventListener('resize', () => updateUI());
             }
 
             // Inicializa Gerenciamento
             initializeScroll('gerenciamento-list', 'window-gerenciamento', 'btnPrev', 'btnNext', 'pagerInfo');
-
-            // Inicializa Relatórios (Usando IDs diferentes para evitar conflito)
-            // Criei novos IDs temporários para o novo submenu, pois o antigo usava os mesmos
-            const relatoriosPrev = document.getElementById('btnPrevRel');
-            const relatoriosNext = document.getElementById('btnNextRel');
-            const relatoriosInfo = document.getElementById('pagerInfoRel');
-
-            // Se esses novos IDs forem criados, inicialize aqui (por enquanto, usaremos a rolagem padrão se não houver rolagem de 5 itens)
-            // Se você quiser rolagem no submenu Relatórios, precisará duplicar os botões de controle na sua lista (no HTML)
         })();
 
-        // ===== Rola o submenu para o item ativo ao carregar a página =====
+        // Rola para o item ativo ao carregar
         document.addEventListener("DOMContentLoaded", function() {
-            // Verifica o submenu de Gerenciamento
             const submenuGerenciamento = document.getElementById('submenu-gerenciamento');
             if (submenuGerenciamento && submenuGerenciamento.classList.contains('show')) {
                 const activeSubMenuItem = submenuGerenciamento.querySelector('.menu-item a.active');
-                if (activeSubMenuItem) {
-                    activeSubMenuItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-                }
-            }
-            
-            // Verifica o submenu de Relatórios
-            const submenuRelatorios = document.getElementById('submenu-relatorios');
-            if (submenuRelatorios && submenuRelatorios.classList.contains('show')) {
-                const activeSubMenuItem = submenuRelatorios.querySelector('.menu-item a.active');
                 if (activeSubMenuItem) {
                     activeSubMenuItem.scrollIntoView({ behavior: 'auto', block: 'nearest' });
                 }

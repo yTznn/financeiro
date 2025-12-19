@@ -5,7 +5,7 @@
     var action = Model.Id == 0 ? "Salvar" : "Atualizar";
 }
 
-<div class="container py-4" style="max-width: 700px;">
+<div class="container py-4" style="max-width: 800px;">
     
     <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
@@ -31,22 +31,37 @@
                 <input type="hidden" asp-for="Id" />
                 <input type="hidden" asp-for="InstrumentoId" />
                 
+                @* Campo Oculto para o Valor (Decimal C#) *@
                 <input type="hidden" asp-for="Valor" id="ValorHidden" 
                        value="@(Model.Valor > 0 ? Model.Valor.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) : "")" />
 
-                <div class="row g-3">
+                <h6 class="fw-bold text-muted text-uppercase small border-bottom pb-2 mb-3">Dados da Competência</h6>
+
+                <div class="row g-3 mb-4">
                     <div class="col-md-6">
-                        <label asp-for="DataInicio" class="form-label fw-bold text-secondary small text-uppercase">Mês de Referência</label>
+                        <label asp-for="DataInicio" class="form-label fw-bold small text-secondary">Data Início</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-calendar-month"></i></span>
-                            <input asp-for="DataInicio" class="form-control form-control-lg border-start-0 ps-0" type="month" required />
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-calendar-event"></i></span>
+                            <input asp-for="DataInicio" class="form-control" type="date" required />
                         </div>
-                        <div class="form-text">O sistema calculará a vigência completa do mês.</div>
                         <span asp-validation-for="DataInicio" class="text-danger small"></span>
                     </div>
 
                     <div class="col-md-6">
-                        <label for="ValorVisual" class="form-label fw-bold text-secondary small text-uppercase">Valor do Repasse</label>
+                        <label asp-for="DataFim" class="form-label fw-bold small text-secondary">Data Fim</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-calendar-check"></i></span>
+                            <input asp-for="DataFim" class="form-control" type="date" required />
+                        </div>
+                        <span asp-validation-for="DataFim" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-muted text-uppercase small border-bottom pb-2 mb-3">Valores e Detalhes</h6>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="ValorVisual" class="form-label fw-bold small text-secondary">Valor do Repasse</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light border-end-0 text-success fw-bold">R$</span>
                             <input id="ValorVisual" type="text" class="form-control form-control-lg border-start-0 ps-0 fw-bold text-dark" 
@@ -56,13 +71,13 @@
                     </div>
 
                     <div class="col-12">
-                        <label asp-for="Observacao" class="form-label fw-bold text-secondary small text-uppercase">Observações</label>
+                        <label asp-for="Observacao" class="form-label fw-bold small text-secondary">Observações</label>
                         <textarea asp-for="Observacao" class="form-control" rows="3" placeholder="Ex: Parcela referente ao aditivo 01..."></textarea>
                         <span asp-validation-for="Observacao" class="text-danger small"></span>
                     </div>
                 </div>
 
-                <div class="d-grid gap-2 d-md-flex justify-content-md-end pt-4 mt-2 border-top">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end pt-4 mt-4 border-top">
                     <a asp-action="Index" asp-route-instrumentoId="@Model.InstrumentoId" class="btn btn-light border px-4 me-md-2">Cancelar</a>
                     <button type="submit" class="btn btn-success btn-lg px-5 shadow-sm">
                         <i class="bi bi-check-lg me-2"></i> Salvar Lançamento
@@ -82,7 +97,7 @@
             const inputHidden = document.getElementById('ValorHidden');
             const form = document.getElementById('form-recebimento');
 
-            // 1. Função para formatar moeda BRL enquanto digita
+            // --- Lógica de Moeda (Mantida igual) ---
             const formatarMoeda = (valor) => {
                 valor = valor.replace(/\D/g, "");
                 let numero = (parseInt(valor) / 100).toFixed(2) + "";
@@ -91,41 +106,22 @@
                 return numero;
             };
 
-            // 2. Evento de Digitação (Input)
             inputVisual.addEventListener('input', function (e) {
-                if(e.target.value === "") {
-                    e.target.value = "0,00";
-                    return;
-                }
+                if(e.target.value === "") { e.target.value = "0,00"; return; }
                 e.target.value = formatarMoeda(e.target.value);
             });
 
-            // 3. Inicialização (Caso seja Edição)
             if (inputHidden.value) {
-                // O valor vem do C# como "1500.50" (ponto)
-                // Convertemos para "1.500,50" para o visual
                 let valorInicial = parseFloat(inputHidden.value).toFixed(2); 
                 let valorSemPonto = valorInicial.replace(".", ""); 
                 inputVisual.value = formatarMoeda(valorSemPonto);
             }
 
-            // 4. Preparar para Salvar (Submit)
             form.addEventListener('submit', function (e) {
-                // Pega o valor visual (ex: "6.000.000,00")
                 let valorFormatado = inputVisual.value;
+                if (!valorFormatado) { inputHidden.value = "0"; return; }
                 
-                if (!valorFormatado) {
-                    inputHidden.value = "0";
-                    return;
-                }
-
-                // CORREÇÃO AQUI:
-                // Remove apenas os pontos de milhar. Mantém a vírgula decimal.
-                // Ex: "6.000.000,00" -> "6000000,00"
-                // O ModelBinder do C# (pt-BR) espera VÍRGULA como decimal.
                 let valorLimpo = valorFormatado.replace(/\./g, ""); 
-                
-                // Joga no hidden input que o ASP.NET vai ler
                 inputHidden.value = valorLimpo;
                 
                 if (!form.checkValidity()) {

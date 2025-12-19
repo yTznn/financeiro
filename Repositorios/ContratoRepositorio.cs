@@ -477,5 +477,58 @@ namespace Financeiro.Repositorios
             var total = await conn.ExecuteScalarAsync<decimal?>(sql, new { orcamentoId, ignorarId = ignorarContratoId });
             return total ?? 0m;
         }
+        // Método para o "Dedo Duro" (Verificar contrato existente)
+        public async Task<Contrato?> ObterContratoAtivoPorItemAsync(int fornecedorId, string tipoPessoa, int orcamentoDetalheId, DateTime dataReferencia)
+        {
+            using var conn = _factory.CreateConnection();
+            
+            // SQL Ajustado:
+            // 1. Usa CAST(Date) para ignorar horas
+            // 2. Verifica se o Item está ligado ao contrato
+            string sql = @"
+                SELECT TOP 1 c.* FROM Contrato c
+                INNER JOIN ContratoItem ci ON ci.ContratoId = c.Id
+                WHERE c.Ativo = 1 
+                AND ci.OrcamentoDetalheId = @orcamentoDetalheId
+                AND CAST(@dataReferencia AS DATE) >= CAST(c.DataInicio AS DATE) 
+                AND CAST(@dataReferencia AS DATE) <= CAST(c.DataFim AS DATE)";
+
+            if (tipoPessoa == "PF") sql += " AND c.PessoaFisicaId = @fornecedorId ";
+            else sql += " AND c.PessoaJuridicaId = @fornecedorId ";
+
+            return await conn.QueryFirstOrDefaultAsync<Contrato>(sql, new { fornecedorId, orcamentoDetalheId, dataReferencia });
+        }
+
+        // Método para Listar Itens do Contrato com Sugestão de Valor
+        public async Task<IEnumerable<dynamic>> ListarItensDoContratoComValoresAsync(int contratoId)
+        {
+            using var conn = _factory.CreateConnection(); // <--- CORRIGIDO PARA _factory
+            
+            // Retorna o Item + Sugestão de Valor Mensal
+            const string sql = @"
+                SELECT 
+                    od.Id, 
+                    od.Nome,
+                    ci.Valor AS ValorTotalItem,
+                    CASE 
+                        WHEN DATEDIFF(MONTH, c.DataInicio, c.DataFim) > 0 
+                        THEN ci.Valor / (DATEDIFF(MONTH, c.DataInicio, c.DataFim) + 1)
+                        ELSE ci.Valor 
+                    END AS ValorMensalSugerido
+                FROM ContratoItem ci
+                INNER JOIN Contrato c ON ci.ContratoId = c.Id
+                INNER JOIN OrcamentoDetalhe od ON ci.OrcamentoDetalheId = od.Id
+                WHERE ci.ContratoId = @contratoId";
+
+            return await conn.QueryAsync(sql, new { contratoId });
+        }
+        public async Task<bool> PossuiLancamentosFinanceirosAsync(int contratoId)
+        {
+            using var conn = _factory.CreateConnection();
+            // Verifica se existe pelo menos 1 linha na tabela de rateio ligada a este contrato
+            string sql = "SELECT TOP 1 1 FROM MovimentacaoRateio WHERE ContratoId = @contratoId";
+            var result = await conn.ExecuteScalarAsync<int?>(sql, new { contratoId });
+            return result.HasValue;
+        }
     }
 }

@@ -1,0 +1,496 @@
+@using Financeiro.Extensions
+@using System.Linq
+@model Financeiro.Models.ViewModels.MovimentacaoViewModel
+@{ 
+    bool isEdicao = Model.Id > 0;
+    ViewData["Title"] = isEdicao ? "Editar Lançamento" : "Novo Lançamento"; 
+    
+    var instrumentoPadraoId = ViewBag.Instrumentos != null 
+        ? ((SelectList)ViewBag.Instrumentos).FirstOrDefault()?.Value 
+        : "";
+
+    // Captura erros de validação do ModelState para exibir no SweetAlert
+    string errosDeValidacao = null;
+    if (!ViewData.ModelState.IsValid)
+    {
+        var erros = ViewData.ModelState.Values
+            .SelectMany(v => v.Errors)
+            .Select(e => e.ErrorMessage);
+        errosDeValidacao = string.Join("<br><br>", erros);
+    }
+}
+
+@* --- FLAGS INVISÍVEIS PARA O JAVASCRIPT --- *@
+<div id="pageFlags" 
+     data-success="@TempData["Sucesso"]" 
+     data-error="@TempData["Erro"]"
+     data-warning="@TempData["Alerta"]" 
+     data-validation-msg="@errosDeValidacao">
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0 fw-bold text-primary">
+            <i class='bx @(isEdicao ? "bx-edit" : "bx-plus-circle")'></i> @ViewData["Title"]
+        </h2>
+        <small class="text-muted">@(isEdicao ? $"Editando registro #{Model.Id}" : "Registre um pagamento vinculado a contrato ou avulso.")</small>
+    </div>
+    <a asp-action="Index" class="btn btn-outline-secondary">
+        <i class='bx bx-arrow-back'></i> Voltar
+    </a>
+</div>
+
+@* --- CARDS DE FEEDBACK BANCÁRIO --- *@
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card border-primary border-opacity-25 bg-primary bg-opacity-10 h-100 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="bg-white p-3 rounded-circle me-3 shadow-sm text-primary position-relative">
+                    <i class='bx bxs-bank fs-3'></i>
+                    <i class='bx bxs-down-arrow-circle text-danger position-absolute bottom-0 end-0 bg-white rounded-circle' style="font-size: 1rem;"></i>
+                </div>
+                <div>
+                    <div class="small text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Saiu de (Sua Conta):</div>
+                    <div class="fw-bold text-dark fs-6">
+                        @if (!string.IsNullOrEmpty(Model.ContaOrigemDescricao)) {
+                            <span>@Model.ContaOrigemDescricao</span>
+                        } else {
+                            <span class="text-danger"><i class='bx bxs-error-circle'></i> Conta Principal não configurada!</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-success border-opacity-25 bg-success bg-opacity-10 h-100 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="bg-white p-3 rounded-circle me-3 shadow-sm text-success position-relative">
+                    <i class='bx bxs-user-account fs-3'></i>
+                    <i class='bx bxs-up-arrow-circle text-success position-absolute bottom-0 end-0 bg-white rounded-circle' style="font-size: 1rem;"></i>
+                </div>
+                <div>
+                    <div class="small text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Entrou em (Fornecedor):</div>
+                    <div class="fw-bold text-dark fs-6" id="txtContaDestino">
+                        <span class="text-muted fst-italic small">Selecione um fornecedor...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form asp-action="Salvar" method="post" id="formMov" enctype="multipart/form-data" class="needs-validation" novalidate>
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="Id" />
+    
+    @* Escondemos o resumo padrão para usar o SweetAlert *@
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger shadow-sm mb-4 d-none"></div>
+
+    @* --- BLOCO PRINCIPAL --- *@
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <h6 class="card-title fw-bold text-muted mb-3 text-uppercase small border-bottom pb-2">Dados do Pagamento</h6>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label asp-for="DataMovimentacao" class="form-label fw-bold"></label>
+                    <input asp-for="DataMovimentacao" class="form-control" type="date" />
+                    <span asp-validation-for="DataMovimentacao" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="ReferenciaMesAno" class="form-label fw-bold"></label>
+                    <input asp-for="ReferenciaMesAno" class="form-control" type="month" id="ReferenciaMesAno" />
+                    <div class="form-text small">Competência (Fato Gerador)</div>
+                    <span asp-validation-for="ReferenciaMesAno" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="ValorTotal" class="form-label fw-bold"></label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0 text-muted">R$</span>
+                        <input asp-for="ValorTotal" class="form-control money fw-bold text-dark fs-5" id="ValorTotal" placeholder="0,00" autocomplete="off" />
+                    </div>
+                    <span asp-validation-for="ValorTotal" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-3">
+                    <label asp-for="Historico" class="form-label fw-bold"></label>
+                    <input asp-for="Historico" class="form-control" placeholder="Ex: Pagamento NF 123" />
+                    <span asp-validation-for="Historico" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Fornecedor / Beneficiário</label>
+                    <select asp-for="FornecedorIdCompleto" class="form-select select2-fornecedor" id="ddlFornecedor">
+                        <option value="">Selecione ou digite...</option>
+                        @foreach (var f in (SelectList)ViewBag.Fornecedores)
+                        {
+                            <option value="@f.Value">@f.Text</option>
+                        }
+                    </select>
+                    <span asp-validation-for="FornecedorIdCompleto" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="ArquivoAnexo" class="form-label fw-bold">
+                        <i class='bx bx-paperclip'></i> Comprovante
+                    </label>
+                    <input asp-for="ArquivoAnexo" class="form-control" type="file" accept=".pdf, .png, .jpg, .jpeg" />
+                    @if(Model.TemAnexoSalvo) {
+                        <div class="form-text text-success fw-bold"><i class='bx bx-check-double'></i> Comprovante já salvo no sistema.</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* --- BLOCO RATEIO (ORIGEM) --- *@
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-0 fw-bold text-uppercase text-secondary"><i class='bx bx-layer me-1'></i> Detalhamento (Origem do Recurso)</h6>
+                <small class="text-muted">Adicione contratos ou itens avulsos.</small>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm fw-bold" id="btnAddItem">
+                <i class='bx bx-plus'></i> Adicionar Item
+            </button>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="tbRateio">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th style="width: 25%">Instrumento</th>
+                        <th style="width: 25%">Contrato</th>
+                        <th style="width: 30%">Item de Orçamento</th>
+                        <th style="width: 15%">Valor (R$)</th>
+                        <th style="width: 5%"></th>
+                    </tr>
+                </thead>
+                <tbody id="listaRateio"></tbody>
+                <tfoot class="bg-light fw-bold" style="font-size: 0.9rem;">
+                    <tr>
+                        <td colspan="3" class="text-end text-muted">TOTAL:</td>
+                        <td class="text-primary" id="lblTotalRateio">R$ 0,00</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td colspan="3" class="text-end text-muted">DIFERENÇA:</td>
+                        <td class="text-danger" id="lblDiferenca">R$ 0,00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 justify-content-end pb-5">
+        <a asp-action="Index" class="btn btn-light btn-lg border px-4">Cancelar</a>
+        <button type="submit" class="btn btn-success btn-lg px-5 shadow-sm fw-bold" id="btnSalvar" disabled>
+            <i class='bx bx-check-double'></i> Confirmar
+        </button>
+    </div>
+</form>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+
+    <script>
+        const dadosInstrumentos = @Json.Serialize(ViewBag.Instrumentos);
+        const instrumentoPadraoId = '@instrumentoPadraoId'; 
+        const cacheContratos = {}; 
+        const cacheItensContrato = {};
+        const cacheItensAvulsos = {};
+
+        $(document).ready(function() {
+            // --- ALERTAS E FEEDBACK ---
+            const pageFlags = document.getElementById('pageFlags');
+            if (pageFlags) {
+                // Sucesso
+                if (pageFlags.dataset.success) {
+                    Swal.fire({
+                        toast: true, position: 'top-end', icon: 'success', 
+                        title: pageFlags.dataset.success, showConfirmButton: false, timer: 3000
+                    });
+                }
+                // Erro Técnico
+                if (pageFlags.dataset.error) {
+                    Swal.fire({ icon: 'error', title: 'Erro', html: pageFlags.dataset.error });
+                }
+                // Erro de Validação (Vigência)
+                if (pageFlags.dataset.validationMsg) {
+                    Swal.fire({ 
+                        icon: 'error', 
+                        title: 'Não foi possível salvar!', 
+                        html: pageFlags.dataset.validationMsg, 
+                        confirmButtonText: 'Corrigir', 
+                        confirmButtonColor: '#d33' 
+                    });
+                }
+                // Aviso Amarelo (Orçamento)
+                if (pageFlags.dataset.warning) {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'Atenção ao Orçamento!', 
+                        html: pageFlags.dataset.warning, 
+                        confirmButtonText: 'Ciente', 
+                        confirmButtonColor: '#f0ad4e' 
+                    });
+                }
+            }
+
+            $('.select2-fornecedor').select2({ theme: 'bootstrap-5', placeholder: 'Selecione...', allowClear: true });
+            $('.money').mask('#.##0,00', { reverse: true });
+
+            let idx = 0;
+
+            function parseMoney(val) {
+                if (!val) return 0;
+                if (typeof val === 'number') return val;
+                return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+            }
+
+            function gerarOptions(lista, selecionado) {
+                let html = '';
+                if(lista) {
+                    lista.forEach(item => {
+                        const val = item.value || item.Value || item.id;
+                        const txt = item.text || item.Text;
+                        const isSel = String(val) === String(selecionado) ? 'selected' : '';
+                        html += `<option value="${val}" ${isSel}>${txt}</option>`;
+                    });
+                }
+                return html;
+            }
+
+            // --- FUNÇÃO PARA CRIAR LINHAS ---
+            window.adicionarLinhaRateio = function(dados = {}) {
+                const selInst = dados.instrumentoId || instrumentoPadraoId;
+                const optsInstrumentos = gerarOptions(dadosInstrumentos, selInst);
+                
+                const tr = `
+                <tr class="rateio-item" data-idx="${idx}">
+                    <td>
+                        <select name="Rateios[${idx}].InstrumentoId" class="form-select form-select-sm ddl-instrumento bg-light" required style="pointer-events: none;">
+                            ${optsInstrumentos}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="Rateios[${idx}].ContratoId" class="form-select form-select-sm ddl-contrato">
+                            <option value="">(Carregando...)</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select name="Rateios[${idx}].OrcamentoDetalheId" class="form-select form-select-sm ddl-item" required>
+                            <option value="">(Selecione a Origem)</option>
+                        </select>
+                        <div class="form-text text-danger d-none msg-alerta-contrato" style="font-size: 0.75rem;"></div>
+                    </td>
+                    <td>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text border-end-0 bg-white text-muted">R$</span>
+                            <input name="Rateios[${idx}].Valor" class="form-control money-input val-rateio fw-bold border-start-0" required 
+                                   placeholder="0,00" value="${dados.valor || ''}" autocomplete="off" />
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-outline-danger btn-sm border-0 remove-row"><i class='bx bx-trash'></i></button>
+                    </td>
+                </tr>`;
+                
+                const $linha = $(tr);
+                $('#listaRateio').append($linha);
+                $linha.find('.money-input').mask('#.##0,00', { reverse: true });
+
+                carregarContratosDaLinha($linha, dados.contratoId, dados.orcamentoDetalheId);
+                idx++;
+                atualizarTotais();
+            };
+
+            function carregarContratosDaLinha($linha, contratoSelecionadoId, itemSelecionadoId) {
+                const fornecedorId = $('#ddlFornecedor').val();
+                const $ddlContrato = $linha.find('.ddl-contrato');
+
+                if (!fornecedorId) {
+                    $ddlContrato.html('<option value="">(Selecione Fornecedor)</option>');
+                    return;
+                }
+
+                function preencherSelect(lista) {
+                    const contratosFormatados = lista.map(c => ({ id: c.id, text: `Nº ${c.numero} - ${(c.objeto ? c.objeto.substring(0, 30) + '...' : '')}` }));
+                    const opts = '<option value="">(Avulso - Sem Contrato)</option>' + gerarOptions(contratosFormatados, contratoSelecionadoId);
+                    $ddlContrato.html(opts);
+                    carregarItensDaLinha($linha, itemSelecionadoId);
+                }
+
+                if (cacheContratos[fornecedorId]) {
+                    preencherSelect(cacheContratos[fornecedorId]);
+                } else {
+                    $ddlContrato.html('<option>Buscando...</option>');
+                    fetch(`/Movimentacoes/ObterContratosPorFornecedor?fornecedorIdCompleto=${fornecedorId}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            cacheContratos[fornecedorId] = data;
+                            preencherSelect(data);
+                        });
+                }
+            }
+
+            function carregarItensDaLinha($linha, itemSelecionadoId) {
+                const contratoId = $linha.find('.ddl-contrato').val();
+                const instrumentoId = $linha.find('.ddl-instrumento').val();
+                const $ddlItem = $linha.find('.ddl-item');
+                const $inputValor = $linha.find('.val-rateio');
+
+                const url = contratoId 
+                    ? `/Movimentacoes/ObterItensPorContrato?contratoId=${contratoId}`
+                    : `/Movimentacoes/ObterItensAvulsos?instrumentoId=${instrumentoId}`;
+
+                const cacheKey = contratoId ? `C_${contratoId}` : `I_${instrumentoId}`;
+                
+                if(contratoId) $linha.removeClass('table-warning');
+                else $linha.addClass('table-warning');
+
+                function preencherItens(data) {
+                    if (data.length === 0) {
+                        $ddlItem.html('<option value="">Sem itens disponíveis!</option>');
+                        return;
+                    }
+                    $ddlItem.html(gerarOptions(data, itemSelecionadoId));
+                    
+                    if (contratoId && data.length === 1 && !itemSelecionadoId && !$inputValor.val()) {
+                        $inputValor.val(data[0].valorMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })).trigger('input');
+                    }
+                }
+
+                if (cacheItensContrato[cacheKey]) {
+                    preencherItens(cacheItensContrato[cacheKey]);
+                } else {
+                    $ddlItem.html('<option>Carregando...</option>');
+                    fetch(url)
+                        .then(r => r.json())
+                        .then(data => {
+                            cacheItensContrato[cacheKey] = data;
+                            preencherItens(data);
+                        });
+                }
+            }
+
+            // --- EVENTOS ---
+            $('#ddlFornecedor').change(function() {
+                const id = $(this).val();
+                if(!id) {
+                    $('#txtContaDestino').html('<span class="text-muted">Selecione um fornecedor...</span>');
+                } else {
+                    $.get('/Movimentacoes/ObterContaFornecedor?idCompleto=' + id, function(data) {
+                        if(data.temConta) {
+                            $('#txtContaDestino').html('<span class="text-success"><i class="bx bxs-check-circle"></i> ' + data.descricao + '</span>');
+                        } else {
+                            $('#txtContaDestino').html('<span class="text-danger fw-bold"><i class="bx bxs-error"></i> Nenhuma conta principal configurada!</span>');
+                        }
+                    });
+                }
+                if (document.readyState === 'complete') {
+                    $('.rateio-item').each(function() {
+                        carregarContratosDaLinha($(this), null, null);
+                    });
+                }
+            });
+
+            $(document).on('change', '.ddl-contrato', function() {
+                carregarItensDaLinha($(this).closest('tr'), null);
+            });
+
+            // =================================================================
+            // [CORRIGIDO] VALIDAÇÃO "DEDO DURO" (Verifica Contrato x Data)
+            // =================================================================
+            function validarDedoDuro($linha) {
+                if (!$linha || $linha.length === 0) return;
+
+                const contratoId = $linha.find('.ddl-contrato').val();
+                const itemId = $linha.find('.ddl-item').val();
+                const fornecedorId = $('#ddlFornecedor').val();
+                const dataRef = $('#ReferenciaMesAno').val(); // [IMPORTANTE] Data GLOBAL
+                const $msg = $linha.find('.msg-alerta-contrato');
+
+                $msg.addClass('d-none').text(''); 
+
+                // Só valida se for Avulso (sem contrato), tiver item, fornecedor e data
+                if (!contratoId && itemId && fornecedorId && dataRef) {
+                    // Envia a dataRef no AJAX
+                    fetch(`/Movimentacoes/VerificarContratoExistente?fornecedorIdCompleto=${fornecedorId}&orcamentoDetalheId=${itemId}&dataReferencia=${dataRef}`)
+                        .then(r => r.json())
+                        .then(resp => {
+                            if (resp.existe) {
+                                $msg.removeClass('d-none').html(`<i class="bx bxs-error"></i> Existe Contrato ${resp.numero}!`);
+                                
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: 'Contrato Encontrado!',
+                                    html: resp.msg + `<br><br><b>O sistema detectou um contrato ativo para o período ${dataRef}.</b><br>Por favor, vincule-o.`,
+                                    confirmButtonText: 'Entendi'
+                                });
+                            }
+                        });
+                }
+            }
+
+            // 1. Mudou o Item: Valida a linha atual
+            $(document).on('change', '.ddl-item', function() {
+                validarDedoDuro($(this).closest('tr'));
+            });
+
+            // 2. Mudou a Data Principal: Valida TODAS as linhas ativas
+            $('#ReferenciaMesAno').change(function() {
+                $('.rateio-item').each(function() {
+                    validarDedoDuro($(this));
+                });
+            });
+            // =================================================================
+
+            function atualizarTotais() {
+                let totalPago = parseMoney($('#ValorTotal').val());
+                let totalRateado = 0;
+                $('.val-rateio').each(function() { totalRateado += parseMoney($(this).val()); });
+                const dif = totalPago - totalRateado;
+                
+                $('#lblTotalRateio').text(totalRateado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+                const elDif = $('#lblDiferenca');
+                elDif.text(dif.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
+                const btn = $('#btnSalvar');
+                if (Math.abs(dif) < 0.05 && totalPago > 0) {
+                    elDif.removeClass('text-danger').addClass('text-success').html('<i class="bx bx-check-circle"></i> Zerado');
+                    btn.prop('disabled', false);
+                } else {
+                    elDif.removeClass('text-success').addClass('text-danger');
+                    btn.prop('disabled', true);
+                }
+            }
+
+            $(document).on('keyup', '.money, .money-input', function() { atualizarTotais(); });
+            $('#ValorTotal').on('keyup', atualizarTotais);
+            $('#btnAddItem').click(() => adicionarLinhaRateio());
+            $(document).on('click', '.remove-row', function() { $(this).closest('tr').remove(); atualizarTotais(); });
+
+            const dadosEdicao = [
+                @foreach(var item in Model.Rateios)
+                {
+                    @: { instrumentoId: @item.InstrumentoId, contratoId: @(item.ContratoId?.ToString() ?? "null"), orcamentoDetalheId: @item.OrcamentoDetalheId, valor: '@item.Valor' },
+                }
+            ];
+
+            if (dadosEdicao.length > 0) {
+                dadosEdicao.forEach(r => adicionarLinhaRateio(r));
+                $('#ddlFornecedor').trigger('change');
+            } else {
+                adicionarLinhaRateio();
+            }
+        });
+    </script>
+}

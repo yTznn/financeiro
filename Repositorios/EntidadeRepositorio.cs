@@ -57,9 +57,34 @@ namespace Financeiro.Repositorios
 
         public async Task<Entidade?> GetByIdAsync(int id)
         {
-            const string sql = "SELECT * FROM Entidade WHERE Id = @Id;";
+            // [CORREÇÃO] Fazemos JOIN para trazer os dados da Conta Bancária
+            // Precisamos ajustar o SQL para preencher a propriedade de navegação (se existir no Model)
+            // OU simplesmente garantir que o ID venha. 
+            // Como o controller só checa "entidade.ContaBancariaId != null", o SELECT * já resolve a validação básica.
+            
+            // MAS, para mostrar os dados na tela ("Banco X, Ag Y"), precisamos dos dados.
+            // Vamos turbinar esse método para trazer a conta completa.
+            
+            const string sql = @"
+                SELECT e.*, cb.*
+                FROM Entidade e
+                LEFT JOIN ContaBancaria cb ON e.ContaBancariaId = cb.Id
+                WHERE e.Id = @Id;";
+
             using var conn = _connectionFactory.CreateConnection();
-            return await conn.QuerySingleOrDefaultAsync<Entidade>(sql, new { Id = id });
+            
+            var resultado = await conn.QueryAsync<Entidade, ContaBancaria, Entidade>(
+                sql,
+                (entidade, conta) =>
+                {
+                    entidade.ContaBancaria = conta; // Precisamos adicionar essa prop no Model Entidade
+                    return entidade;
+                },
+                new { Id = id },
+                splitOn: "Id" // O Dapper quebra no ID da ContaBancaria
+            );
+
+            return resultado.FirstOrDefault();
         }
 
         public async Task<Entidade?> GetByCnpjAsync(string cnpj)
