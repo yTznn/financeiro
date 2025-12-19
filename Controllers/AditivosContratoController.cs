@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using System;
 using Financeiro.Models;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Logging; // Importante para logs de erro
+using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Financeiro.Controllers
 {
@@ -19,7 +21,7 @@ namespace Financeiro.Controllers
         private readonly IContratoVersaoService _service;
         private readonly ILogService _logService;
         private readonly IJustificativaService _justificativaService;
-        private readonly ILogger<AditivosContratoController> _logger; // Logger injetado
+        private readonly ILogger<AditivosContratoController> _logger;
 
         public AditivosContratoController(
             IContratoVersaoRepositorio versaoRepo,
@@ -42,34 +44,39 @@ namespace Financeiro.Controllers
         [HttpGet]
         public async Task<IActionResult> Novo(int contratoId)
         {
+            // 1. Busca os dados atuais do contrato (incluindo os ITENS vigentes)
+            var contrato = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
+            if (contrato == null) return NotFound("Contrato não encontrado.");
+
             var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(contratoId);
             
-            // Prepara ViewBag para mostrar resumo na tela
-            if (versaoAtual == null)
-            {
-                var contrato = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
-                if(contrato != null)
-                {
-                    ViewBag.VersaoAtual = new ContratoVersao 
-                    { 
-                        Versao = 1, 
-                        ValorContrato = contrato.ValorContrato,
-                        DataInicio = contrato.DataInicio,
-                        DataFim = contrato.DataFim,
-                        ObjetoContrato = contrato.ObjetoContrato
-                    };
-                }
-                else
-                {
-                    return NotFound("Contrato não encontrado.");
-                }
-            }
-            else 
-            {
-                ViewBag.VersaoAtual = versaoAtual;
-            }
+            // Prepara ViewBag para mostrar resumo no topo da tela
+            ViewBag.VersaoAtual = versaoAtual ?? new ContratoVersao 
+            { 
+                Versao = 1, 
+                ValorContrato = contrato.ValorContrato,
+                DataInicio = contrato.DataInicio,
+                DataFim = contrato.DataFim,
+                ObjetoContrato = contrato.ObjetoContrato
+            };
 
-            var vm = new AditivoContratoViewModel { ContratoId = contratoId };
+            // 2. Monta o ViewModel carregando os ITENS para a grid e DATAS
+            var vm = new AditivoContratoViewModel 
+            { 
+                ContratoId = contratoId,
+                // Data do documento (assinatura do aditivo)
+                DataInicioAditivo = DateTime.Today,
+                
+                // Sugere datas atuais da vigência para facilitar (se o usuário não mexer, mantém)
+                NovaDataInicio = contrato.DataInicio, 
+                NovaDataFim = contrato.DataFim,
+                
+                NovoObjeto = contrato.ObjetoContrato,
+                
+                // CARREGA A GRID: O usuário verá os valores atuais para poder editar
+                Itens = contrato.Itens ?? new List<ContratoItemViewModel>()
+            };
+
             return View("AditivoContratoForm", vm);
         }
 
@@ -78,62 +85,60 @@ namespace Financeiro.Controllers
         public async Task<IActionResult> Salvar(AditivoContratoViewModel vm)
         {
             // 1. Preenchimento Automático de Datas (Herança) se não vier preenchido
-            if (!vm.DataInicioAditivo.HasValue || !vm.NovaDataFim.HasValue)
+            // Isso garante que se o usuário não mexer na data de início, ela não vá nula
+            if (!vm.DataInicioAditivo.HasValue || !vm.NovaDataFim.HasValue || !vm.NovaDataInicio.HasValue)
             {
                 var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId);
                 if (atual != null)
                 {
-                    if (!vm.DataInicioAditivo.HasValue) vm.DataInicioAditivo = atual.DataInicio;
-                    if (!vm.NovaDataFim.HasValue) vm.NovaDataFim = atual.DataFim;
+                    if (!vm.DataInicioAditivo.HasValue) vm.DataInicioAditivo = atual.DataInicio; // Fallback data doc
+                    if (!vm.NovaDataInicio.HasValue) vm.NovaDataInicio = atual.DataInicio;     // Fallback vigência ini
+                    if (!vm.NovaDataFim.HasValue) vm.NovaDataFim = atual.DataFim;            // Fallback vigência fim
                 }
                 else
                 {
-                    // Fallback para contrato pai
                     var pai = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId);
                     if(pai != null)
                     {
                         if (!vm.DataInicioAditivo.HasValue) vm.DataInicioAditivo = pai.DataInicio;
+                        if (!vm.NovaDataInicio.HasValue) vm.NovaDataInicio = pai.DataInicio;
                         if (!vm.NovaDataFim.HasValue) vm.NovaDataFim = pai.DataFim;
                     }
                 }
             }
 
             // 2. Validação do Orçamento (Trava Financeira)
-            // Lógica: Se aumentar valor, o saldo do orçamento deve suportar o NOVO TOTAL do contrato.
-            if (vm.TipoAditivo == TipoAditivo.Acrescimo || vm.TipoAditivo == TipoAditivo.PrazoAcrescimo)
+            // Lógica: Se for aditivo de valor (Acréscimo/Supressão), validamos o novo total contra o saldo
+            bool alteraValor = vm.TipoAditivo == TipoAditivo.Acrescimo || 
+                               vm.TipoAditivo == TipoAditivo.Supressao || 
+                               vm.TipoAditivo == TipoAditivo.PrazoAcrescimo || 
+                               vm.TipoAditivo == TipoAditivo.PrazoSupressao;
+
+            if (alteraValor)
             {
                 var contratoPai = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId);
                 if (contratoPai != null && contratoPai.OrcamentoId.HasValue)
                 {
                     var orcamento = await _orcamentoRepo.ObterHeaderPorIdAsync(contratoPai.OrcamentoId.Value);
                     
-                    // Gasto de todos os OUTROS contratos desse orçamento
+                    // Quanto já foi gasto por OUTROS contratos neste mesmo orçamento
                     var gastoOutros = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(
                         contratoPai.OrcamentoId.Value, 
                         ignorarContratoId: vm.ContratoId); 
                     
                     var saldoDisponivel = orcamento.ValorPrevistoTotal - gastoOutros;
 
-                    // Calcula quanto vai ficar o contrato
-                    decimal valorAtual = contratoPai.ValorContrato; // Ou pegar da última versão se preferir rigor
-                    decimal delta = Math.Abs(vm.NovoValorDecimal);
+                    // O NOVO CUSTO deste contrato será a soma dos itens da grid editada
+                    decimal novoValorTotalContrato = 0;
+                    if (vm.Itens != null) novoValorTotalContrato = vm.Itens.Sum(x => x.Valor);
 
-                    if (vm.EhValorMensal)
+                    // Valida se cabe no orçamento
+                    // Adicionamos uma margem de 0.01 para evitar erros de arredondamento de float
+                    if (novoValorTotalContrato > (saldoDisponivel + 0.01m)) 
                     {
-                        DateTime iniCalc = vm.DataInicioAditivo ?? DateTime.Today;
-                        DateTime fimCalc = vm.NovaDataFim ?? contratoPai.DataFim;
-                        int meses = ((fimCalc.Year - iniCalc.Year) * 12) + fimCalc.Month - iniCalc.Month + 1;
-                        if (meses < 0) meses = 0;
-                        delta = delta * meses;
-                    }
-
-                    decimal novoValorTotalContrato = valorAtual + delta;
-
-                    if (novoValorTotalContrato > (saldoDisponivel + 0.01m)) // Margem erro float
-                    {
-                         TempData["Erro"] = $"Saldo insuficiente no Orçamento. Disponível para este contrato: {saldoDisponivel:C2}. O contrato passaria a custar: {novoValorTotalContrato:C2}.";
-                         ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId); // Recarrega viewbag
-                         return View("AditivoContratoForm", vm);
+                            TempData["Erro"] = $"Saldo insuficiente no Orçamento. Disponível para este contrato: {saldoDisponivel:C2}. O contrato passaria a custar: {novoValorTotalContrato:C2}.";
+                            ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId); 
+                            return View("AditivoContratoForm", vm);
                     }
                 }
             }
@@ -146,9 +151,9 @@ namespace Financeiro.Controllers
 
             try 
             {
+                // O Serviço faz a mágica: Snapshot -> Atualiza Contrato -> Atualiza Itens
                 await _service.CriarAditivoAsync(vm);
                 
-                // Log e Justificativa
                 await _logService.RegistrarCriacaoAsync("ContratoAditivo", vm, vm.ContratoId);
                 await _justificativaService.RegistrarAsync("Contrato", "Aditivo de Contrato", vm.ContratoId, vm.Justificativa);
 
@@ -164,7 +169,7 @@ namespace Financeiro.Controllers
             }
         }
 
-        // Cancelar Aditivo (Via AJAX, chamado pela View de Contratos)
+        // Cancelar Aditivo (Via AJAX)
         [HttpPost]
         public async Task<IActionResult> Cancelar(int contratoId, int versao, string justificativa)
         {

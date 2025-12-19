@@ -45,6 +45,7 @@
         <th class="text-center">Vigência</th>
         <th class="text-end">Valor Global</th>
         <th>Observação</th>
+        <th class="text-center" style="width: 80px;">Ver</th> @* Nova Coluna *@
       </tr>
     </thead>
     <tbody>
@@ -66,13 +67,22 @@
               <td class="small text-muted text-truncate" style="max-width: 150px;" title="@v.Observacao">
                   @v.Observacao
               </td>
+              <td class="text-center">
+                  @* --- O BOTÃO DO OLHINHO --- *@
+                  <a href="@Url.Action("VisualizarHistorico", "Contratos", new { contratoId = v.ContratoId, versao = v.Versao })" 
+                     class="btn btn-sm btn-outline-secondary" 
+                     target="_blank" 
+                     title="Visualizar esta versão completa">
+                      <i class="bi bi-eye"></i>
+                  </a>
+              </td>
             </tr>
         }
     }
     else 
     {
         <tr>
-            <td colspan="6" class="text-center py-4 text-muted">
+            <td colspan="7" class="text-center py-4 text-muted">
                 <i class="bi bi-info-circle me-2"></i> Nenhum histórico encontrado.
             </td>
         </tr>
@@ -104,9 +114,8 @@
             const cId = $(this).data('contrato-id');
             const url = '@Url.Action("Historico", "Contratos")' + '?id=' + cId + '&pag=' + page;
             
-            // Recarrega o conteúdo dentro do container do SweetAlert
-            // (Assumindo que o container tem a classe swal-aditivos que definimos no Index)
-            $('.swal-aditivos').load(url);
+            // Recarrega o conteúdo dentro do container do Modal (ID do container na View Pai)
+            $('#histBody').load(url);
         });
     </script>
 }

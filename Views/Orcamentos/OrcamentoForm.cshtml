@@ -216,12 +216,24 @@
             }
 
             document.querySelectorAll('.orcamento-node').forEach(node => {
-                const inputVal = node.querySelector('input[data-prop="ValorPrevisto"]');
-                const badge = node.querySelector('.badge-mensal-valor');
-                if (inputVal && badge) {
-                    const val = parseBR(inputVal.value);
+                const inputTotal = node.querySelector('input[data-prop="ValorPrevisto"]');
+                // Pega tanto o badge (Pai) quanto o input (Filho) para atualizar
+                const badgePai = node.querySelector('.badge-mensal-valor');
+                const inputMensalFilho = node.querySelector('.input-mensal-calc');
+                
+                if (inputTotal) {
+                    const val = parseBR(inputTotal.value);
                     const mensalNode = val / meses;
-                    badge.innerText = `Mensal: R$ ${toBR(mensalNode)}`;
+                    
+                    // Se for Pai, atualiza o texto do badge
+                    if (badgePai) {
+                        badgePai.innerText = `Mensal: R$ ${toBR(mensalNode)}`;
+                    }
+                    
+                    // Se for Filho (Analítico), atualiza o input SOMENTE se não estiver em foco (digitando)
+                    if (inputMensalFilho && document.activeElement !== inputMensalFilho) {
+                        inputMensalFilho.value = toBR(mensalNode);
+                    }
                 }
             });
         }
@@ -262,6 +274,27 @@
                 initialOption = `<option value="${escapeHtml(node.Nome)}" selected>${escapeHtml(node.Nome)}</option>`;
             }
 
+            // --- LÓGICA DO CAMPO MENSAL ---
+            // Se for Pai (isParent): Mostra Badge (Apenas Leitura)
+            // Se for Filho (!isParent): Mostra Input (Editável)
+            let htmlMensal = '';
+            if (isParent) {
+                htmlMensal = `
+                    <span class="input-group-text bg-warning bg-opacity-10 border-end-0 text-dark" title="Valor Mensal Calculado">
+                        <i class="bi bi-calendar3"></i>
+                    </span>
+                    <span class="form-control bg-warning bg-opacity-10 text-dark badge-mensal-valor d-flex align-items-center justify-content-end fw-bold" style="white-space: nowrap;">
+                        Mensal: R$ 0,00
+                    </span>`;
+            } else {
+                htmlMensal = `
+                    <span class="input-group-text bg-white text-primary fw-bold" title="Definir por valor mensal">Mensal</span>
+                    <input type="text" 
+                           class="form-control money input-mensal-calc fw-bold text-end" 
+                           style="color: #0d6efd;" 
+                           placeholder="0,00">`;
+            }
+
             div.innerHTML = `
                 <div class="card shadow-sm border-0">
                     <div class="card-body p-2 d-flex align-items-center">
@@ -275,6 +308,7 @@
                                 </select>
                             </div>
                             <div class="d-flex gap-2">
+                                @* CAMPO TOTAL *@
                                 <div class="input-group input-group-sm" style="flex: 1;">
                                     <span class="input-group-text fw-bold">Total</span>
                                     <input type="text" 
@@ -284,13 +318,10 @@
                                            placeholder="0,00"
                                            ${isParent ? 'readonly style="background-color:#e9ecef;"' : ''}>
                                 </div>
+                                
+                                @* CAMPO MENSAL (Dinâmico: Badge ou Input) *@
                                 <div class="input-group input-group-sm" style="flex: 1;">
-                                    <span class="input-group-text bg-warning bg-opacity-10 text-dark fw-bold" title="Previsão de gasto mensal">
-                                        <i class="bi bi-calendar3 me-1"></i>
-                                    </span>
-                                    <span class="form-control bg-warning bg-opacity-10 text-dark badge-mensal-valor d-flex align-items-center justify-content-end fw-bold">
-                                        Mensal: R$ 0,00
-                                    </span>
+                                    ${htmlMensal}
                                 </div>
                             </div>
                         </div>
@@ -361,7 +392,6 @@
             atualizarVisuaisMensais();
         }
 
-        // --- CORREÇÃO IMPORTANTE: Função para salvar o estado visual no array ---
         function syncSelectionsIntoData() {
             document.querySelectorAll('.orcamento-node select[data-prop="Nome"]').forEach(sel => {
                 const path = sel.closest('.orcamento-node').dataset.path.split('-').map(Number);
@@ -436,7 +466,7 @@
         vigenciaFimInput.addEventListener('change', atualizarVisuaisMensais);
 
         btnAdicionarNivel.addEventListener('click', () => {
-            syncSelectionsIntoData(); // <<< SALVA O ESTADO ATUAL ANTES DE ADICIONAR
+            syncSelectionsIntoData();
             const novoNodeData = { NivelId: '', Nome: '', ValorPrevisto: 0, Filhos: [] };
             detalhamento.push(novoNodeData);
             renderizarArvore();
@@ -449,7 +479,7 @@
             const path = elem.dataset.path.split('-').map(Number);
             const act = btn.dataset.action;
 
-            syncSelectionsIntoData(); // <<< SALVA O ESTADO ATUAL ANTES DE MEXER
+            syncSelectionsIntoData();
 
             if (act === 'add-child') {
                 const pNode = getNode(path);
@@ -479,16 +509,51 @@
             syncSelectionsIntoData();
         });
 
+        // --- CÁLCULO INVERSO (MENSAL -> TOTAL) ---
         arvoreContainer.addEventListener('input', e => {
+            // Caso 1: Editando o MENSAL (Calcula para TRÁS)
+            if (e.target.classList.contains('input-mensal-calc')) {
+                const inputMensal = e.target;
+                const meses = calcularMesesDeVigencia();
+                const mensalVal = parseBR(inputMensal.value);
+                
+                // Regra: Total = Mensal * Meses
+                const novoTotal = mensalVal * meses;
+
+                // Acha o input de Total "irmão" (está no mesmo card-body)
+                const row = inputMensal.closest('.card-body');
+                const inputTotal = row.querySelector('input[data-prop="ValorPrevisto"]');
+
+                if (inputTotal) {
+                    // Atualiza visualmente o Total
+                    inputTotal.value = toBR(novoTotal);
+                    
+                    // Atualiza o dado na memória
+                    const path = row.closest('.orcamento-node').dataset.path.split('-').map(Number);
+                    const node = getNode(path);
+                    if(node) node.ValorPrevisto = novoTotal;
+
+                    // Dispara a cascata de soma para os pais
+                    calcularTotaisNosDados();
+                    atualizarReadonlyValores();
+                    // Obs: Não chamamos atualizarVisuaisMensais aqui para não sobrescrever o input que o usuário está digitando
+                }
+                return;
+            }
+
+            // Caso 2: Editando o TOTAL (Calcula para FRENTE - Comportamento Original)
             const inputValor = e.target.closest('input[data-prop="ValorPrevisto"]');
-            if (!inputValor) return;
-            const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
-            const node = getNode(path);
-            
-            if (node) node.ValorPrevisto = parseBR(inputValor.value);
-            
-            calcularTotaisNosDados();
-            atualizarReadonlyValores();
+            if (inputValor) {
+                const path = inputValor.closest('.orcamento-node').dataset.path.split('-').map(Number);
+                const node = getNode(path);
+                
+                if (node) node.ValorPrevisto = parseBR(inputValor.value);
+                
+                calcularTotaisNosDados();
+                atualizarReadonlyValores();
+                // Aqui sim chamamos para atualizar o input mensal correspondente
+                // (mas o atualizarVisuaisMensais tem a proteção activeElement)
+            }
         });
 
         let ultimoNivelFocado = 1;

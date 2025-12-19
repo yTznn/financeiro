@@ -107,7 +107,6 @@ builder.Services.AddScoped<IEnderecoService, EnderecoService>();
 
 // Financeiro e Contratos
 builder.Services.AddScoped<IContaBancariaRepositorio, ContaBancariaRepositorio>();
-builder.Services.AddScoped<INaturezaRepositorio, NaturezaRepositorio>();
 builder.Services.AddScoped<IOrcamentoRepositorio, OrcamentoRepositorio>();
 builder.Services.AddScoped<IMovimentacaoRepositorio, MovimentacaoRepositorio>();
 

@@ -3,142 +3,166 @@
 @using System.Globalization
 
 @{
-    ViewBag.Title  = "Registrar Aditivo de Contrato";
-    Layout         = "_Layout";
-    var versaoAtual = ViewBag.VersaoAtual as ContratoVersao; // Ajustado para ContratoVersao (conforme seu modelo)
+    ViewBag.Title = "Registrar Aditivo de Contrato";
+    Layout = "_Layout";
+    var versaoAtual = ViewBag.VersaoAtual as ContratoVersao;
     var br = new CultureInfo("pt-BR");
 }
 
-@* --- MENSAGENS DE SUCESSO/ERRO (SWEETALERT) --- *@
 <div id="pageFlags"
-     data-success="@(TempData["MensagemSucesso"] ?? TempData["Sucesso"])"
-     data-error="@(TempData["MensagemErro"] ?? TempData["Erro"])"></div>
+     data-success="@(TempData["Sucesso"])"
+     data-error="@(TempData["Erro"])"></div>
 
 <div class="container-md mt-4" style="max-width: 980px;">
-    <div class="text-center mb-4">
-        <h2 class="fw-bold">@ViewBag.Title</h2>
-        <p class="text-muted mb-0">Preencha os dados do novo aditivo para o contrato abaixo.</p>
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-primary"><i class="bi bi-file-earmark-plus"></i> @ViewBag.Title</h2>
     </div>
 
-    @* ——— Versão atual do contrato ——— *@
+    @* --- RESUMO DA SITUAÇÃO ATUAL --- *@
     @if (versaoAtual != null)
     {
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-body p-3 p-md-4">
-                <div class="d-flex flex-wrap align-items-center gap-3">
-                    <div class="flex-grow-1">
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            <span class="badge bg-info-subtle text-info fw-semibold">Versão atual</span>
-                            <span class="badge bg-primary-subtle text-primary">v @versaoAtual.Versao</span>
-                        </div>
-
-                        <div class="text-muted small">Objeto</div>
-                        <div class="fw-semibold mb-2">@versaoAtual.ObjetoContrato</div>
-
-                        <div class="row g-3">
-                            <div class="col-12 col-md-4">
-                                <div class="text-muted small">Valor vigente (Total)</div>
-                                <div class="fs-5 fw-bold">@versaoAtual.ValorContrato.ToString("C", br)</div>
-                            </div>
-                            <div class="col-12 col-md-8">
-                                <div class="text-muted small">Vigência</div>
-                                <div class="fw-semibold">
-                                    @($"{versaoAtual.DataInicio:dd/MM/yyyy}") — @($"{versaoAtual.DataFim:dd/MM/yyyy}")
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="ms-auto">
-                        <i class="bi bi-file-earmark-text text-info" style="font-size:2rem;"></i>
-                    </div>
+        <div class="card border-primary border-opacity-25 shadow-sm mb-4 bg-primary bg-opacity-10">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3 display-6 text-primary"><i class="bi bi-info-circle"></i></div>
+                <div>
+                    <h5 class="card-title fw-bold text-primary mb-1">Situação Atual (Versão @versaoAtual.Versao)</h5>
+                    <p class="card-text mb-0 text-dark">
+                        <span class="me-3"><i class="bi bi-calendar-event me-1"></i> Vigência: <strong>@versaoAtual.DataInicio.ToString("dd/MM/yyyy")</strong> a <strong>@versaoAtual.DataFim.ToString("dd/MM/yyyy")</strong></span>
+                        <span><i class="bi bi-cash-stack me-1"></i> Valor Global: <strong>@versaoAtual.ValorContrato.ToString("C", br)</strong></span>
+                    </p>
                 </div>
             </div>
         </div>
     }
 
-    @* Summary de validação padrão do ASP.NET *@
-    <div asp-validation-summary="All" class="alert alert-danger d-none" id="validationSummary"></div>
-
-    <form asp-action="Salvar"
-          method="post"
-          class="row g-3 bg-white p-4 rounded shadow-sm border position-relative"
-          id="formAditivoContrato"
-          novalidate
-          data-valor-atual="@((versaoAtual?.ValorContrato ?? 0m).ToString("0.##", CultureInfo.InvariantCulture))"
-          data-fim-atual="@(versaoAtual?.DataFim.ToString("yyyy-MM-dd") ?? "")">
-        
+    <form asp-action="Salvar" method="post" id="formAditivo" class="needs-validation" novalidate>
         @Html.AntiForgeryToken()
         <input asp-for="ContratoId" type="hidden" />
 
-        <div class="col-md-4">
-            <label asp-for="TipoAditivo" class="form-label fw-semibold">Tipo de Aditivo</label>
-            <select asp-for="TipoAditivo"
-                    asp-items="Html.GetEnumSelectList<TipoAditivo>()"
-                    class="form-select" id="tipoAditivoSelect">
-                <option value="">— selecione —</option>
-            </select>
-            <span asp-validation-for="TipoAditivo" class="text-danger small"></span>
+        @* --- BLOCO 1: CONFIGURAÇÕES DO ADITIVO --- *@
+        <div class="card shadow-sm mb-4 border-0">
+            <div class="card-header bg-light fw-bold text-uppercase small text-muted">
+                <i class="bi bi-sliders me-1"></i> Configuração do Aditivo
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label asp-for="TipoAditivo" class="form-label fw-bold"></label>
+                        <select asp-for="TipoAditivo" asp-items="Html.GetEnumSelectList<TipoAditivo>()" class="form-select" id="SelectTipoAditivo">
+                            <option value="">-- Selecione --</option>
+                        </select>
+                        <span asp-validation-for="TipoAditivo" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label asp-for="DataInicioAditivo" class="form-label fw-bold"></label>
+                        <input asp-for="DataInicioAditivo" type="date" class="form-control" />
+                        <span asp-validation-for="DataInicioAditivo" class="text-danger"></span>
+                        <div class="form-text">Data de assinatura do termo.</div>
+                    </div>
+
+                    @* --- PAR DE VIGÊNCIA --- *@
+                    <div class="col-md-3">
+                        <label asp-for="NovaDataInicio" class="form-label fw-bold"></label>
+                        <input asp-for="NovaDataInicio" type="date" class="form-control input-prazo" readonly />
+                        <span asp-validation-for="NovaDataInicio" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label asp-for="NovaDataFim" class="form-label fw-bold"></label>
+                        <input asp-for="NovaDataFim" type="date" class="form-control input-prazo" readonly />
+                        <span asp-validation-for="NovaDataFim" class="text-danger"></span>
+                    </div>
+                    
+                    <div class="col-12">
+                        <label asp-for="NovoObjeto" class="form-label fw-bold">Novo Objeto (Opcional)</label>
+                        <textarea asp-for="NovoObjeto" class="form-control" rows="2" placeholder="Mantenha vazio para preservar o objeto atual..."></textarea>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="col-md-4">
-            <label asp-for="DataInicioAditivo" class="form-label fw-semibold">Início do Aditivo</label>
-            <input asp-for="DataInicioAditivo" type="date" class="form-control" id="DataInicioAditivo" />
-            <span asp-validation-for="DataInicioAditivo" class="text-danger small"></span>
-        </div>
-
-        <div class="col-md-4" id="campo-novo-valor" style="display:none;">
-            <label asp-for="NovoValor" class="form-label fw-semibold">Valor (positivo)</label>
-            <div class="input-group">
-                <span class="input-group-text">R$</span>
-                <input asp-for="NovoValor" type="text" class="form-control money" id="NovoValor" />
+        @* --- BLOCO 2: DETALHAMENTO FINANCEIRO (GRID) --- *@
+        <div class="card shadow-sm mb-4 border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <div>
+                    <span class="fw-bold text-uppercase small text-muted"><i class="bi bi-table me-1"></i> Detalhamento Financeiro</span>
+                    <div class="small text-muted mt-1" id="msgGrid">Selecione um tipo de aditivo de valor para editar.</div>
+                </div>
+                <div class="bg-primary text-white px-3 py-2 rounded shadow-sm">
+                    <div class="small text-uppercase opacity-75" style="font-size: 0.7rem;">Novo Total Estimado</div>
+                    <div class="fw-bold fs-5" id="badgeTotal">R$ 0,00</div>
+                </div>
             </div>
             
-            <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" asp-for="EhValorMensal" id="EhValorMensal">
-                <label class="form-check-label text-muted small" for="EhValorMensal">
-                    É um acréscimo/desconto na parcela mensal?
-                </label>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tabelaItens">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60%;" class="ps-4">Item / Especialidade</th>
+                            <th style="width: 40%;" class="text-end pe-4">Novo Valor Total (R$)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Itens != null && Model.Itens.Any())
+                        {
+                            for (int i = 0; i < Model.Itens.Count; i++)
+                            {
+                                <tr>
+                                    <td class="ps-4">
+                                        <input type="hidden" name="Itens[@i].Id" value="@Model.Itens[i].Id" />
+                                        <input type="hidden" name="Itens[@i].NomeItem" value="@Model.Itens[i].NomeItem" />
+                                        
+                                        <div class="fw-semibold text-dark">@Model.Itens[i].NomeItem</div>
+                                        <div class="text-muted small">
+                                            <i class="bi bi-clock-history"></i> Valor Atual: @Model.Itens[i].Valor.ToString("C", br)
+                                        </div>
+                                    </td>
+                                    <td class="pe-4">
+                                        @* INPUT INICIA COMO READONLY *@
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-white border-end-0 text-muted">R$</span>
+                                            <input type="text" 
+                                                   name="Itens[@i].Valor" 
+                                                   value="@Model.Itens[i].Valor.ToString("N2", br)" 
+                                                   class="form-control money item-valor fw-bold text-end border-start-0 fs-5 bg-light" 
+                                                   autocomplete="off" 
+                                                   readonly />
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="2" class="text-center text-muted p-5 bg-light">
+                                    <i class="bi bi-exclamation-octagon fs-1 d-block mb-2"></i>
+                                    Nenhum item financeiro encontrado.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-
-            <div id="ajudaValor" class="form-text fw-semibold mt-1 text-secondary"></div>
-            <div id="previewValor" class="small mt-1 text-muted bg-light p-2 rounded"></div>
-            <span asp-validation-for="NovoValor" class="text-danger small"></span>
         </div>
 
-        <div class="col-md-4" id="campo-nova-data" style="display:none;">
-            <label asp-for="NovaDataFim" class="form-label fw-semibold">Nova Data de Fim</label>
-            <input asp-for="NovaDataFim" type="date" class="form-control" id="NovaDataFim" />
-            <span asp-validation-for="NovaDataFim" class="text-danger small"></span>
+        @* --- BLOCO 3: JUSTIFICATIVA --- *@
+        <div class="mb-4">
+            <label asp-for="Justificativa" class="form-label fw-bold">Justificativa do Aditivo <span class="text-danger">*</span></label>
+            <textarea asp-for="Justificativa" class="form-control" rows="3" placeholder="Descreva o motivo técnico/legal para esta alteração..."></textarea>
+            <span asp-validation-for="Justificativa" class="text-danger"></span>
         </div>
 
-        <div class="col-12" id="campo-novo-objeto" style="display:none;">
-            <label asp-for="NovoObjeto" class="form-label fw-semibold">Novo Objeto</label>
-            <textarea asp-for="NovoObjeto" class="form-control" rows="3"></textarea>
-            <span asp-validation-for="NovoObjeto" class="text-danger small"></span>
-        </div>
-
-        @* [CORREÇÃO] Campo Justificativa Adicionado *@
-        <div class="col-12">
-            <label asp-for="Justificativa" class="form-label fw-semibold">Justificativa / Observação</label>
-            <textarea asp-for="Justificativa"
-                      class="form-control"
-                      placeholder="Descreva o motivo do aditivo..."
-                      rows="2"></textarea>
-            <span asp-validation-for="Justificativa" class="text-danger small"></span>
-        </div>
-
-        <div class="col-12 d-flex gap-2 pt-2">
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-save2-fill me-1"></i> Salvar Aditivo
-            </button>
-            <a asp-controller="Contratos" asp-action="Editar" asp-route-id="@Model.ContratoId" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left-circle me-1"></i> Cancelar
+        @* --- RODAPÉ COM AÇÕES --- *@
+        <div class="d-flex justify-content-end gap-2 pb-5">
+            <a asp-controller="Contratos" asp-action="Editar" asp-route-id="@Model.ContratoId" class="btn btn-light border btn-lg px-4">
+                Cancelar
             </a>
-        </div>
-
-        <div class="position-absolute top-0 end-0 m-3 d-none" id="flagAuto">
-            <span class="badge bg-primary-subtle text-primary">Cálculo automático</span>
+            <button type="submit" class="btn btn-success btn-lg px-5 fw-bold shadow-sm" id="btnSalvar">
+                <i class="bi bi-check2-circle me-2"></i> Confirmar Aditivo
+            </button>
         </div>
     </form>
 </div>
@@ -146,194 +170,113 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+    
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Aceitar formato PT-BR no validator do jQuery
-        if (window.jQuery && $.validator) {
-            $.validator.methods.number = function (value, element) {
-                return this.optional(element) ||
-                       /^-?(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d+)?$/.test(value) ||
-                       /^-?\d+(?:[\.,]\d+)?$/.test(value);
-            };
-        }
+        $(document).ready(function() {
+            // 1. Alertas
+            const successMsg = $('#pageFlags').data('success');
+            const errorMsg = $('#pageFlags').data('error');
+            if (successMsg) Swal.fire({ icon: 'success', title: 'Sucesso', text: successMsg });
+            if (errorMsg) Swal.fire({ icon: 'error', title: 'Atenção', text: errorMsg });
 
-        const form          = document.getElementById('formAditivoContrato');
-        const tipoSelect    = document.getElementById('tipoAditivoSelect');
-        const campoValor    = document.getElementById('campo-novo-valor');
-        const campoData     = document.getElementById('campo-nova-data');
-        const campoObj      = document.getElementById('campo-novo-objeto');
-        const inpValor      = document.getElementById('NovoValor');
-        const chkMensal     = document.getElementById('EhValorMensal');
-        const ajudaValor    = document.getElementById('ajudaValor');
-        const preview       = document.getElementById('previewValor');
-        const novaFim       = document.getElementById('NovaDataFim');
-        const iniAditivo    = document.getElementById('DataInicioAditivo');
-        const flagAuto      = document.getElementById('flagAuto');
+            // 2. Máscaras
+            $('.money').mask('#.##0,00', {reverse: true});
 
-        // enum: Prazo=1, PrazoAcrescimo=2, PrazoSupressao=3, Supressao=4, Acrescimo=5
-        const T = { Prazo:1, PrazoAcrescimo:2, PrazoSupressao:3, Supressao:4, Acrescimo:5 };
+            // 3. Lógica de Bloqueio de Campos por Tipo (CORRIGIDA)
+            function configurarCamposPorTipo() {
+                // Pega o texto da opção selecionada
+                let textoOriginal = $('#SelectTipoAditivo option:selected').text();
+                
+                // Normaliza: Remove acentos e joga pra minúsculo (Acréscimo -> acrescimo)
+                let texto = textoOriginal.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                
+                const valorSelecionado = $('#SelectTipoAditivo').val();
 
-        const valorAtual = Number(form?.dataset?.valorAtual || '0');
-        const fimAtualStr = form?.dataset?.fimAtual || '';
+                if (!valorSelecionado) {
+                    bloquearGrid(true);
+                    bloquearPrazo(true);
+                    return;
+                }
 
-        function show(el, on){ if (el) el.style.display = on ? 'block' : 'none'; }
-        function req(el, on){ if (el){ el.required = !!on; el.setAttribute('aria-required', on ? 'true' : 'false'); } }
+                console.log("Texto Selecionado: ", texto); // Para debug
 
-        function atualizarAjudaValor(tipo){
-            let msg = '';
-            switch (tipo) {
-                case T.Supressao:       msg = 'O valor será SUBTRAÍDO do total vigente.'; break;
-                case T.Acrescimo:       msg = 'O valor será ACRESCENTADO ao total vigente.'; break;
-                case T.PrazoSupressao:  msg = 'O valor será SUBTRAÍDO e o prazo alterado.'; break;
-                case T.PrazoAcrescimo:  msg = 'O valor será ACRESCENTADO e o prazo alterado.'; break;
-                default: msg = '';
+                // Regras:
+                // PRAZO: Habilita se tiver "prazo"
+                const temPrazo = texto.includes("prazo");
+                
+                // VALOR: Habilita se tiver "acrescimo" OU "supressao"
+                const temValor = texto.includes("acrescimo") || texto.includes("supressao");
+
+                // Aplica bloqueios (Lógica Inversa: Se TEM prazo, NÃO bloqueia prazo)
+                bloquearPrazo(!temPrazo);
+                bloquearGrid(!temValor);
             }
-            ajudaValor.textContent = msg;
-            flagAuto?.classList.toggle('d-none', !msg);
-        }
 
-        function parsePtBr(s){
-            if(!s) return 0;
-            // Remove pontos de milhar e troca vírgula decimal por ponto para cálculo JS
-            return Number((s || '').replace(/\./g,'').replace(',','.')) || 0;
-        }
-        
-        function fmtBr(n){
-            try { return Number(n).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
-            catch { return 'R$ ' + (n || 0).toFixed(2); }
-        }
-
-        function mesesEntre(d1Str, d2Str) {
-            if(!d1Str || !d2Str) return 0;
-            const i = new Date(d1Str + 'T00:00:00');
-            const f = new Date(d2Str + 'T00:00:00');
-            if (isNaN(i) || isNaN(f)) return 0;
-            if (f < i) return 0;
-            return (f.getFullYear() - i.getFullYear()) * 12 + (f.getMonth() - i.getMonth()) + 1;
-        }
-
-        function atualizarPreview(){
-            preview.textContent = '';
-            const tipo = parseInt(tipoSelect?.value || '0', 10);
-            const precisaValor = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
-            if(!precisaValor || !inpValor) return;
-
-            let delta = parsePtBr(inpValor.value);
-            if (delta <= 0) return;
-
-            if (chkMensal && chkMensal.checked) {
-                const dataFinalConsiderada = (novaFim && novaFim.value) ? novaFim.value : fimAtualStr;
-                const dataInicialConsiderada = (iniAditivo && iniAditivo.value) ? iniAditivo.value : new Date().toISOString().slice(0, 10);
+            function bloquearPrazo(bloquear) {
+                const inputs = $('.input-prazo');
+                inputs.prop('readonly', bloquear);
                 
-                const meses = mesesEntre(dataInicialConsiderada, dataFinalConsiderada);
-                
-                if(meses > 0) {
-                    const deltaTotal = delta * meses;
-                    preview.innerHTML = `<small class='d-block mb-1'>Cálculo Mensal: ${fmtBr(delta)} x ${meses} meses = <strong>${fmtBr(deltaTotal)}</strong></small>`;
-                    delta = deltaTotal;
+                if (bloquear) {
+                    inputs.addClass('bg-light');
                 } else {
-                    preview.innerHTML = `<small class='text-danger'>Não foi possível calcular os meses (verifique datas).</small>`;
+                    inputs.removeClass('bg-light');
                 }
             }
 
-            const final = (tipo === T.Supressao || tipo === T.PrazoSupressao)
-                          ? (valorAtual - delta)
-                          : (valorAtual + delta);
-
-            preview.innerHTML += `Valor Total Vigente: <strong>${fmtBr(valorAtual)}</strong> <br> Novo Total Estimado: <strong>${fmtBr(final)}</strong>`;
-        }
-
-        function aplicarTipo() {
-            const tipo = parseInt(tipoSelect?.value || '0', 10);
-
-            const precisaValor    = [T.Acrescimo, T.Supressao, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
-            const precisaVigencia = [T.Prazo, T.PrazoAcrescimo, T.PrazoSupressao].includes(tipo);
-
-            show(campoValor, precisaValor);
-            show(campoData,  precisaVigencia);
-            show(campoObj,   false);
-
-            req(inpValor, precisaValor);
-            req(novaFim,  precisaVigencia);
-
-            atualizarAjudaValor(tipo);
-            atualizarPreview();
-        }
-        
-        function formatarMoedaInput(el) {
-            // Apenas formata visualmente, mantendo o valor para envio
-            const v = parsePtBr(el.value);
-            if(v) el.value = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-
-        if(inpValor) {
-            inpValor.addEventListener('blur', () => formatarMoedaInput(inpValor));
-            inpValor.addEventListener('input', atualizarPreview);
-        }
-
-        tipoSelect?.addEventListener('change', aplicarTipo);
-        chkMensal?.addEventListener('change', atualizarPreview);
-        iniAditivo?.addEventListener('change', atualizarPreview);
-        novaFim?.addEventListener('change', atualizarPreview);
-        
-        aplicarTipo();
-
-        const summary = document.getElementById("validationSummary");
-        if (summary && summary.innerText.trim().length > 0) summary.classList.remove("d-none");
-
-        form?.addEventListener('submit', async (e) => {
-            if (window.jQuery && !$(form).valid()) return;
-
-            // [VALIDAÇÃO FINAL NO JS]
-            if (campoValor && campoValor.style.display !== 'none' && inpValor) {
-                // Checa se é um número válido (ignorando formatação PT-BR para teste lógico)
-                const checkClean = parsePtBr(inpValor.value);
+            function bloquearGrid(bloquear) {
+                const inputs = $('.item-valor');
+                inputs.prop('readonly', bloquear);
                 
-                if (checkClean <= 0) {
-                    e.preventDefault();
-                    return Swal.fire({ icon:'warning', title:'Informe um valor numérico maior que zero.' });
+                if (bloquear) {
+                    inputs.addClass('bg-light text-muted').removeClass('fw-bold border-primary');
+                    $('#msgGrid').text('Grid bloqueada. Selecione um aditivo de VALOR (Acréscimo/Supressão) para editar.');
+                } else {
+                    inputs.removeClass('bg-light text-muted').addClass('fw-bold border-primary');
+                    $('#msgGrid').text('Edite os valores abaixo para o novo total desejado.');
                 }
-                
-                // [IMPORTANTE] NÃO alteramos o valor do input aqui. 
-                // Deixamos como string formatada (ex: 1.000,00) para o ModelBinder do C# tratar.
             }
 
-            e.preventDefault();
-            const ok = await Swal.fire({
-                icon:'question',
-                title:'Confirmar registro do aditivo?',
-                showCancelButton:true,
-                confirmButtonText:'Salvar',
-                cancelButtonText:'Cancelar'
+            // Ouve a mudança no dropdown
+            $('#SelectTipoAditivo').change(configurarCamposPorTipo);
+
+            // 4. Cálculo de Totais
+            function atualizarTotal() {
+                let total = 0;
+                $('.item-valor').each(function() {
+                    let valStr = $(this).val().replace(/\./g, '').replace(',', '.');
+                    let val = parseFloat(valStr);
+                    if (!isNaN(val)) total += val;
+                });
+                $('#badgeTotal').text('Novo Total: ' + total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+            }
+
+            $(document).on('keyup change', '.item-valor', atualizarTotal);
+            
+            // Executa na carga inicial
+            atualizarTotal();
+            configurarCamposPorTipo(); // Garante o estado correto ao carregar
+
+            // 5. Submit com Confirmação
+            $('#formAditivo').on('submit', function(e) {
+                if (!$(this).valid()) return;
+                e.preventDefault();
+                
+                Swal.fire({
+                    title: 'Confirmar Aditivo?',
+                    text: "Essa ação criará uma nova versão do contrato.",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#198754',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Sim, salvar!',
+                    cancelButtonText: 'Revisar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.submit();
+                    }
+                });
             });
-            if (ok.isConfirmed) form.submit();
         });
-
-        // --- EXIBIÇÃO DE ALERTAS (TEMP DATA) ---
-        const pageFlags = document.getElementById('pageFlags');
-        if (pageFlags) {
-            const successMsg = pageFlags.getAttribute('data-success');
-            const errorMsg   = pageFlags.getAttribute('data-error');
-
-            if (successMsg) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Sucesso!',
-                    text: successMsg,
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            }
-
-            if (errorMsg) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Atenção',
-                    html: errorMsg // Permite HTML para quebras de linha se houver
-                });
-            }
-        }
-    });
     </script>
 }

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Transactions; // Necessário para garantir a integridade (Snapshot + Update)
 
 namespace Financeiro.Servicos
 {
@@ -42,14 +43,13 @@ namespace Financeiro.Servicos
 
             int versaoId = await _versaoRepo.InserirAsync(versaoInicial);
 
-            // 2. Snapshot dos ITENS (Antes eram Naturezas)
-            // Se o ViewModel já tem os itens preenchidos (geralmente tem no Insert), usamos eles.
+            // 2. Snapshot dos ITENS
             if (vm.Itens != null && vm.Itens.Any())
             {
                 var itensHistorico = vm.Itens.Select(item => new ContratoVersaoItem
                 {
                     ContratoVersaoId = versaoId,
-                    OrcamentoDetalheId = item.Id, // No VM, Id = OrcamentoDetalheId
+                    OrcamentoDetalheId = item.Id,
                     Valor = item.Valor
                 }).ToList();
 
@@ -57,125 +57,120 @@ namespace Financeiro.Servicos
             }
         }
 
-        // --- GERAÇÃO DE ADITIVO (SNAPSHOT V-NEXT) ---
+        // --- GERAÇÃO DE ADITIVO (SNAPSHOT DO ESTADO ATUAL -> ATUALIZAÇÃO PARA O NOVO) ---
         public async Task CriarAditivoAsync(AditivoContratoViewModel vm)
         {
             if (vm == null) throw new ArgumentNullException(nameof(vm));
-            
-            var contrato = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId)
-                           ?? throw new ArgumentException("Contrato não encontrado.");
 
-            // 1. Garante V1 se não existir
-            var vigente = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId);
-            if (vigente == null)
+            // Usamos TransactionScope para que o salvamento do histórico e a atualização do contrato sejam atômicos
+            using (var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {
-                await CriarVersaoInicialAsync(contrato);
-                vigente = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId);
-            }
+                // 1. RECUPERAR O ESTADO ATUAL (ANTES DA MUDANÇA)
+                // Precisamos dos dados "crus" do banco para salvar no histórico antes de alterar
+                var contratoAtual = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId);
+                if (contratoAtual == null) throw new Exception("Contrato original não encontrado.");
 
-            // 2. Define novos dados (Datas)
-            DateTime novaIni = vm.DataInicioAditivo ?? vigente.DataInicio;
-            DateTime novaFim = vm.NovaDataFim ?? vigente.DataFim;
+                // Descobrir qual é o número da próxima versão
+                var ultimaVersao = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId);
+                int numeroNovaVersao = (ultimaVersao?.Versao ?? 1) + 1;
 
-            // 3. Define novo Valor
-            decimal valorFinal = vigente.ValorContrato;
-            bool alteraValor = vm.TipoAditivo == TipoAditivo.Acrescimo || 
-                               vm.TipoAditivo == TipoAditivo.Supressao ||
-                               vm.TipoAditivo == TipoAditivo.PrazoAcrescimo ||
-                               vm.TipoAditivo == TipoAditivo.PrazoSupressao;
-
-            if (alteraValor)
-            {
-                if (vm.NovoValorDecimal == 0) throw new ArgumentException("Informe um valor diferente de zero.");
-                decimal delta = Math.Abs(vm.NovoValorDecimal);
-                
-                if (vm.TipoAditivo == TipoAditivo.Supressao || vm.TipoAditivo == TipoAditivo.PrazoSupressao)
-                    delta = -delta;
-
-                if (vm.EhValorMensal)
+                // 2. CRIAR O SNAPSHOT (HISTÓRICO)
+                // Salvamos como o contrato ERA até agora (Estado Vigente vira Histórico)
+                var versaoHistorica = new ContratoVersao
                 {
-                    int meses = CalcularMeses(novaIni, novaFim);
-                    delta = delta * meses;
-                }
-                valorFinal = vigente.ValorContrato + delta;
-                if (valorFinal < 0) throw new ArgumentException("O valor do contrato não pode ficar negativo.");
-            }
+                    ContratoId = vm.ContratoId,
+                    Versao = numeroNovaVersao, // A versão salva no histórico ganha o ID novo
+                    
+                    // Dados do momento anterior à mudança:
+                    ObjetoContrato = contratoAtual.ObjetoContrato,
+                    DataInicio = contratoAtual.DataInicio,
+                    DataFim = contratoAtual.DataFim,
+                    ValorContrato = contratoAtual.ValorContrato,
+                    Ativo = contratoAtual.Ativo,
+                    
+                    // Metadados do Aditivo que está sendo aplicado agora:
+                    TipoAditivo = vm.TipoAditivo,
+                    Observacao = vm.Justificativa,
+                    DataRegistro = DateTime.Now,
+                    DataInicioAditivo = vm.DataInicioAditivo
+                };
 
-            // 4. Criação da Nova Versão (Header do Histórico)
-            var novaVersao = new ContratoVersao
-            {
-                ContratoId = vm.ContratoId,
-                Versao = vigente.Versao + 1,
-                DataInicio = novaIni,
-                DataFim = novaFim,
-                ValorContrato = valorFinal,
-                ObjetoContrato = contrato.ObjetoContrato,
-                TipoAditivo = vm.TipoAditivo,
-                Observacao = vm.Justificativa,
-                DataRegistro = DateTime.Now,
-                DataInicioAditivo = vm.DataInicioAditivo,
-                Ativo = true
-            };
+                int idVersao = await _versaoRepo.InserirAsync(versaoHistorica);
 
-            int novaVersaoId = await _versaoRepo.InserirAsync(novaVersao);
-
-            // 5. Snapshot dos ITENS (Cópia da versão anterior/atual)
-            // Precisamos pegar os itens que estão VIGENTES no banco agora
-            var itensAtuais = await _contratoRepo.ListarItensPorContratoAsync(vm.ContratoId);
-            
-            if (itensAtuais != null)
-            {
-                var itensCopia = new List<ContratoVersaoItem>();
-                foreach(var item in itensAtuais)
+                // 3. SALVAR OS ITENS NO HISTÓRICO
+                // Copiamos os itens que estavam vigentes para a tabela de versão
+                if (contratoAtual.Itens != null && contratoAtual.Itens.Any())
                 {
-                    // O retorno é dynamic, precisamos converter
-                    // Propriedades vindas do Repo: Id (OrcamentoDetalheId), Nome, ValorTotalItemNoContrato
-                    itensCopia.Add(new ContratoVersaoItem
+                    var itensHistoricos = contratoAtual.Itens.Select(x => new ContratoVersaoItem
                     {
-                        ContratoVersaoId = novaVersaoId,
-                        OrcamentoDetalheId = (int)item.Id, 
-                        Valor = (decimal)item.ValorTotalItemNoContrato
-                    });
+                        ContratoVersaoId = idVersao,
+                        OrcamentoDetalheId = x.Id,
+                        Valor = x.Valor // Valor que estava valendo antes do aditivo
+                    }).ToList();
+
+                    await _versaoRepo.InserirItensAsync(itensHistoricos);
                 }
 
-                if (itensCopia.Any())
+                // 4. PREPARAR A ATUALIZAÇÃO DO CONTRATO PRINCIPAL (O FUTURO)
+                // Agora pegamos o ViewModel do Aditivo (que tem a grid editada) e aplicamos no Contrato
+                
+                // Recalcula o Valor Total Global baseado nos novos itens da grid
+                decimal novoValorTotal = 0;
+                if (vm.Itens != null) novoValorTotal = vm.Itens.Sum(x => x.Valor);
+
+                var contratoParaAtualizar = new ContratoViewModel
                 {
-                    await _versaoRepo.InserirItensAsync(itensCopia);
-                }
-            }
+                    Id = vm.ContratoId,
+                    
+                    // Campos que mudam com o aditivo:
+                    ObjetoContrato = !string.IsNullOrWhiteSpace(vm.NovoObjeto) ? vm.NovoObjeto : contratoAtual.ObjetoContrato,
+                    // Data Inicio geralmente mantém a original do contrato, a não ser que seja renegociação total. 
+                    // Vamos manter a original:
+                    DataInicio = contratoAtual.DataInicio, 
+                    // Nova data fim se informada, senão mantém a atual
+                    DataFim = vm.NovaDataFim ?? contratoAtual.DataFim, 
+                    ValorContrato = novoValorTotal, // O novo total vem da soma dos itens editados
+                    Observacao = vm.Justificativa, // Atualiza obs do contrato atual
+                    
+                    // Campos fixos (mantém o original):
+                    FornecedorIdCompleto = contratoAtual.FornecedorIdCompleto,
+                    NumeroContrato = contratoAtual.NumeroContrato,
+                    AnoContrato = contratoAtual.AnoContrato,
+                    DataAssinatura = contratoAtual.DataAssinatura,
+                    OrcamentoId = contratoAtual.OrcamentoId, // Importante manter o vínculo
+                    Ativo = true,
+                    
+                    // NOVOS ITENS (A grid editada pelo usuário)
+                    Itens = vm.Itens ?? new List<ContratoItemViewModel>()
+                };
 
-            // 6. Atualiza a tabela PAI (Contrato) IMEDIATAMENTE
-            // Isso faz com que o contrato fique com o Valor Novo, mas os Itens Antigos.
-            // A View vai detectar isso e avisar: "Redistribua o rateio".
-            await _contratoRepo.AtualizarVigenciaEValorAsync(
-                vm.ContratoId, 
-                novaIni, 
-                novaFim, 
-                valorFinal
-            );
+                // 5. EFETIVAR A ATUALIZAÇÃO NO BANCO
+                // O método AtualizarAsync do repositório já sabe: limpa ContratoItem antigo e insere o novo
+                await _contratoRepo.AtualizarAsync(contratoParaAtualizar);
+
+                // Confirma a transação
+                scope.Complete();
+            }
         }
 
-        // --- ATUALIZAÇÃO DE SNAPSHOT (CORREÇÃO DE RATEIO) ---
+        // --- Sincronização em caso de edição manual (sem aditivo) ---
         public async Task AtualizarSnapshotUltimaVersaoAsync(int contratoId)
         {
-            // 1. Pega a última versão
             var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(contratoId);
             if (versaoAtual == null) return;
 
-            // 2. Atualiza Header da versão (caso data/valor tenham mudado na edição)
             var contratoVigente = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
             if(contratoVigente == null) return;
 
+            // Atualiza Header
             versaoAtual.DataInicio = contratoVigente.DataInicio;
             versaoAtual.DataFim = contratoVigente.DataFim;
             versaoAtual.ValorContrato = contratoVigente.ValorContrato;
             await _versaoRepo.AtualizarAsync(versaoAtual);
 
-            // 3. Atualiza os ITENS da versão (Snapshot) para ficarem iguais aos do Contrato
-            // Primeiro limpa os itens antigos dessa versão
+            // Atualiza Itens (Remove e Recria)
             await _versaoRepo.ExcluirItensPorVersaoAsync(versaoAtual.Id);
 
-            // Agora insere os novos baseados no contrato vigente
             if (contratoVigente.Itens != null && contratoVigente.Itens.Any())
             {
                 var novosItensSnapshot = contratoVigente.Itens.Select(x => new ContratoVersaoItem
@@ -189,58 +184,65 @@ namespace Financeiro.Servicos
             }
         }
 
+        // --- CANCELAR ADITIVO (ROLLBACK) ---
         public async Task<(ContratoVersao Removida, ContratoVersao? Vigente)> CancelarUltimoAditivoAsync(
             int contratoId, int versao, string justificativa)
         {
-            var atual = await _versaoRepo.ObterVersaoAtualAsync(contratoId)
-                        ?? throw new ArgumentException("Não há versão vigente para cancelar.");
-
-            if (atual.Versao != versao)
-                throw new ArgumentException("Versão informada não é a vigente.");
-
-            // Remove a versão atual (aditivo cancelado)
-            await _versaoRepo.ExcluirAsync(atual.Id);
-
-            // Busca a versão anterior (que vai voltar a ser a vigente)
-            var anterior = await _versaoRepo.ObterVersaoAtualAsync(contratoId);
-
-            if (anterior != null)
+            using (var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {
-                // 1. Restaura Header (Datas e Valor Total)
-                await _contratoRepo.AtualizarVigenciaEValorAsync(
-                    contratoId,
-                    anterior.DataInicio,
-                    anterior.DataFim,
-                    anterior.ValorContrato
-                );
+                var versaoParaRemover = await _versaoRepo.ObterPorIdAsync(contratoId, versao);
+                if (versaoParaRemover == null) throw new ArgumentException("Versão não encontrada.");
 
-                // 2. Restaura os ITENS (Deleta os itens atuais do contrato e insere os da versão anterior)
-                var itensHistoricoAnterior = await _versaoRepo.ListarItensPorVersaoAsync(anterior.Id);
+                var ultimaVersao = await _versaoRepo.ObterVersaoAtualAsync(contratoId);
+                if (ultimaVersao.Id != versaoParaRemover.Id) throw new ArgumentException("Apenas o último aditivo pode ser cancelado.");
+
+                // A versão que estamos removendo contém o SNAPSHOT de como o contrato era ANTES desse aditivo.
+                // Então, para cancelar o aditivo, nós restauramos os dados dessa versão para a tabela principal.
+
+                // 1. Recupera os itens dessa versão histórica (Backup)
+                var itensHistoricos = await _versaoRepo.ListarItensPorVersaoAsync(versaoParaRemover.Id);
+
+                // 2. Monta o objeto para restaurar o contrato principal
+                // Precisamos de alguns dados do contrato atual (fixos) para montar o ViewModel completo
+                var contratoAtual = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
                 
-                // Precisamos converter para ViewModel para usar o método AtualizarAsync do Repositório,
-                // ou atualizar manualmente. Vamos montar um ViewModel para facilitar e usar a lógica de INSERT/DELETE que já existe lá.
-                var contratoRestaurado = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
-                
-                if (contratoRestaurado != null)
+                var contratoRestaurado = new ContratoViewModel
                 {
-                    contratoRestaurado.Itens = itensHistoricoAnterior.Select(h => new ContratoItemViewModel
+                    Id = contratoId,
+                    // Restauramos os dados que estavam salvos no histórico
+                    ObjetoContrato = versaoParaRemover.ObjetoContrato,
+                    DataInicio = versaoParaRemover.DataInicio,
+                    DataFim = versaoParaRemover.DataFim,
+                    ValorContrato = versaoParaRemover.ValorContrato,
+                    
+                    // Mantemos dados fixos
+                    FornecedorIdCompleto = contratoAtual.FornecedorIdCompleto,
+                    NumeroContrato = contratoAtual.NumeroContrato,
+                    AnoContrato = contratoAtual.AnoContrato,
+                    DataAssinatura = contratoAtual.DataAssinatura,
+                    OrcamentoId = contratoAtual.OrcamentoId,
+                    Ativo = true,
+                    Observacao = $"Aditivo cancelado. Restaurado para estado anterior (v.{versao-1}). Justificativa: {justificativa}",
+
+                    // Restaura os itens
+                    Itens = itensHistoricos.Select(x => new ContratoItemViewModel 
                     {
-                        Id = h.OrcamentoDetalheId,
-                        Valor = h.Valor
-                        // Nome não é necessário para o Insert
-                    }).ToList();
+                        Id = x.OrcamentoDetalheId,
+                        Valor = x.Valor,
+                        NomeItem = x.NomeItem // Apenas visual, mas o repo usa ID
+                    }).ToList()
+                };
 
-                    await _contratoRepo.AtualizarAsync(contratoRestaurado);
-                }
+                // 3. Atualiza o Contrato Principal (Rollback dos dados e itens)
+                await _contratoRepo.AtualizarAsync(contratoRestaurado);
+
+                // 4. Remove o registro do histórico
+                await _versaoRepo.ExcluirAsync(versaoParaRemover.Id);
+
+                scope.Complete();
+
+                return (versaoParaRemover, null);
             }
-
-            return (atual, anterior);
-        }
-
-        private int CalcularMeses(DateTime inicio, DateTime fim)
-        {
-            if (fim < inicio) return 0;
-            return ((fim.Year - inicio.Year) * 12) + fim.Month - inicio.Month + 1;
         }
     }
 }

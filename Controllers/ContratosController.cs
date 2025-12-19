@@ -380,6 +380,72 @@ namespace Financeiro.Controllers
             ViewBag.ContratoId = id;
             return PartialView("_HistoricoContrato", itens);
         }
+        [HttpGet]
+        [AutorizarPermissao("CONTRATO_VIEW")]
+        public async Task<IActionResult> VisualizarHistorico(int contratoId, int versao)
+        {
+            // 1. Busca os dados BASE do contrato (Cabeçalho fixo: Fornecedor, Número, Ano, etc)
+            // Usamos o método existente para pegar esses dados mestres já formatados
+            var contratoAtual = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
+            if (contratoAtual == null) return NotFound("Contrato não encontrado.");
+
+            // 2. Busca o SNAPSHOT DAQUELA ÉPOCA (Tabela ContratoVersao)
+            // Aqui pegamos: Valor antigo, Vigência antiga, Objeto antigo
+            var dadosHistoricos = await _versaoRepo.ObterPorIdAsync(contratoId, versao);
+            if (dadosHistoricos == null) return NotFound("Versão histórica não encontrada.");
+
+            // 3. Busca os ITENS DAQUELA ÉPOCA (Tabela ContratoVersaoItem)
+            // Aqui pegamos a lista de itens exata daquele momento
+            var itensHistoricos = await _versaoRepo.ListarItensPorVersaoAsync(dadosHistoricos.Id);
+
+            // 4. Monta a ViewModel MESCLANDO (Dados Fixos do Pai + Dados Variáveis do Histórico)
+            var vm = new ContratoViewModel
+            {
+                // --- DADOS FIXOS (Não mudam com aditivo) ---
+                Id = contratoAtual.Id, 
+                FornecedorIdCompleto = contratoAtual.FornecedorIdCompleto,
+                NumeroContrato = contratoAtual.NumeroContrato,
+                AnoContrato = contratoAtual.AnoContrato,
+                OrcamentoId = contratoAtual.OrcamentoId, // O orçamento pai continua o mesmo
+                DataAssinatura = contratoAtual.DataAssinatura,
+
+                // --- DADOS HISTÓRICOS (Vêm do Snapshot) ---
+                ObjetoContrato = dadosHistoricos.ObjetoContrato,
+                DataInicio = dadosHistoricos.DataInicio,
+                DataFim = dadosHistoricos.DataFim,
+                ValorContrato = dadosHistoricos.ValorContrato,
+                Observacao = dadosHistoricos.Observacao, // Observação registrada na versão
+                Ativo = dadosHistoricos.Ativo,
+
+                // --- ITENS HISTÓRICOS (Conversão para ViewModel) ---
+                Itens = itensHistoricos.Select(x => new ContratoItemViewModel
+                {
+                    Id = x.OrcamentoDetalheId, // Mapeia para o ID do detalhe (como na edição normal)
+                    NomeItem = x.NomeItem,     // O Repositório já traz o nome via JOIN
+                    Valor = x.Valor            // Valor TOTAL histórico
+                }).ToList()
+            };
+
+            // 5. Recalcula o "Valor Mensal Visual" baseado na vigência HISTÓRICA
+            int mesesHistoricos = ((vm.DataFim.Year - vm.DataInicio.Year) * 12) + vm.DataFim.Month - vm.DataInicio.Month + 1;
+            if (mesesHistoricos < 1) mesesHistoricos = 1;
+            
+            if (vm.ValorContrato > 0)
+            {
+                vm.ValorMensal = (vm.ValorContrato / mesesHistoricos).ToString("N2", new System.Globalization.CultureInfo("pt-BR"));
+            }
+
+            // 6. Prepara a View para MODO LEITURA
+            // Carregamos as ViewBags normais para os dropdowns não quebrarem (mesmo estando disabled)
+            await PrepararViewBagParaFormulario(vm);
+            
+            ViewBag.Title = $"Histórico - Versão {versao} (Consulta)";
+            ViewBag.ApenasLeitura = true; // <--- Essa é a flag que vamos usar na View no próximo passo
+            ViewBag.VersaoVisualizada = versao;
+
+            // Reutilizamos a MESMA View de formulário, mas ela vai se comportar diferente por causa da flag
+            return View("ContratoForm", vm);
+        }
 
         private async Task PrepararViewBagParaFormulario(ContratoViewModel vm)
         {

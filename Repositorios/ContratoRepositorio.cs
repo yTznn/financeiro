@@ -134,7 +134,6 @@ namespace Financeiro.Repositorios
 
             return (itens, totalPaginas);
         }
-
         public async Task<ContratoViewModel?> ObterParaEdicaoAsync(int id)
         {
             const string sqlContrato = "SELECT * FROM Contrato WHERE Id = @id;";
@@ -143,7 +142,8 @@ namespace Financeiro.Repositorios
             var contrato = await conn.QuerySingleOrDefaultAsync<Contrato>(sqlContrato, new { id });
             if (contrato == null) return null;
 
-            // RECUPERA OS ITENS (NOVA ESTRUTURA)
+            // RECUPERA OS ITENS
+            // O valor vindo do banco (ci.Valor) é o Valor Total do item no contrato
             const string sqlItens = @"
                 SELECT ci.OrcamentoDetalheId AS Id, od.Nome AS NomeItem, ci.Valor
                 FROM ContratoItem ci
@@ -152,6 +152,7 @@ namespace Financeiro.Repositorios
                 
             var itens = await conn.QueryAsync<ContratoItemViewModel>(sqlItens, new { id });
 
+            // Calcula meses apenas para definir o Valor Mensal Global (informativo do cabeçalho)
             int mesesEdicao = 1;
             if (contrato.DataFim >= contrato.DataInicio)
             {
@@ -160,12 +161,11 @@ namespace Financeiro.Repositorios
             }
 
             var listaItens = itens.ToList();
-            foreach (var n in listaItens)
-            {
-                n.Valor = n.Valor / mesesEdicao; // Divide para mostrar mensal
-            }
+            
+            // OBS: O loop de divisão foi removido. 
+            // Agora mandamos o valor TOTAL (ex: 400.000) direto para a view.
 
-            // Tenta descobrir o OrcamentoId Pai através do primeiro item (para preencher o dropdown)
+            // Tenta descobrir o OrcamentoId Pai através do primeiro item
             int? orcamentoId = null;
             if (listaItens.Any())
             {
@@ -186,9 +186,10 @@ namespace Financeiro.Repositorios
                 Observacao = contrato.Observacao,
                 Ativo = contrato.Ativo,
                 OrcamentoId = orcamentoId,
-                Itens = listaItens
+                Itens = listaItens // Lista com valores TOTAIS
             };
 
+            // Calcula o valor mensal do contrato apenas para o campo de exibição no topo da tela
             if (vm.ValorContrato > 0)
             {
                 decimal valorMensalCalc = vm.ValorContrato / mesesEdicao;

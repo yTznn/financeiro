@@ -3,7 +3,10 @@
 @using Financeiro.Extensions 
 
 @{
-    ViewBag.Title = Model.Id == 0 ? "Novo Contrato" : "Editar Contrato";
+    // Verifica se é modo leitura (Histórico)
+    bool apenasLeitura = ViewBag.ApenasLeitura == true;
+
+    ViewBag.Title = apenasLeitura ? (ViewBag.Title ?? "Visualizar Contrato") : (Model.Id == 0 ? "Novo Contrato" : "Editar Contrato");
     Layout = "_Layout";
     
     var versaoAtual = ViewBag.VersaoAtual as Financeiro.Models.ContratoVersao;
@@ -11,16 +14,13 @@
     bool isEdicao = Model.Id > 0;
     var br = new CultureInfo("pt-BR");
 
-    // Lógica para saber se tem aditivo (Versão > 1)
     bool temAditivo = versaoAtual != null && versaoAtual.Versao > 1;
-
-    // Valor original (fallback)
     decimal valorOriginal = ViewBag.ValorOriginal != null ? (decimal)ViewBag.ValorOriginal : Model.ValorContrato;
     
-    // Permissões
-    bool podeAditivar = isEdicao && User.TemPermissao("ADITIVO_ADD");
-    bool podeEditar   = isEdicao ? User.TemPermissao("CONTRATO_EDIT") : User.TemPermissao("CONTRATO_ADD");
-    bool podeCancelar = isEdicao && temAditivo && User.TemPermissao("ADITIVO_DEL");
+    // Permissões (Só valem se NÃO for apenas leitura)
+    bool podeAditivar = !apenasLeitura && isEdicao && User.TemPermissao("ADITIVO_ADD");
+    bool podeEditar   = !apenasLeitura && (isEdicao ? User.TemPermissao("CONTRATO_EDIT") : User.TemPermissao("CONTRATO_ADD"));
+    bool podeCancelar = !apenasLeitura && isEdicao && temAditivo && User.TemPermissao("ADITIVO_DEL");
 }
 
 @* --- FLAG PARA O SWEETALERT --- *@
@@ -29,10 +29,14 @@
      data-error="@(TempData["MensagemErro"] ?? TempData["Erro"])"></div>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>@ViewBag.Title</h2>
+    <h2>
+        @ViewBag.Title
+        @if(apenasLeitura) { <span class="badge bg-secondary fs-6 ms-2">Modo Consulta</span> }
+    </h2>
 </div>
 
-@if (isEdicao)
+@* --- BOTÕES DE AÇÃO (Escondidos no modo leitura) --- *@
+@if (isEdicao && !apenasLeitura)
 {
   <div class="mb-3 d-flex flex-wrap gap-2">
     @if (podeAditivar) {
@@ -40,9 +44,11 @@
           <i class="bi bi-file-earmark-plus"></i> Registrar Aditivo
         </a>
     }
+    
     <button type="button" class="btn btn-outline-secondary" onclick="carregarHistorico(@Model.Id)">
       <i class="bi bi-clock-history"></i> Histórico
     </button>
+
     @if (podeCancelar) {
       <button type="button" class="btn btn-outline-danger" id="btnCancelarAditivo"
               data-contrato="@Model.Id" data-versao="@versaoAtual.Versao">
@@ -51,6 +57,14 @@
     }
   </div>
 }
+else if (apenasLeitura)
+{
+    <div class="mb-3">
+        <a href="javascript:history.back()" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+}
 
 <div asp-validation-summary="All" class="alert alert-danger d-none" id="validationSummary"></div>
 
@@ -58,240 +72,261 @@
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
     
-    @* --- BLOCO 1: DADOS GERAIS --- *@
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light fw-bold">Dados do Contrato</div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label asp-for="FornecedorIdCompleto" class="form-label">Fornecedor</label>
-                        <select asp-for="FornecedorIdCompleto" class="form-select" id="FornecedorSelect" style="width: 100%;">
-                            @if (ViewBag.FornecedorAtual != null) {
-                                var f = (Financeiro.Models.VwFornecedor)ViewBag.FornecedorAtual;
-                                <option value="@Model.FornecedorIdCompleto" selected>@f.Nome (@f.Documento)</option>
-                            }
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <label asp-for="OrcamentoId" class="form-label">Orçamento Base (Macro)</label>
-                        <select asp-for="OrcamentoId" class="form-select" id="OrcamentoId" asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
-                            <option value="">-- Selecione o Orçamento --</option>
-                        </select>
-                        <div class="form-text">Selecione o orçamento para liberar os itens abaixo.</div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <label asp-for="NumeroContrato" class="form-label">Número</label>
-                        <div class="input-group">
-                            <input asp-for="NumeroContrato" type="number" class="form-control" id="NumeroContrato" />
-                            <button class="btn btn-outline-secondary" type="button" id="btnSugerirNumero"><i class="bi bi-magic"></i></button>
+    @* FIELDSET: Bloqueia tudo se for leitura *@
+    <fieldset @(apenasLeitura ? "disabled" : "") class="contents-display-block">
+        
+        @* --- BLOCO 1: DADOS GERAIS --- *@
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light fw-bold">Dados do Contrato</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="FornecedorIdCompleto" class="form-label">Fornecedor</label>
+                            <select asp-for="FornecedorIdCompleto" class="form-select" id="FornecedorSelect" style="width: 100%;">
+                                @if (ViewBag.FornecedorAtual != null) {
+                                    var f = (Financeiro.Models.VwFornecedor)ViewBag.FornecedorAtual;
+                                    <option value="@Model.FornecedorIdCompleto" selected>@f.Nome (@f.Documento)</option>
+                                }
+                            </select>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label asp-for="AnoContrato" class="form-label">Ano</label>
-                        <input asp-for="AnoContrato" type="number" class="form-control" id="AnoContrato" value="@(Model.AnoContrato == 0 ? DateTime.Now.Year : Model.AnoContrato)" />
-                    </div>
-                    <div class="col-md-6">
-                        <label asp-for="ObjetoContrato" class="form-label">Objeto</label>
-                        <textarea asp-for="ObjetoContrato" class="form-control" rows="1"></textarea>
+                        
+                        <div class="col-md-6">
+                            <label asp-for="OrcamentoId" class="form-label">Orçamento Base (Macro)</label>
+                            <select asp-for="OrcamentoId" class="form-select" id="OrcamentoId" asp-items="@(new SelectList(ViewBag.Orcamentos, "Id", "Nome", Model.OrcamentoId))">
+                                <option value="">-- Selecione o Orçamento --</option>
+                            </select>
+                            @if(!apenasLeitura){ <div class="form-text">Selecione o orçamento para liberar os itens abaixo.</div> }
+                        </div>
+
+                        <div class="col-md-3">
+                            <label asp-for="NumeroContrato" class="form-label">Número</label>
+                            <div class="input-group">
+                                <input asp-for="NumeroContrato" type="number" class="form-control" id="NumeroContrato" />
+                                @if(!apenasLeitura) {
+                                    <button class="btn btn-outline-secondary" type="button" id="btnSugerirNumero"><i class="bi bi-magic"></i></button>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label asp-for="AnoContrato" class="form-label">Ano</label>
+                            <input asp-for="AnoContrato" type="number" class="form-control" id="AnoContrato" value="@(Model.AnoContrato == 0 ? DateTime.Now.Year : Model.AnoContrato)" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="ObjetoContrato" class="form-label">Objeto</label>
+                            <textarea asp-for="ObjetoContrato" class="form-control" rows="1"></textarea>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    @* --- BLOCO 2: DADOS ORIGINAIS (Somente Leitura - Se tiver aditivo) --- *@
-    @if (temAditivo)
-    {
-        <div class="col-12">
-            <div class="card border-0 shadow-sm bg-light">
-                <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between">
-                    <span><i class="bi bi-clock-history me-2"></i> Dados Originais (Versão 1)</span>
-                    <span class="badge bg-light text-dark">Apenas Consulta</span>
+        @* --- BLOCO 2: DADOS ORIGINAIS --- *@
+        @if (temAditivo)
+        {
+            <div class="col-12 mt-3">
+                <div class="card border-0 shadow-sm bg-light">
+                    <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between">
+                        <span><i class="bi bi-clock-history me-2"></i> Dados Originais (Versão 1)</span>
+                        <span class="badge bg-light text-dark">Apenas Consulta</span>
+                    </div>
+                    <div class="card-body opacity-75">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Data Assinatura</label>
+                                <input type="text" class="form-control" value="@(Model.DataAssinatura.HasValue ? Model.DataAssinatura.Value.ToString("dd/MM/yyyy") : "")" disabled />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Valor Original (R$)</label>
+                                <input type="text" class="form-control fw-bold" value="@valorOriginal.ToString("N2", br)" disabled />
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center">
+                                <small class="text-muted">Estes eram os valores antes dos aditivos.</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body opacity-75">
+            </div>
+        }
+
+        @* --- BLOCO 3: VIGÊNCIA E TOTAIS --- *@
+        <div class="col-12 mt-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white fw-bold">
+                    @(temAditivo ? "Dados Vigentes (Atualizados via Aditivo)" : "Vigência e Valores")
+                </div>
+                <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label class="form-label">Data Assinatura</label>
-                            <input type="text" class="form-control" value="@(Model.DataAssinatura.HasValue ? Model.DataAssinatura.Value.ToString("dd/MM/yyyy") : "")" disabled />
+                            <label asp-for="DataAssinatura" class="form-label">Data Assinatura</label>
+                            <input asp-for="DataAssinatura" type="date" class="form-control" />
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Valor Original (R$)</label>
-                            <input type="text" class="form-control fw-bold" value="@valorOriginal.ToString("N2", br)" disabled />
+                            <label asp-for="DataInicio" class="form-label">Data Início (Vigente)</label>
+                            <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio" />
                         </div>
-                        <div class="col-md-6 d-flex align-items-center">
-                            <small class="text-muted">Estes eram os valores antes dos aditivos.</small>
+                        <div class="col-md-3">
+                            <label asp-for="DataFim" class="form-label">Data Fim (Vigente)</label>
+                            <input asp-for="DataFim" type="date" class="form-control" id="DataFim" />
+                        </div>
+                        
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check form-switch mt-4">
+                                <input class="form-check-input" type="checkbox" asp-for="Ativo" id="AtivoSwitch">
+                                <label class="form-check-label fw-bold" for="AtivoSwitch">Contrato Ativo</label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label asp-for="ValorMensal" class="form-label">Valor Mensal (Calculado)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">R$</span>
+                                <input asp-for="ValorMensal" class="form-control money bg-light fw-bold text-secondary" 
+                                       id="ValorMensal" readonly tabindex="-1" />
+                            </div>
+                            <div class="form-text small">Média mensal baseada nos itens e vigência.</div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Valor Total Global (Calculado)</label>
+                             <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">R$</span>
+                                <input type="text" 
+                                       name="ValorContrato" 
+                                       id="ValorTotal"
+                                       class="form-control money fw-bold text-primary bg-light" 
+                                       value="@Model.ValorContrato.ToString("N2", br)"
+                                       readonly tabindex="-1" />
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="text-muted" id="infoCalculo">Soma automática dos itens abaixo.</small>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+
+        @* --- BLOCO 4: ITENS DO CONTRATO --- *@
+        <div class="col-12 mt-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                    <span>Itens do Contrato (Detalhe Financeiro)</span>
+                    <span id="badgeRateio" class="badge bg-secondary">Total Itens: R$ 0,00</span>
+                </div>
+                <div class="card-body">
+                    
+                    @* Só mostra inputs de adição se NÃO for leitura *@
+                    @if (!apenasLeitura)
+                    {
+                        <div class="row g-2 align-items-end mb-3 border-bottom pb-3">
+                            <div class="col-md-4">
+                                <label class="form-label small text-muted">Selecionar Item do Orçamento</label>
+                                <select id="selectItemOrcamento" class="form-select" disabled>
+                                    <option value="">-- Selecione um Orçamento acima primeiro --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small text-muted">V. Mensal (Item)</label>
+                                <input type="text" id="inputValorMensalItem" class="form-control money" placeholder="0,00" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small text-muted">V. Total (Item)</label>
+                                <input type="text" id="inputValorTotalItem" class="form-control money" placeholder="0,00" />
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-outline-primary w-100" id="btnAddItem">
+                                    <i class="bi bi-plus-circle"></i> Adicionar
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    <table class="table table-hover mb-0" id="tabelaItens">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50%">Item / Especialidade</th>
+                                <th style="width: 20%">V. Mensal Estimado</th>
+                                <th style="width: 20%">V. Total (Oficial)</th>
+                                @if(!apenasLeitura) { <th style="width: 10%" class="text-center">Ações</th> }
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyItens">
+                            @if (Model.Itens != null) {
+                                int i = 0;
+                                int meses = 1;
+                                if(Model.DataFim >= Model.DataInicio) {
+                                    meses = ((Model.DataFim.Year - Model.DataInicio.Year) * 12) + Model.DataFim.Month - Model.DataInicio.Month + 1;
+                                    if(meses < 1) meses = 1;
+                                }
+
+                                foreach (var item in Model.Itens) {
+                                    decimal valorTotalItem = item.Valor;
+                                    decimal valorMensalItem = valorTotalItem / meses;
+
+                                    <tr class="linha-item">
+                                        <td>
+                                            <input type="hidden" name="Itens[@i].Id" value="@item.Id" class="item-id" />
+                                            <input type="hidden" name="Itens[@i].NomeItem" value="@item.NomeItem" class="item-nome-input" />
+                                            <span class="item-nome">@item.NomeItem</span>
+                                        </td>
+                                        <td>
+                                            <span class="item-valor-mensal-display text-muted">@valorMensalItem.ToString("N2", br)</span>
+                                        </td>
+                                        <td>
+                                            @* No modo leitura, mostramos o input como readonly ou plain text?
+                                               Como estamos num fieldset disabled, o input fica disabled.
+                                               Mas para ficar bonito (sem parecer um form desabilitado feio), 
+                                               podemos usar condicional no style/class *@
+                                            
+                                            <input type="text" 
+                                                   name="Itens[@i].Valor" 
+                                                   value="@valorTotalItem.ToString("N2", br)" 
+                                                   class="form-control money item-valor-input fw-bold" 
+                                                   style="min-width: 120px; @(apenasLeitura ? "background-color: transparent; border: 0;" : "")" 
+                                                   @(apenasLeitura ? "readonly" : "") />
+                                        </td>
+                                        @if(!apenasLeitura) {
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item" title="Remover"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        }
+                                    </tr>
+                                    i++;
+                                }
+                            }
+                        </tbody>
+                    </table>
+                    
+                    <div class="text-center p-3 text-muted" id="msgSemItens" style="@(Model.Itens != null && Model.Itens.Any() ? "display:none" : "")">
+                        Nenhum item financeiro registrado.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 mt-3">
+            <label asp-for="Observacao" class="form-label">Observações</label>
+            <textarea asp-for="Observacao" class="form-control" rows="2"></textarea>
+        </div>
+
+    </fieldset> 
+    @* FIM DO FIELDSET DE LEITURA *@
+
+    @if (!apenasLeitura)
+    {
+        <div class="col-12 d-flex gap-2 mt-4 pt-3 border-top">
+            @if (podeEditar) {
+                <button type="submit" class="btn btn-success px-4" id="btnSalvar">
+                    <i class="bi bi-check-lg me-1"></i> @(Model.Id == 0 ? "Salvar Contrato" : "Salvar Alterações Cadastrais")
+                </button>
+            }
+            else {
+                <div class="alert alert-warning mb-0"><i class="bi bi-lock-fill"></i> Sem permissão de edição.</div>
+            }
+            <a asp-action="Index" class="btn btn-light border px-4">Cancelar / Voltar</a>
         </div>
     }
-
-    @* --- BLOCO 3: VIGÊNCIA E TOTAIS (BLOQUEADOS PARA DIGITAÇÃO) --- *@
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-primary text-white fw-bold">
-                @(temAditivo ? "Dados Vigentes (Atualizados via Aditivo)" : "Vigência e Valores")
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label asp-for="DataAssinatura" class="form-label">Data Assinatura</label>
-                        <input asp-for="DataAssinatura" type="date" class="form-control" />
-                    </div>
-                    <div class="col-md-3">
-                        <label asp-for="DataInicio" class="form-label">Data Início (Vigente)</label>
-                        <input asp-for="DataInicio" type="date" class="form-control" id="DataInicio" />
-                    </div>
-                    <div class="col-md-3">
-                        <label asp-for="DataFim" class="form-label">Data Fim (Vigente)</label>
-                        <input asp-for="DataFim" type="date" class="form-control" id="DataFim" />
-                    </div>
-                    
-                    <div class="col-md-3 d-flex align-items-center">
-                        <div class="form-check form-switch mt-4">
-                            <input class="form-check-input" type="checkbox" asp-for="Ativo" id="AtivoSwitch">
-                            <label class="form-check-label fw-bold" for="AtivoSwitch">Contrato Ativo</label>
-                        </div>
-                    </div>
-
-                    @* --- MUDANÇA: CAMPOS READONLY --- *@
-                    <div class="col-md-4">
-                        <label asp-for="ValorMensal" class="form-label">Valor Mensal (Calculado)</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-end-0">R$</span>
-                            <input asp-for="ValorMensal" class="form-control money bg-light fw-bold text-secondary" 
-                                   id="ValorMensal" readonly tabindex="-1" />
-                        </div>
-                        <div class="form-text small">Média mensal baseada nos itens e vigência.</div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label">Valor Total Global (Calculado)</label>
-                         <div class="input-group">
-                            <span class="input-group-text bg-light border-end-0">R$</span>
-                            <input type="text" 
-                                   name="ValorContrato" 
-                                   id="ValorTotal"
-                                   class="form-control money fw-bold text-primary bg-light" 
-                                   value="@Model.ValorContrato.ToString("N2", br)"
-                                   readonly tabindex="-1" />
-                        </div>
-                        <div class="d-flex justify-content-between mt-1">
-                            <small class="text-muted" id="infoCalculo">Soma automática dos itens abaixo.</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    @* --- BLOCO 4: ITENS DO CONTRATO (ONDE O USUÁRIO DIGITA) --- *@
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span>Itens do Contrato (Detalhe Financeiro)</span>
-                <span id="badgeRateio" class="badge bg-secondary">Total Itens: R$ 0,00</span>
-            </div>
-            <div class="card-body">
-                
-                @* Aviso de divergência sumiu, pois agora o total é forçado a ser a soma *@
-
-                <div class="row g-2 align-items-end mb-3 border-bottom pb-3">
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted">Selecionar Item do Orçamento</label>
-                        <select id="selectItemOrcamento" class="form-select" disabled>
-                            <option value="">-- Selecione um Orçamento acima primeiro --</option>
-                        </select>
-                    </div>
-                    
-                    @* --- INPUTS DE ENTRADA (HABILITADOS) --- *@
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted">V. Mensal (Item)</label>
-                        <input type="text" id="inputValorMensalItem" class="form-control money" placeholder="0,00" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted">V. Total (Item)</label>
-                        <input type="text" id="inputValorTotalItem" class="form-control money" placeholder="0,00" />
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-outline-primary w-100" id="btnAddItem">
-                            <i class="bi bi-plus-circle"></i> Adicionar
-                        </button>
-                    </div>
-                </div>
-
-                <table class="table table-hover mb-0" id="tabelaItens">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 50%">Item / Especialidade</th>
-                            <th style="width: 20%">V. Mensal Estimado</th>
-                            <th style="width: 20%">V. Total (Oficial)</th>
-                            <th style="width: 10%" class="text-center">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbodyItens">
-                        @if (Model.Itens != null) {
-                            int i = 0;
-                            int meses = 1;
-                            if(Model.DataFim >= Model.DataInicio) {
-                                meses = ((Model.DataFim.Year - Model.DataInicio.Year) * 12) + Model.DataFim.Month - Model.DataInicio.Month + 1;
-                                if(meses < 1) meses = 1;
-                            }
-
-                            foreach (var item in Model.Itens) {
-                                // item.Valor já é o total vindo do backend
-                                decimal valorTotalItem = item.Valor;
-                                decimal valorMensalItem = valorTotalItem / meses;
-
-                                <tr class="linha-item">
-                                    <td>
-                                        <input type="hidden" name="Itens[@i].Id" value="@item.Id" class="item-id" />
-                                        <input type="hidden" name="Itens[@i].NomeItem" value="@item.NomeItem" class="item-nome-input" />
-                                        <span class="item-nome">@item.NomeItem</span>
-                                    </td>
-                                    <td>
-                                        <span class="item-valor-mensal-display">@valorMensalItem.ToString("N2", br)</span>
-                                    </td>
-                                    <td>
-                                        <input type="hidden" name="Itens[@i].Valor" value="@valorTotalItem.ToString("N2", br)" class="item-valor-raw" />
-                                        <span class="item-valor-total-display fw-bold">@valorTotalItem.ToString("N2", br)</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item"><i class="bi bi-trash"></i></button>
-                                    </td>
-                                </tr>
-                                i++;
-                            }
-                        }
-                    </tbody>
-                </table>
-                <div class="text-center p-3 text-muted" id="msgSemItens" style="@(Model.Itens != null && Model.Itens.Any() ? "display:none" : "")">
-                    Nenhum item adicionado ao contrato.
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12">
-        <label asp-for="Observacao" class="form-label">Observações</label>
-        <textarea asp-for="Observacao" class="form-control" rows="2"></textarea>
-    </div>
-
-    <div class="col-12 d-flex gap-2 mt-4 pt-3 border-top">
-        @if (podeEditar) {
-            <button type="submit" class="btn btn-success px-4" id="btnSalvar">
-                <i class="bi bi-check-lg me-1"></i> @(Model.Id == 0 ? "Salvar Contrato" : "Salvar Alterações Cadastrais")
-            </button>
-        }
-        else {
-            <div class="alert alert-warning mb-0"><i class="bi bi-lock-fill"></i> Sem permissão de edição.</div>
-        }
-        <a asp-action="Index" class="btn btn-light border px-4">Cancelar / Voltar</a>
-    </div>
 </form>
 
 @* --- MODAL DE HISTÓRICO --- *@
@@ -317,6 +352,8 @@
     <script>
         var formChanged = false;
         var itensIniciaisJson = '@Html.Raw(ViewBag.ListaItensOrcamentoJson ?? "[]")';
+        // Variável JS para saber se é leitura
+        var isReadOnly = @(apenasLeitura ? "true" : "false");
 
         function carregarHistorico(id) {
             var modal = new bootstrap.Modal(document.getElementById('modalHistorico'));
@@ -325,42 +362,25 @@
         }
 
         $(document).ready(function() {
-            // ============================================================
-            // 1. O TRECHO QUE FALTOU: DISPARAR ALERTAS AO CARREGAR
-            // ============================================================
             var successMsg = $('#pageFlags').data('success');
             var errorMsg = $('#pageFlags').data('error');
+            if (successMsg) Swal.fire({ icon: 'success', title: 'Sucesso', text: successMsg });
+            if (errorMsg) Swal.fire({ icon: 'error', title: 'Atenção', html: errorMsg });
 
-            if (successMsg) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Sucesso',
-                    text: successMsg
-                });
-            }
-
-            if (errorMsg) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Atenção',
-                    html: errorMsg // Usando html pq no controller enviamos <br>
-                });
-            }
-            // ============================================================
+            // Se for apenas leitura, não precisa ativar máscaras de input (são apenas textos) ou listeners de edição
+            if (isReadOnly) return;
 
             $('.money').mask('#.##0,00', {reverse: true});
 
-            // --- LÓGICA DE DATAS E CÁLCULO DE MESES ---
+            // --- LÓGICA DE DATAS ---
             function getMesesEntre(d1Str, d2Str) {
                 if (!d1Str || !d2Str) return 1;
                 var inicio = new Date(d1Str + "T12:00:00");
                 var fim = new Date(d2Str + "T12:00:00");
-                
                 var meses = (fim.getFullYear() - inicio.getFullYear()) * 12;
                 meses -= inicio.getMonth();
                 meses += fim.getMonth();
                 meses += 1; 
-                
                 if (meses <= 0) meses = 1;
                 return meses;
             }
@@ -369,22 +389,30 @@
                 return getMesesEntre($('#DataInicio').val(), $('#DataFim').val());
             }
 
-            // --- CÁLCULO REVERSO (Mensal/Total) APENAS NA LINHA DE INSERÇÃO DO ITEM ---
+            // --- CÁLCULO REVERSO (LINHA DE INSERÇÃO) ---
             $('#inputValorMensalItem').on('keyup', function() {
                 var mensal = brlToFloat($(this).val());
                 var meses = getMesesAtuais();
-                var total = mensal * meses;
-                $('#inputValorTotalItem').val(floatToBrl(total));
+                $('#inputValorTotalItem').val(floatToBrl(mensal * meses));
             });
 
             $('#inputValorTotalItem').on('keyup', function() {
                 var total = brlToFloat($(this).val());
                 var meses = getMesesAtuais();
-                var mensal = total / meses;
-                $('#inputValorMensalItem').val(floatToBrl(mensal));
+                $('#inputValorMensalItem').val(floatToBrl(total / meses));
             });
 
-            // --- MUDANÇA DE DATAS ATUALIZA TUDO ---
+            // --- CÁLCULO DINÂMICO GRID (EDIÇÃO) ---
+            $(document).on('keyup', '.item-valor-input', function() {
+                var novoTotal = brlToFloat($(this).val());
+                var meses = getMesesAtuais();
+                var novoMensal = novoTotal / meses;
+                $(this).closest('tr').find('.item-valor-mensal-display').text(floatToBrl(novoMensal));
+                atualizarTotaisCabecalho();
+                formChanged = true;
+            });
+
+            // --- DATAS ---
             $('#DataInicio, #DataFim').on('change', function() {
                 recalcularTudoPelaVigencia();
                 formChanged = true;
@@ -392,20 +420,15 @@
 
             function recalcularTudoPelaVigencia() {
                 var meses = getMesesAtuais();
-                
                 $('#tbodyItens .linha-item').each(function() {
-                    var totalItem = brlToFloat($(this).find('.item-valor-raw').val());
+                    var totalItem = brlToFloat($(this).find('.item-valor-input').val());
                     var mensalItem = totalItem / meses;
                     $(this).find('.item-valor-mensal-display').text(floatToBrl(mensalItem));
                 });
-                
-                $('#inputValorMensalItem').val('');
-                $('#inputValorTotalItem').val('');
-
                 atualizarTotaisCabecalho();
             }
 
-            // --- AJAX DO DROPDOWN ---
+            // --- DROPDOWN ---
             $('#OrcamentoId').change(function() {
                 var orcamentoId = $(this).val();
                 carregarItensNoDropdown(orcamentoId);
@@ -434,6 +457,7 @@
                 }
             }
 
+            // --- CARREGA DROPDOWN SE JÁ TIVER ORÇAMENTO ---
             if ($('#OrcamentoId').val()) {
                 var dadosIniciais = JSON.parse(itensIniciaisJson);
                 var $comboItem = $('#selectItemOrcamento');
@@ -460,36 +484,30 @@
                 return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
 
-            // --- GRID DE ITENS & TOTAIS ---
+            // --- TOTAIS ---
             function atualizarTotaisCabecalho() {
                 var totalGeral = 0;
                 var count = 0;
-                
-                $('#tbodyItens .item-valor-raw').each(function() {
+                $('#tbodyItens .item-valor-input').each(function() {
                     totalGeral += brlToFloat($(this).val());
                     count++;
                 });
-
                 if(count === 0) $('#msgSemItens').show(); else $('#msgSemItens').hide();
-
                 $('#ValorTotal').val(floatToBrl(totalGeral));
-                
                 var meses = getMesesAtuais();
                 var mensalGeral = totalGeral / meses;
                 $('#ValorMensal').val(floatToBrl(mensalGeral));
-
                 $('#badgeRateio').text("Total Itens: " + floatToBrl(totalGeral));
             }
 
+            // --- ADD ITEM ---
             $('#btnAddItem').click(function() {
                 var id = $('#selectItemOrcamento').val();
                 var texto = $('#selectItemOrcamento option:selected').text();
                 var valorTotalStr = $('#inputValorTotalItem').val(); 
                 
                 if (!id) { Swal.fire('Atenção', 'Selecione um item.', 'warning'); return; }
-                if (!valorTotalStr || valorTotalStr === '0,00') { 
-                    Swal.fire('Atenção', 'Informe o valor.', 'warning'); return; 
-                }
+                if (!valorTotalStr || valorTotalStr === '0,00') { Swal.fire('Atenção', 'Informe o valor.', 'warning'); return; }
 
                 var existe = false;
                 $('.item-id').each(function() { if ($(this).val() == id) existe = true; });
@@ -505,12 +523,10 @@
                             <input type="hidden" name="Itens[0].NomeItem" value="${texto}" class="item-nome-input" />
                             <span class="item-nome">${texto}</span>
                         </td>
+                        <td><span class="item-valor-mensal-display text-muted">${floatToBrl(valorMensal)}</span></td>
                         <td>
-                            <span class="item-valor-mensal-display">${floatToBrl(valorMensal)}</span>
-                        </td>
-                        <td>
-                            <input type="hidden" name="Itens[0].Valor" value="${valorTotalStr}" class="item-valor-raw" />
-                            <span class="item-valor-total-display fw-bold">${valorTotalStr}</span>
+                            <input type="text" name="Itens[0].Valor" value="${valorTotalStr}" 
+                                   class="form-control money item-valor-input fw-bold" style="min-width: 120px;" />
                         </td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-outline-danger btn-remove-item"><i class="bi bi-trash"></i></button>
@@ -518,16 +534,16 @@
                     </tr>`;
                 
                 $('#tbodyItens').append(tr);
-                
+                $('.money').mask('#.##0,00', {reverse: true});
                 $('#selectItemOrcamento').val('');
                 $('#inputValorMensalItem').val('');
                 $('#inputValorTotalItem').val('');
-                
                 reindexarItens();
                 formChanged = true;
                 atualizarTotaisCabecalho();
             });
 
+            // --- REMOVER ---
             $(document).on('click', '.btn-remove-item', function() {
                 $(this).closest('tr').remove();
                 reindexarItens();
@@ -539,7 +555,7 @@
                 $('#tbodyItens tr').each(function(index) {
                     $(this).find('input.item-id').attr('name', `Itens[${index}].Id`);
                     $(this).find('input.item-nome-input').attr('name', `Itens[${index}].NomeItem`);
-                    $(this).find('input.item-valor-raw').attr('name', `Itens[${index}].Valor`);
+                    $(this).find('input.item-valor-input').attr('name', `Itens[${index}].Valor`);
                 });
             }
 
@@ -548,17 +564,16 @@
             $('#FornecedorSelect').select2({ theme: 'bootstrap-5', placeholder: 'Busque...', allowClear: true, width: '100%', minimumInputLength: 2, ajax: { url: '@Url.Action("BuscarFornecedores", "Contratos")', dataType: 'json', delay: 250, data: function (params) { return { term: params.term, page: params.page || 1 }; }, processResults: function (data, params) { return { results: data.results, pagination: { more: data.pagination.more } }; }, cache: true } });
             
             $('#formContrato').on('submit', async function(e) {
-                var isEdicao = '@isEdicao';
                 if (!$('#FornecedorSelect').val()) { Swal.fire('Atenção', 'Selecione um fornecedor.', 'warning'); e.preventDefault(); return; }
+                if ($('#tbodyItens tr').length === 0) { Swal.fire('Atenção', 'Adicione pelo menos um item financeiro ao contrato.', 'warning'); e.preventDefault(); return; }
                 
-                if ($('#tbodyItens tr').length === 0) {
-                     Swal.fire('Atenção', 'Adicione pelo menos um item financeiro ao contrato.', 'warning'); e.preventDefault(); return; 
-                }
-
+                var isEdicao = '@isEdicao';
                 if (isEdicao === 'False') { if (!this.checkValidity()) { e.preventDefault(); e.stopPropagation(); } this.classList.add('was-validated'); return; }
+                
                 e.preventDefault();
                 if (!this.checkValidity()) { this.classList.add('was-validated'); return; }
                 if (formChanged === false) { this.submit(); return; }
+                
                 const { value: justif } = await Swal.fire({ title: 'Salvar Alterações', input: 'textarea', inputLabel: 'Justificativa', inputValidator: (value) => { if (!value) return 'Obrigatório!' }, showCancelButton: true, confirmButtonText: 'Salvar' });
                 if (justif) { $('<input>').attr({type: 'hidden', name: 'justificativa', value: justif}).appendTo('#formContrato'); this.submit(); }
             });
