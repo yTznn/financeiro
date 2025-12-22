@@ -44,13 +44,11 @@ namespace Financeiro.Controllers
         [HttpGet]
         public async Task<IActionResult> Novo(int contratoId)
         {
-            // 1. Busca os dados atuais do contrato (incluindo os ITENS vigentes)
             var contrato = await _contratoRepo.ObterParaEdicaoAsync(contratoId);
             if (contrato == null) return NotFound("Contrato não encontrado.");
 
             var versaoAtual = await _versaoRepo.ObterVersaoAtualAsync(contratoId);
             
-            // Prepara ViewBag para mostrar resumo no topo da tela
             ViewBag.VersaoAtual = versaoAtual ?? new ContratoVersao 
             { 
                 Versao = 1, 
@@ -60,20 +58,13 @@ namespace Financeiro.Controllers
                 ObjetoContrato = contrato.ObjetoContrato
             };
 
-            // 2. Monta o ViewModel carregando os ITENS para a grid e DATAS
             var vm = new AditivoContratoViewModel 
             { 
                 ContratoId = contratoId,
-                // Data do documento (assinatura do aditivo)
                 DataInicioAditivo = DateTime.Today,
-                
-                // Sugere datas atuais da vigência para facilitar (se o usuário não mexer, mantém)
                 NovaDataInicio = contrato.DataInicio, 
                 NovaDataFim = contrato.DataFim,
-                
                 NovoObjeto = contrato.ObjetoContrato,
-                
-                // CARREGA A GRID: O usuário verá os valores atuais para poder editar
                 Itens = contrato.Itens ?? new List<ContratoItemViewModel>()
             };
 
@@ -84,16 +75,15 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Salvar(AditivoContratoViewModel vm)
         {
-            // 1. Preenchimento Automático de Datas (Herança) se não vier preenchido
-            // Isso garante que se o usuário não mexer na data de início, ela não vá nula
+            // 1. Preenchimento Automático de Datas
             if (!vm.DataInicioAditivo.HasValue || !vm.NovaDataFim.HasValue || !vm.NovaDataInicio.HasValue)
             {
                 var atual = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId);
                 if (atual != null)
                 {
-                    if (!vm.DataInicioAditivo.HasValue) vm.DataInicioAditivo = atual.DataInicio; // Fallback data doc
-                    if (!vm.NovaDataInicio.HasValue) vm.NovaDataInicio = atual.DataInicio;     // Fallback vigência ini
-                    if (!vm.NovaDataFim.HasValue) vm.NovaDataFim = atual.DataFim;            // Fallback vigência fim
+                    if (!vm.DataInicioAditivo.HasValue) vm.DataInicioAditivo = atual.DataInicio;
+                    if (!vm.NovaDataInicio.HasValue) vm.NovaDataInicio = atual.DataInicio;
+                    if (!vm.NovaDataFim.HasValue) vm.NovaDataFim = atual.DataFim;
                 }
                 else
                 {
@@ -107,40 +97,48 @@ namespace Financeiro.Controllers
                 }
             }
 
-            // 2. Validação do Orçamento (Trava Financeira)
-            // Lógica: Se for aditivo de valor (Acréscimo/Supressão), validamos o novo total contra o saldo
+            // 2. Validação do Orçamento (Trava Financeira ITEM A ITEM)
             bool alteraValor = vm.TipoAditivo == TipoAditivo.Acrescimo || 
                                vm.TipoAditivo == TipoAditivo.Supressao || 
                                vm.TipoAditivo == TipoAditivo.PrazoAcrescimo || 
                                vm.TipoAditivo == TipoAditivo.PrazoSupressao;
 
-            if (alteraValor)
+            // Lista para acumular erros e exibir no SweetAlert
+            var errosOrcamento = new List<string>();
+
+            if (alteraValor && vm.Itens != null)
             {
-                var contratoPai = await _contratoRepo.ObterParaEdicaoAsync(vm.ContratoId);
-                if (contratoPai != null && contratoPai.OrcamentoId.HasValue)
+                foreach (var item in vm.Itens)
                 {
-                    var orcamento = await _orcamentoRepo.ObterHeaderPorIdAsync(contratoPai.OrcamentoId.Value);
-                    
-                    // Quanto já foi gasto por OUTROS contratos neste mesmo orçamento
-                    var gastoOutros = await _contratoRepo.ObterTotalComprometidoPorOrcamentoAsync(
-                        contratoPai.OrcamentoId.Value, 
-                        ignorarContratoId: vm.ContratoId); 
-                    
-                    var saldoDisponivel = orcamento.ValorPrevistoTotal - gastoOutros;
+                    var detalheOrcamento = await _orcamentoRepo.ObterDetalhePorIdAsync(item.Id);
 
-                    // O NOVO CUSTO deste contrato será a soma dos itens da grid editada
-                    decimal novoValorTotalContrato = 0;
-                    if (vm.Itens != null) novoValorTotalContrato = vm.Itens.Sum(x => x.Valor);
-
-                    // Valida se cabe no orçamento
-                    // Adicionamos uma margem de 0.01 para evitar erros de arredondamento de float
-                    if (novoValorTotalContrato > (saldoDisponivel + 0.01m)) 
+                    if (detalheOrcamento != null)
                     {
-                            TempData["Erro"] = $"Saldo insuficiente no Orçamento. Disponível para este contrato: {saldoDisponivel:C2}. O contrato passaria a custar: {novoValorTotalContrato:C2}.";
-                            ViewBag.VersaoAtual = await _versaoRepo.ObterVersaoAtualAsync(vm.ContratoId); 
-                            return View("AditivoContratoForm", vm);
+                        var jaGastoOutros = await _contratoRepo.ObterTotalComprometidoPorDetalheAsync(item.Id, ignorarContratoId: vm.ContratoId);
+                        var saldoDisponivelItem = detalheOrcamento.ValorPrevisto - jaGastoOutros;
+                        decimal novoValorItem = item.Valor;
+
+                        if (novoValorItem > (saldoDisponivelItem + 0.01m))
+                        {
+                            string msgErro = $"Saldo insuficiente no item <b>'{detalheOrcamento.Nome}'</b>.<br>" +
+                                             $"Disponível: {saldoDisponivelItem:C2}.<br>" +
+                                             $"Tentativa Aditivo: {novoValorItem:C2}.";
+                            
+                            ModelState.AddModelError("", msgErro);
+                            errosOrcamento.Add(msgErro); // Adiciona na lista para o TempData
+                        }
+                    }
+                    else
+                    {
+                        ModelState.AddModelError("", $"Item de orçamento ID {item.Id} não encontrado.");
                     }
                 }
+            }
+
+            // --- AQUI ESTÁ A MÁGICA: Se tiver erros de orçamento, joga pro TempData pro SweetAlert pegar ---
+            if (errosOrcamento.Any())
+            {
+                TempData["Erro"] = string.Join("<br><br>", errosOrcamento);
             }
 
             if (!ModelState.IsValid)
@@ -151,7 +149,6 @@ namespace Financeiro.Controllers
 
             try 
             {
-                // O Serviço faz a mágica: Snapshot -> Atualiza Contrato -> Atualiza Itens
                 await _service.CriarAditivoAsync(vm);
                 
                 await _logService.RegistrarCriacaoAsync("ContratoAditivo", vm, vm.ContratoId);
@@ -169,7 +166,6 @@ namespace Financeiro.Controllers
             }
         }
 
-        // Cancelar Aditivo (Via AJAX)
         [HttpPost]
         public async Task<IActionResult> Cancelar(int contratoId, int versao, string justificativa)
         {

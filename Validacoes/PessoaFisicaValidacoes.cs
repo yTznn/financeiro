@@ -26,23 +26,25 @@ namespace Financeiro.Validacoes
             if (!CpfEhValido(vm.Cpf))
                 r.Erros.Add("O CPF informado é inválido.");
 
-            if (vm.DataNascimento >= DateTime.Today)
+            if (vm.DataNascimento.HasValue && vm.DataNascimento.Value >= DateTime.Today)
                 r.Erros.Add("A Data de Nascimento deve ser anterior à data de hoje.");
 
-            if (vm.DataNascimento > DateTime.Today.AddYears(-18))
+            if (vm.DataNascimento.HasValue && vm.DataNascimento.Value > DateTime.Today.AddYears(-18))
                 r.Erros.Add("O cliente deve ser maior de 18 anos.");
 
-            if (!EhEmailValido(vm.Email))
-                r.Erros.Add("O E-mail informado é inválido ou está vazio.");
+            // --- AGORA É OPCIONAL: Valida apenas se foi preenchido ---
+            if (!string.IsNullOrWhiteSpace(vm.Email) && !EhEmailValido(vm.Email))
+                r.Erros.Add("O E-mail informado é inválido.");
 
-            if (string.IsNullOrWhiteSpace(vm.Telefone) || vm.Telefone.Length < 10)
-                r.Erros.Add("O Telefone precisa ter no mínimo 10 dígitos (DDD + número).");
+            // --- AGORA É OPCIONAL: Valida apenas se foi preenchido ---
+            if (!string.IsNullOrWhiteSpace(vm.Telefone) && vm.Telefone.Length < 10)
+                r.Erros.Add("O Telefone informado parece incompleto (mínimo 10 dígitos).");
 
             return r;
         }
 
         // ——— Métodos de Apoio (Helpers) ———
-        private string ApenasNumeros(string entrada)
+        private string ApenasNumeros(string? entrada) // Aceita null agora
             => string.IsNullOrWhiteSpace(entrada)
                 ? string.Empty
                 : new string(entrada.Where(char.IsDigit).ToArray());
@@ -53,7 +55,6 @@ namespace Financeiro.Validacoes
 
         private bool CpfEhValido(string cpf)
         {
-            // O CPF já deve vir limpo (apenas números) para este método
             if (string.IsNullOrWhiteSpace(cpf) || cpf.Length != 11 || cpf.All(c => c == cpf[0]))
                 return false;
 

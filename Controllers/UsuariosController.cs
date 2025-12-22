@@ -428,23 +428,44 @@ namespace Financeiro.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AtualizarMeusDados(UsuarioViewModel model)
         {
-            if (!ModelState.IsValid) return View("MeusDadosForm", model);
+            // 1. Busca o usuário original no banco para garantir que estamos editando o registro certo
+            var usuarioBanco = await _usuarioRepositorio.ObterPorIdAsync(model.Id);
+            if (usuarioBanco == null) return NotFound();
 
-            var usuario = await _usuarioRepositorio.ObterPorIdAsync(model.Id);
-            if (usuario == null) return NotFound();
+            bool houveAlteracao = false;
 
-            usuario.EmailCriptografado = _criptografiaService.CriptografarEmail(model.Email);
+            // 2. Lógica da Senha (só processa se o usuário digitou algo)
             if (!string.IsNullOrWhiteSpace(model.Senha))
-                usuario.SenhaHash = _criptografiaService.GerarHashSenha(model.Senha);
+            {
+                if (model.Senha != model.ConfirmarSenha)
+                {
+                    ModelState.AddModelError("Senha", "As senhas não conferem.");
+                    return View("MeusDadosForm", model);
+                }
 
+                // Gera o novo hash
+                var novaSenhaHash = _criptografiaService.GerarHashSenha(model.Senha);
+
+                // Verifica se a senha nova é realmente diferente da atual (opcional, mas boa prática)
+                if (usuarioBanco.SenhaHash != novaSenhaHash)
+                {
+                    usuarioBanco.SenhaHash = novaSenhaHash;
+                    houveAlteracao = true;
+                }
+            }
+
+            // 3. Lógica da Imagem
             if (model.ImagemPerfil != null)
             {
                 try
                 {
                     var idArquivo = await _anexoService.SalvarAnexoAsync(model.ImagemPerfil, "PerfilUsuario");
-                    var arquivo   = await _arquivoRepositorio.ObterPorIdAsync(idArquivo);
-                    usuario.NomeArquivoImagem = Path.GetFileNameWithoutExtension(model.ImagemPerfil.FileName);
-                    usuario.HashImagem        = arquivo?.Hash;
+                    var arquivo = await _arquivoRepositorio.ObterPorIdAsync(idArquivo);
+                    
+                    usuarioBanco.NomeArquivoImagem = Path.GetFileNameWithoutExtension(model.ImagemPerfil.FileName);
+                    usuarioBanco.HashImagem = arquivo?.Hash;
+                    
+                    houveAlteracao = true;
                 }
                 catch (Exception ex)
                 {
@@ -453,7 +474,26 @@ namespace Financeiro.Controllers
                 }
             }
 
-            await _usuarioRepositorio.AtualizarAsync(usuario);
+            // 4. Verificação de "Nada Modificado"
+            // Nota: Ignoramos totalmente o model.Email aqui para segurança (não atualizamos o e-mail do banco)
+            if (!houveAlteracao)
+            {
+                // Usamos um TempData diferente para exibir um alerta amarelo (warning)
+                TempData["Info"] = "Nenhuma informação foi modificada.";
+                return RedirectToAction("MeusDados");
+            }
+
+            // 5. Salva as alterações
+            await _usuarioRepositorio.AtualizarAsync(usuarioBanco);
+
+            // Opcional: Log de auditoria de auto-edição
+            await _logService.RegistrarEdicaoAsync(
+                "Usuario", 
+                "Auto-atualização de Perfil", 
+                $"Usuário {usuarioBanco.NameSkip} atualizou seus próprios dados.", 
+                usuarioBanco.Id
+            );
+
             TempData["Sucesso"] = "Seus dados foram atualizados com sucesso!";
             return RedirectToAction("MeusDados");
         }

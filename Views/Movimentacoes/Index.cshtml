@@ -1,5 +1,8 @@
 @using System.Globalization
 @using Financeiro.Extensions
+@* 1. INJEÇÃO DE DEPENDÊNCIA DO SERVIÇO DE ANEXOS *@
+@inject Financeiro.Servicos.Anexos.IAnexoService AnexoService
+
 @model IEnumerable<Financeiro.Models.MovimentacaoFinanceira>
 
 @{
@@ -37,7 +40,7 @@
 <div id="pageFlags" 
      data-success="@TempData["Sucesso"]" 
      data-error="@TempData["Erro"]"
-     data-warning="@TempData["Alerta"]"> @* <--- AQUI ESTÁ A NOVIDADE *@
+     data-warning="@TempData["Alerta"]">
 </div>
 
 <div class="container-fluid px-0 py-3">
@@ -113,6 +116,12 @@
                             string rowClass = ehEstorno ? "row-estorno" : "";
                             string corValor = item.ValorTotal < 0 ? "text-success" : "text-danger";
 
+                            // =========================================================================
+                            // CORREÇÃO: Busca no serviço pois o Model não tem a info
+                            // =========================================================================
+                            var anexo = await AnexoService.ObterPorReferenciaAsync("MovimentacaoFinanceira", item.Id);
+                            bool possuiAnexo = (anexo != null);
+
                             <tr class="@rowClass">
                                 <td class="ps-4">
                                     <div class="fw-bold text-dark">@item.DataMovimentacao.ToString("dd/MM/yyyy")</div>
@@ -144,6 +153,7 @@
                                             data-valor="@item.ValorTotal.ToString("C", ptBR)"
                                             data-data="@item.DataMovimentacao.ToString("dd/MM/yyyy")"
                                             data-estorno="@ehEstorno.ToString().ToLower()"
+                                            data-tem-anexo="@possuiAnexo.ToString().ToLower()" 
                                             data-url-anexo="@Url.Action("BaixarAnexo", new { id = item.Id })"
                                             data-url-editar="@Url.Action("Editar", new { id = item.Id })" 
                                             data-pode-editar="@podeEditar.ToString().ToLower()"
@@ -176,12 +186,12 @@
                 if (pageFlags.dataset.error) {
                     Swal.fire({ icon: 'error', title: 'Atenção', html: pageFlags.dataset.error });
                 }
-                // [NOVO] Alerta Amarelo (Contrato existente ou Orçamento estourado)
+                // Alerta Amarelo
                 if (pageFlags.dataset.warning) {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Atenção!',
-                        html: pageFlags.dataset.warning, // Permite HTML para quebra de linha
+                        html: pageFlags.dataset.warning, 
                         confirmButtonText: 'Entendi',
                         confirmButtonColor: '#f0ad4e'
                     });
@@ -204,10 +214,20 @@
                             </div>
                         </div>
                         
-                        <div class="d-grid gap-2">
-                            <a href="${d.urlAnexo}" target="_blank" class="swal-action-btn">
-                                <i class='bx bx-file text-primary'></i> Ver Comprovante
-                            </a>`;
+                        <div class="d-grid gap-2">`;
+
+                // =========================================================================
+                // VALIDAÇÃO JS: Só renderiza se d.temAnexo for true (vindo do backend)
+                // =========================================================================
+                if (d.temAnexo === true) {
+                    htmlContent += `
+                        <a href="${d.urlAnexo}" target="_blank" class="swal-action-btn">
+                            <i class='bx bx-file text-primary'></i> Ver Comprovante
+                        </a>`;
+                } else {
+                    // Opcional: Se quiser mostrar algo desabilitado ou apenas não mostrar nada
+                    // htmlContent += `<div class="text-muted small text-center mb-2">Sem comprovante anexado</div>`;
+                }
 
                 if (d.estorno === false && d.podeEditar === true) {
                     htmlContent += `

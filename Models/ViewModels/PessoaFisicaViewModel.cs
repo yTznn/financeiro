@@ -7,26 +7,28 @@ namespace Financeiro.Models.ViewModels
     {
         public int Id { get; set; }
 
-        [Required, Display(Name = "Nome")]
+        [Required(ErrorMessage = "O Nome é obrigatório."), Display(Name = "Nome")]
         public string Nome { get; set; }
 
-        [Required, Display(Name = "Sobrenome")]
+        [Required(ErrorMessage = "O Sobrenome é obrigatório."), Display(Name = "Sobrenome")]
         public string Sobrenome { get; set; }
 
-        [Required, Display(Name = "CPF")]
+        [Required(ErrorMessage = "O CPF é obrigatório."), Display(Name = "CPF")]
         public string Cpf { get; set; }
 
-        [Required, Display(Name = "Data de Nascimento")]
         [DataType(DataType.Date)]
-        public DateTime DataNascimento { get; set; }
+        [Display(Name = "Data de Nascimento")]
+        public DateTime? DataNascimento { get; set; }
 
-        [EmailAddress, Display(Name = "E-mail")]
-        public string Email { get; set; }
+        // ADICIONADO O '?' PARA TORNAR OPCIONAL
+        [EmailAddress(ErrorMessage = "E-mail inválido."), Display(Name = "E-mail")]
+        public string? Email { get; set; }
 
+        // MANTIDO O '?' (Já estava correto)
         [Phone, Display(Name = "Telefone")]
-        public string Telefone { get; set; }
+        public string? Telefone { get; set; }
 
         [Display(Name = "Ativo")]
-        public bool SituacaoAtiva { get; set; } = true;
+        public bool? SituacaoAtiva { get; set; } = true;
     }
 }

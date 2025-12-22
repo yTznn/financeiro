@@ -64,21 +64,23 @@
                             </div>
                         </div>
 
-                        <h5 class="mb-3 fw-light text-primary border-bottom pb-2">Informações de Contato</h5>
+                        <h5 class="mb-3 fw-light text-primary border-bottom pb-2">Informações de Contato (Opcional)</h5>
                         <div class="row g-3 mb-4">
                              <div class="col-md-6">
-                                <label asp-for="Email" class="form-label"></label>
+                                <label asp-for="Email" class="form-label">E-mail</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bx bx-envelope"></i></span>
-                                    <input asp-for="Email" class="form-control" placeholder="contato@empresa.com" />
+                                    @* data-val="false" inibe validação obrigatória no front *@
+                                    <input asp-for="Email" class="form-control" placeholder="contato@empresa.com" data-val="false" />
                                 </div>
                                 <span asp-validation-for="Email" class="text-danger small"></span>
                             </div>
                             <div class="col-md-6">
-                                <label asp-for="Telefone" class="form-label"></label>
+                                <label asp-for="Telefone" class="form-label">Telefone</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bx bx-phone"></i></span>
-                                    <input asp-for="Telefone" class="form-control" placeholder="(00) 0000-0000" />
+                                    @* data-val="false" inibe validação obrigatória no front *@
+                                    <input asp-for="Telefone" class="form-control" placeholder="(00) 0000-0000" data-val="false" />
                                 </div>
                                 <span asp-validation-for="Telefone" class="text-danger small"></span>
                             </div>

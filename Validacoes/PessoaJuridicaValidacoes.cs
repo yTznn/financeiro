@@ -15,7 +15,7 @@ namespace Financeiro.Validacoes
             vm.NumeroInscricao = ApenasNumeros(vm.NumeroInscricao);
             vm.Telefone        = ApenasNumeros(vm.Telefone);
 
-            // Validações
+            // Validações Obrigatórias
             if (string.IsNullOrWhiteSpace(vm.RazaoSocial))
                 r.Erros.Add("Razão Social é obrigatória.");
 
@@ -25,17 +25,19 @@ namespace Financeiro.Validacoes
             if (!CnpjEhValido(vm.NumeroInscricao))
                 r.Erros.Add("O CNPJ informado é inválido.");
 
-            if (!EhEmailValido(vm.Email))
-                r.Erros.Add("O E-mail informado é inválido ou está vazio.");
+            // --- AGORA É OPCIONAL: Valida apenas se foi preenchido ---
+            if (!string.IsNullOrWhiteSpace(vm.Email) && !EhEmailValido(vm.Email))
+                r.Erros.Add("O E-mail informado é inválido.");
 
-            if (string.IsNullOrWhiteSpace(vm.Telefone) || vm.Telefone.Length < 10)
-                r.Erros.Add("O Telefone precisa ter no mínimo 10 dígitos (DDD + número).");
+            // --- AGORA É OPCIONAL: Valida apenas se foi preenchido ---
+            if (!string.IsNullOrWhiteSpace(vm.Telefone) && vm.Telefone.Length < 10)
+                r.Erros.Add("O Telefone informado parece incompleto (mínimo 10 dígitos).");
 
             return r;
         }
 
         // ——— Helpers ———
-        private string ApenasNumeros(string entrada)
+        private string ApenasNumeros(string? entrada) // Aceita null agora
             => string.IsNullOrWhiteSpace(entrada)
                 ? string.Empty
                 : new string(entrada.Where(char.IsDigit).ToArray());
@@ -46,7 +48,6 @@ namespace Financeiro.Validacoes
 
         private bool CnpjEhValido(string cnpj)
         {
-            // O CNPJ já deve vir limpo (apenas números) para este método
             if (string.IsNullOrWhiteSpace(cnpj) || cnpj.Length != 14 || cnpj.All(c => c == cnpj[0]))
                 return false;
 

@@ -32,7 +32,7 @@ namespace Financeiro.Models.ViewModels
         public string Conta { get; set; }
 
         [Display(Name = "Chave Pix")]
-        public string ChavePix { get; set; }
+        public string? ChavePix { get; set; } // <--- Interrogação aqui!
 
         /// <summary>Se verdadeiro, define este vínculo como principal (desmarca os demais do mesmo dono)</summary>
         [Display(Name = "Principal?")]

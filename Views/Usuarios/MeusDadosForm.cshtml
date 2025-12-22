@@ -1,7 +1,7 @@
 @model Financeiro.Models.ViewModels.UsuarioViewModel
 @{
     ViewData["Title"] = "Meus Dados";
-    // Verifica se é Admin para liberar edição de e-mail (regra original mantida)
+    // Volta a verificar se é Admin para liberar edição de e-mail
     var isAdmin = User.IsInRole("Administrador");
 }
 
@@ -64,10 +64,12 @@
                             <span class="input-group-text bg-light border-end-0"><i class="bi bi-envelope-fill"></i></span>
                             @if (isAdmin)
                             {
+                                @* Se for Admin, input normal editável *@
                                 <input asp-for="Email" class="form-control form-control-lg border-start-0 ps-0" />
                             }
                             else
                             {
+                                @* Se não for Admin, readonly com visual travado *@
                                 <input asp-for="Email" class="form-control form-control-lg border-start-0 ps-0 bg-light" readonly 
                                        title="Apenas administradores podem alterar o e-mail." data-bs-toggle="tooltip"/>
                             }
@@ -109,7 +111,7 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 
-    @* Integração com SweetAlert para mensagens do Controller *@
+    @* SUCESSO *@
     @if (TempData["Sucesso"] != null)
     {
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -125,6 +127,23 @@
         </script>
     }
     
+    @* INFO *@
+    @if (TempData["Info"] != null)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'info',
+                title: '@TempData["Info"]',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        </script>
+    }
+    
+    @* ERRO *@
     @if (TempData["Erro"] != null)
     {
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -138,7 +157,7 @@
     }
 
     <script>
-        // Inicializa Tooltips do Bootstrap (para o campo de email readonly)
+        // Inicializa Tooltips do Bootstrap
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
           return new bootstrap.Tooltip(tooltipTriggerEl)
